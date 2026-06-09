@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Block coordinate descent：一次只动一个顶点 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="3-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-1</div>
+        <h1>Block coordinate descent：一次只动一个顶点</h1>
+        <p class="lede">前面我们辛苦地把一步隐式欧拉化成了一个最小化问题 $\min_\mathbf{x} G(\mathbf x)$。现在的问题是：怎么解它？Newton 要组装并求解一个大系统，PBD 干脆放弃能量去硬掰约束。VBD 的答案介于两者之间，而且出奇地简单——<b>一次只动一个顶点的 3 个自由度，其余全部按住不动，挨个扫过去。</b></p>
+
+        <h2 id="big-idea">大想法：把一个大问题拆成一串小问题</h2>
+        <p>$G(\mathbf x)$ 是一个关于 $3N$ 个未知数（$N$ 个顶点，每个 3 个坐标）的函数。<span class="term">Newton</span> 的做法是：把这 $3N$ 个变量看成一个整体，组装一个 $3N\times3N$ 的 Hessian，解一个大线性系统，所有顶点<b>同时</b>往谷底挪一步。这一步很准，但每一步都贵——组装、分解一个大稀疏矩阵，连通性一变还得重新分解。</p>
+        <p>VBD 反其道而行之。它问：既然目标只是<b>把 $G$ 推下去</b>，我为什么非得一次动所有顶点？我可以<b>固定住除了顶点 $i$ 以外的全部顶点</b>，只把 $G$ 看成「$\mathbf x_i$ 这 3 个自由度」的函数，去优化这一小块，然后换下一个顶点。这就是 <span class="term">block coordinate descent</span>（块坐标下降）：每个「块」是一个顶点的 3 个 DoF，我们一次只在一个块上做优化。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 你解大线性系统时其实也用过这招</div>
+          <p>课上解隐式积分的大稀疏系统时，你大概率写过 <span class="term">Gauss-Seidel</span> 或 Jacobi 迭代——一次更新一个未知量、扫一遍、再扫一遍。VBD 把这件事抬到了「非线性优化」的层面：它不是在解一个固定的线性方程，而是在<b>非线性能量 $G$ 上</b>做坐标下降。每个顶点的那「一小步」，本身是一个微型的 Newton 步（下面就讲）。所以你可以把 VBD 理解成「在 $G$ 上跑的、每个块带二阶信息的 Gauss-Seidel」。</p>
+        </div>
+
+        <h2 id="local-energy">顶点的局部能量 G_i</h2>
+        <p>把除 $i$ 外的所有顶点钉住，$G$ 里哪些项还会随 $\mathbf x_i$ 变？只有两类：(1) 顶点 $i$ 自己的惯性项；(2) 与 $i$ <b>相邻</b>的那些弹簧（force elements）的能量——离 $i$ 很远的弹簧此刻是常数，对优化 $\mathbf x_i$ 毫无影响。把这些会变的项收集起来，就是顶点 $i$ 的<b>局部能量</b>：</p>
+        <div class="math-block">$$G_i(\mathbf x)=\frac{m_i}{2h^2}\lVert\mathbf x_i-\mathbf y_i\rVert^2+\sum_{j\in\mathcal F_i}E_j(\mathbf x)$$</div>
+        <p>其中 $\mathcal F_i$ 是与顶点 $i$ 相邻的 force elements（在 strand 里就是 <span class="term-i">vertAdjacentEdges[i]</span> 那几条边），$\mathbf y_i$ 是顶点 $i$ 的惯性/预测位置，$m_i$ 是它的质量。注意 $G_i$ 只是 $G$ 中「依赖 $\mathbf x_i$」的那一坨——它仍然是真实 $G$ 的一部分，没有任何近似。优化 $G_i$ 关于 $\mathbf x_i$，就等于在「只许动 $i$」的约束下优化 $G$。</p>
+
+        <h2 id="one-newton-step">每个顶点：一步牛顿</h2>
+        <p>$G_i$ 只有 3 个自由度，这是一个极小的优化问题。VBD 不去精确求它的最小值，而是对它做<b>一步 Newton</b>：算出局部能量的负梯度（也就是作用在 $i$ 上的合力）$\mathbf f_i=-\nabla_{\mathbf x_i}G_i$ 和局部 Hessian $\mathbf H_i=\nabla^2_{\mathbf x_i}G_i$，解一个 $3\times3$ 系统得到位移，然后挪过去：</p>
+        <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i\mathrel{+}=\Delta\mathbf x_i$$</div>
+        <p>$3\times3$ 的求解几乎是免费的（甚至能解析地写出来）。$\mathbf f_i$ 和 $\mathbf H_i$ 的具体形式——惯性项加上相邻弹簧的力与 Hessian——我们留到 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 一项一项拆开。这里你只要记住节奏：<b>取一个顶点 → 算 $\mathbf f_i,\mathbf H_i$ → 解 $3\times3$ → 更新它的位置 → 换下一个顶点。</b>扫完全部顶点叫一次 <span class="term">sweep</span>；一帧里会做很多次 sweep（TinyVBD 默认 <code>numIterations=100</code>）。</p>
+
+        <h2 id="gauss-seidel">Gauss-Seidel 顺序：用上最新的位置</h2>
+        <p>扫描是<b>顺序</b>的，而且关键在于：当我们处理顶点 $i$ 时，它的邻居里凡是<b>这一遍已经更新过</b>的，我们就用它们的<b>新</b>位置来算 $\mathbf f_i$、$\mathbf H_i$。这正是 <span class="term">Gauss-Seidel</span> 的精神——信息在一遍 sweep 之内就向前传播，收敛比「全用旧位置」的 Jacobi 快。TinyVBD 的 <code>solve()</code> 就是一次这样的 Gauss-Seidel sweep，从 <code>iV=1</code> 扫到末端（顶点 0 被 pin 住、跳过）：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · solve()</span><button class="cp">复制</button></div><pre><code>for (size_t iV = 1; iV &lt; strand.numVerts; iV++)
+{
+    Mat3 h = Mat3::Zero();
+    Vec3 f = Vec3::Zero();
+    // 惯性项
+    f = strand.vertexMass(iV) * (strand.inertia.col(iV) - strand.vertex(iV)) * dtSqrReciprocal;
+    h += strand.vertexMass(iV) * dtSqrReciprocal * Mat3::Identity();
+    // 累加相邻弹簧的力与 Hessian
+    for (...adjacent edges...) { f += ...; h += h_1_1; }
+    Vec3 dx = h.colPivHouseholderQr().solve(f);   // 解 3x3
+    strand.vertex(iV) += dx;                        // 立刻就地更新
+}</code></pre></div>
+        <p>注意最后一行 <code>strand.vertex(iV) += dx</code> 是<b>就地</b>更新 <code>mVertPos</code>，所以下一个顶点 <code>iV+1</code> 在算它自己的力时，读到的就是 <code>iV</code> 的新位置——这就是 Gauss-Seidel。<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a> 会讨论它和 Jacobi 的取舍，以及如何用 graph coloring 把它并行化。</p>
+
+        <h2 id="the-widget">慢动作：亲眼看 G 单调下降</h2>
+        <p>这一节的承诺是：<b>每一个这样的局部牛顿步，都让全局 $G$ 单调下降</b>——不是让 $G_i$ 下降而已，是让整个 $G$ 下降。这个「局部 = 全局」的保证，是 VBD 无条件稳定的根，下一节 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 会证明它。在那之前，先用下面这个慢动作部件亲眼看一遍：每点一次「更新下一个顶点」，就走一个 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，左边显示这个顶点当前的 $\mathbf f_i$、$\mathbf H_i$、$\Delta\mathbf x_i$，右边的 $G$ 曲线一路往下走，从不回头。</p>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 Gauss-Seidel 块下降</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">点「更新下一个顶点」一步步走：看每个顶点的 f_i、H_i、Δx_i，以及增量势能 G 单调下降。</div></div>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 都是 Gauss-Seidel 扫顶点，差别在「扫的时候干什么」</div>
+          <p>PBD 也按 Gauss-Seidel 顺序一个个处理（不过它处理的是<b>约束</b>，不是顶点），也是就地更新位置、迭代越多越收敛。表面流程几乎一样。差别在于每一步<b>朝哪走</b>：PBD 把粒子<i>投影到约束流形上</i>（把弹簧硬掰回 rest length），它并不盯着任何能量；VBD 则解一个微型牛顿步，明确地<b>把 $G$ 往下推</b>。正因为 VBD 每一步都对着 $G$ 这把尺子，它才有 PBD 给不了的单调下降与稳定性保证。下一节就把这件事说死。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) VBD 用 <span class="term">block coordinate descent</span> 解 $\min G$——一次只优化一个顶点的 3 个 DoF，其余固定，按 Gauss-Seidel 顺序扫；(2) 每个顶点对自己的局部能量 $G_i$ 做一步牛顿 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，$3\times3$ 求解几乎免费；(3) 关键承诺——每个这样的局部步都让<b>全局</b> $G$ 单调下降。</p>
+        <p>下一节我们证明这个承诺：为什么动一个顶点带来的局部能量下降，恰好等于全局能量的下降；以及它如何直接给出 VBD 的无条件稳定。再下一节 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 把 $\mathbf f_i$、$\mathbf H_i$ 拆到底。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

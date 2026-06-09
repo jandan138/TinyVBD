@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chebyshev 加速：omega 与 applyAccelerator · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="4-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 4 · Code Walkthrough · 4-4</div>
+        <h1>Chebyshev 加速：omega 与 applyAccelerator</h1>
+        <p class="lede">Gauss-Seidel 收敛是线性的——一遍遍 sweep 稳稳逼近，但有点慢。<span class="term">Chebyshev semi-iterative acceleration</span>（Wang 2015）用一个几乎免费的小技巧把收敛曲线压陡：每次完整迭代后，沿着「这次和上上次之差」的方向<b>外推一步</b>。代码里就是 <code>getAcceleratorOmega</code> 加 <code>applyAccelerator</code> 两个函数。</p>
+
+        <h2 id="idea">直觉：往前一步多踩一脚</h2>
+        <p>普通迭代每次只走到 $\bar{\mathbf x}^{(n)}$（这一遍 sweep 的输出）。Chebyshev 的想法：迭代的误差是<b>一路朝同一方向缩</b>的，那不如顺势多推一点。具体地，用一个随迭代变化的系数 $\omega_n$，把当前结果沿「与上上次 $\mathbf x^{(n-2)}$ 的差」放大：</p>
+        <div class="math-block">$$\mathbf x^{(n)} = \omega_n\big(\bar{\mathbf x}^{(n)} - \mathbf x^{(n-2)}\big) + \mathbf x^{(n-2)}$$</div>
+        <p>$\omega_n&gt;1$ 时这是<b>外推</b>（overshoot 一点点，抵消掉慢慢爬的尾巴）；$\omega_n=1$ 时就退回普通迭代。系数靠一条递推生成：</p>
+        <div class="math-block">$$\omega_1 = 1,\quad \omega_2 = \frac{2}{2-\rho^2},\quad \omega_n = \frac{4}{4-\rho^2\,\omega_{n-1}}$$</div>
+        <p>这里 $\rho\in(0,1)$ 是<b>迭代矩阵谱半径的估计值</b>（estimated spectral radius）——它刻画「每遍迭代误差缩多少」。$\rho$ 越接近 1，意味着原始迭代越慢，需要越激进的外推；$\omega_n$ 随之冲得越高。论文里 $\rho$ 常取 $\approx 0.93\text{–}0.95$。</p>
+
+        <h2 id="omega">getAcceleratorOmega：那条递推</h2>
+        <p>这就是上面递推的逐字实现：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · getAcceleratorOmega()</span><button class="cp">复制</button></div><pre><code>FloatingType getAcceleratorOmega(int order, CFloatingType pho, CFloatingType prevOmega)
+{
+    switch (order)
+    {
+    case 1:
+        return 1;
+        break;
+    case 2:
+        return  2 / (2 - SQR(pho));
+        break;
+    default:
+        assert(order &gt; 0);
+
+        return 4.f / (4 - SQR(pho) * prevOmega);;
+        break;
+    }
+}</code></pre></div>
+        <p>对照递推：<code>order</code> 是迭代序号 $n$，<code>pho</code> 是 $\rho$（变量名拼成了 pho），<code>prevOmega</code> 是 $\omega_{n-1}$。<code>SQR(pho)</code> 就是 <a href="4-1-data-structures.html">4.1</a> 那个平方宏算出的 $\rho^2$。三个分支正好是 $\omega_1=1$、$\omega_2=\frac{2}{2-\rho^2}$、$\omega_n=\frac{4}{4-\rho^2\omega_{n-1}}$。注意它<b>需要上一次的 $\omega$</b> 喂回来——主循环里就是把上一轮的 <code>omega</code> 再传进来（<a href="#wire">见下</a>）。</p>
+
+        <h2 id="apply">applyAccelerator：外推那一步</h2>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · applyAccelerator()</span><button class="cp">复制</button></div><pre><code>void applyAccelerator(FloatingType omega) {
+    if (omega &gt; 1.f)
+    {
+        strand.mVertPos = omega * (strand.mVertPos - strand.prevprevPos) + strand.prevprevPos;
+    }
+}</code></pre></div>
+        <p>这就是 $\mathbf x^{(n)} = \omega(\mathbf x - \mathbf x^{(n-2)}) + \mathbf x^{(n-2)}$ 的逐字实现：此刻 <code>mVertPos</code> 是刚 sweep 完的 $\bar{\mathbf x}^{(n)}$，<code>prevprevPos</code> 是 $\mathbf x^{(n-2)}$。只有 <code>omega &gt; 1</code> 才动手（$\omega=1$ 是恒等变换，没必要算），所以前两次迭代（$\omega_1=1$，且 $\omega_2$ 在 $\rho$ 小时也 $\approx 1$）基本不外推，等递推把 $\omega$ 抬起来才真正发力。<code>prevprevPos</code> 这个字段（<a href="4-1-data-structures.html">4.1</a> 见过）就是专为它存在的，存的就是 $\mathbf x^{(n-2)}$。</p>
+
+        <h2 id="wire">simulate() 怎么把它接起来</h2>
+        <p>回到 <a href="4-5-main-loop.html">4.5</a> 的迭代循环，加速逻辑是这样穿进去的：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · simulate() 内层</span><button class="cp">复制</button></div><pre><code>float omega=1.f;
+for (iter = 0; iter &lt; params.numIterations; iter++)
+{
+    prevIterPos = strand.mVertPos;
+    solve();
+
+    if (params.useAcceleration)
+    {
+        omega = getAcceleratorOmega(iter + 1, params.accelerationRho, omega);
+        applyAccelerator(omega);
+        strand.prevprevPos = prevIterPos;
+    }
+}</code></pre></div>
+        <p>读这个时序：每轮<b>先</b>把当前位置存进 <code>prevIterPos</code>，<b>再</b> <code>solve()</code> 做一遍 Gauss-Seidel sweep。若开了加速，就 (1) 用 <code>iter+1</code> 当 order、把上轮 <code>omega</code> 喂回去算新 <code>omega</code>，(2) <code>applyAccelerator</code> 外推，(3) <b>把 <code>prevprevPos</code> 更新成这一轮 sweep 前的 <code>prevIterPos</code></b>。于是下一轮里的 <code>prevprevPos</code> 恰好是再上一轮的位置——也就是 $\mathbf x^{(n-2)}$，递推链就此闭合。</p>
+
+        <div class="callout warn">
+          <div class="c-h">ρ 太大 → overshoot 振荡甚至发散</div>
+          <p>$\rho$ 是个<b>估计值</b>，调对了能把几十次迭代的活儿压到十几次；调过头就翻车。$\rho$ 越接近 1，$\omega_n$ 冲得越高、外推越猛——一旦超过实际谱半径，外推就从「抄近路」变成「冲过头再荡回来」，收敛曲线开始<b>上下振荡</b>，再大直接<b>发散</b>。这就是为什么它叫 semi-iterative「加速」而不是「保证」：它假设了误差谱的形状，假设错了要付代价。下面的部件让你亲手把 $\rho$ 推到 0.99 看它怎么抖。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">Chebyshev 把收敛曲线压陡</span></div>
+          <div class="lab-body" data-widget="chebyshev"></div>
+          <div class="lab-cap">调 ρ 看加速曲线变陡；推到 0.99 看 overshoot 振荡。</div>
+        </div>
+
+        <div class="callout note">
+          <div class="c-h">诚实交代：TinyVBD 默认<b>没开</b>加速</div>
+          <p>别被这一章误导：默认配置里 <code>useAcceleration = false</code>，所以上面那段 <code>if (params.useAcceleration)</code> 整个<b>不执行</b>，<code>getAcceleratorOmega</code> / <code>applyAccelerator</code> 平时是死代码。默认的 <code>accelerationRho = 0.5</code> 也偏保守（论文常用 0.93–0.95）。默认实验 <code>initializeTilted()</code> 还显式写了 <code>params.useAcceleration = false; params.accelerationRho = 0.5;</code>。想试加速，去 <code>main.cpp</code> 把 <code>useAcceleration</code> 设为 <code>true</code>、把 <code>accelerationRho</code> 调到 0.9 上下再跑——这也是 <a href="../05-experiments/5-4-experiment-menu.html">5.4</a> 实验菜单里的一道菜。</p>
+        </div>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 同一个加速器，也能套在别的迭代器上</div>
+          <p>Chebyshev semi-iterative 不是 VBD 专属——它是给<b>任何线性收敛的不动点迭代</b>提速的通用外壳（Wang 2015 最早就是套在 Projective Dynamics 的 local/global 上）。它不改你每步在算什么（这里还是 <a href="4-3-solve.html">4.3</a> 那遍 Gauss-Seidel sweep），只在外面加一层「沿历史方向外推」。代价是引入一个要手调的 $\rho$ 和翻车风险。所以 TinyVBD 把它做成可选开关、默认关掉——基线 VBD 不靠它也已经无条件稳定。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) Chebyshev 加速 = 每遍 sweep 后做一次外推 $\mathbf x^{(n)}=\omega_n(\bar{\mathbf x}^{(n)}-\mathbf x^{(n-2)})+\mathbf x^{(n-2)}$，<code>getAcceleratorOmega</code> 跑递推 $\omega_1{=}1,\omega_2{=}\frac{2}{2-\rho^2},\omega_n{=}\frac{4}{4-\rho^2\omega_{n-1}}$，<code>applyAccelerator</code> 在 $\omega&gt;1$ 时落地，<code>prevprevPos</code> 存 $\mathbf x^{(n-2)}$；(2) $\rho$ 是谱半径估计，越大越激进，太大则 overshoot 振荡/发散；(3) TinyVBD 默认 <code>useAcceleration=false</code>、<code>accelerationRho=0.5</code>，加速是关着的可选项。</p>
+        <p>所有零件都讲完了。下一节把它们串成主循环：<code>simulate()</code> 怎么一帧帧、一 substep 一 substep 地跑，速度怎么反算，结果怎么写盘可视化（以及一个 Windows 路径的小坑）。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

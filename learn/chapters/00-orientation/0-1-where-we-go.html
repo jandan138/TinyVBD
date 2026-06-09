@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>这本书要带你去哪 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="0-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 0 · Orientation · 0-1</div>
+        <h1>这本书要带你去哪</h1>
+        <p class="lede">我们先不讲任何公式。下面这根「头发」正在你的浏览器里被真正地仿真——它跑的就是 TinyVBD 的核心算法 <span class="term">Vertex Block Descent</span>。先玩一会儿，建立一点 feeling，再开始讲为什么。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">先上手：一根真正在跑 VBD 的 strand</span></div>
+          <div class="lab-body" data-widget="strand-lab"></div>
+          <div class="lab-cap">用鼠标拖动任意顶点甩它；调 <b>stiffness</b>（弹簧多硬）、<b>末端质量比</b>（末端有多重）、<b>迭代数</b>（每帧解多少次）。注意：即使把末端质量调到 1000×、迭代数压到很低，它也不会爆炸。这正是 VBD 的招牌。</div>
+        </div>
+
+        <h2 id="what-is-this">这是什么，为什么值得读</h2>
+        <p>你刚才拖动的，是一条 <span class="term-i">mass-spring strand</span>——一串被弹簧连起来的质点，可以当作一根头发、一段绳子或一条链。<span class="term">TinyVBD</span> 是一份只有 ~400 行、唯一依赖 Eigen 的 C++ 程序，它把这根 strand 一帧帧地仿真出来，存成 JSON 给 Blender 可视化。</p>
+        <p>但它不是又一个「调调弹簧、反复迭代」的玩具。它是 SIGGRAPH 2024 论文 <span class="term-i">Vertex Block Descent</span>（VBD）的官方极简实现。那篇论文的完整版能在一块 RTX 4090 上仿真<b>上亿自由度、百万接触</b>的场景，且<b>无条件稳定</b>——哪怕每帧只迭代一次、时间步很大，也不炸。TinyVBD 把同一套思想剥到最干净的骨架：没有 GPU、没有碰撞、没有四面体，只有一根 strand。<b>这恰恰是读懂它的最好机会</b>。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 它长得像你认识的 PBD，但内核换了</div>
+          <p>你对 <span class="term">PBD</span> 的印象大概是：预测一下位置，然后<i>把粒子硬掰到约束上、一遍遍迭代</i>，迭代越多越「硬」。VBD 表面上也很像——它也直接更新位置、也用 Gauss-Seidel 一个个扫过去。但它<b>不把力转成约束去硬掰</b>，而是让每个顶点解一个小小的牛顿步，朝着「让总能量下降」的方向走。这一字之差，换来了 PBD 给不了的稳定性和物理正确性。这本书的主线，就是讲清楚这个「内核替换」。</p>
+        </div>
+
+        <h2 id="audience">这本书假设你已经会什么</h2>
+        <p>我假设你上过 <span class="term">GAMES103</span>：知道质点、弹簧、显式/隐式时间积分这些词，自己写过弹簧质点系统。我也假设你对 <span class="term">PBD</span> 的理解停留在课堂例子那一层——粗暴调位置、反复迭代——还没深究过它和「真正的弹性力学」是什么关系。</p>
+        <p>我<b>不</b>假设你对隐式欧拉背后的数学本质很清楚。事实上，很多人写过隐式积分却说不清「它到底在求什么」。这本书会专门花一个 Part 把这件事讲透——因为它是理解 VBD（以及 PBD / XPBD / Projective Dynamics 全家）的那把钥匙。</p>
+
+        <div class="callout note">
+          <div class="c-h">一个语言约定</div>
+          <p>正文用中文娓娓道来，但所有<b>架构术语、概念名、命令名、性能指标</b>一律保留英文（<span class="term">Gauss-Seidel</span>、<span class="term">incremental potential</span>、<span class="term">Hessian</span>、<span class="term">compliance</span>…）。这是为了让你读完能无缝衔接论文和代码，而不是记一套只在中文语境里成立的译名。</p>
+        </div>
+
+        <h2 id="roadmap">路线图：我们会怎么走</h2>
+        <p>这本书有一条精心安排的坡度，建议顺着读：</p>
+        <ul>
+          <li><b>Part 1 · 数学地基</b>：补回那块发虚的拼图——隐式欧拉的「<span class="term">variational</span> 真身」：<b>一步隐式欧拉 = 最小化一个能量 $G(\mathbf x)$</b>。这是全书的地基。</li>
+          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，发现它们其实都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同。你对 PBD 的旧印象会在这里被校准。</li>
+          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点。为什么「局部下降」能保证「全局下降」，为什么它又快又稳。</li>
+          <li><b>Part 4 · 读代码</b>：把 TinyVBD 的 <code>forwardStep()</code> / <code>solve()</code> / Chebyshev 加速逐行读透，每一行都对得上前面的公式。</li>
+          <li><b>Part 5 · 实验</b>：亲手复现论文里的招牌实验——高质量比、高刚度比、弯曲——并理解每个实验在「考」VBD 的什么。</li>
+          <li><b>Part 6 + 附录</b>：VBD 的位置、局限与后续，外加术语表、公式速查、参考文献。</li>
+        </ul>
+        <p>每一章都尽量配一个可交互的小实验。它们不是装饰——很多直觉用文字讲十句，不如你拖一下滑块看一眼。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>就三件事：(1) TinyVBD 是 VBD 论文的极简 strand 实现，麻雀虽小五脏俱全；(2) VBD 表面像 PBD，但内核是「让每个顶点解一个牛顿步、把总能量推下去」，而不是硬掰约束；(3) 理解它的钥匙，是先理解「隐式欧拉 = 最小化一个能量」。</p>
+        <p>下一节，我们先花五分钟俯瞰这 7 个文件，看清一次 <code>simulate()</code> 调用从头到尾发生了什么——有了地图，后面读代码就不会迷路。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>谱系图：都在解同一个 min G(x) · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="2-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 2 · The Family Tree · 2-4</div>
+        <h1>谱系图：都在解同一个 min G(x)</h1>
+        <p class="lede">这一节是 Part 2 的收束。我们把 PBD、XPBD、Projective Dynamics、Newton 和即将登场的 VBD 摆进同一张表，验证一个贯穿全书的论点：<b>这个家族的成员，要解的是同一个问题，分歧只在解法。</b></p>
+
+        <h2 id="same-what">大家要解的「是什么」：同一个 G(x)</h2>
+        <p>先把共识钉死。<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 证过，一步隐式欧拉等价于最小化增量势能</p>
+        <div class="math-block">$$\mathbf x^{t+1} = \arg\min_{\mathbf x}\,G(\mathbf x),\qquad G(\mathbf x) = \frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2 + E(\mathbf x)$$</div>
+        <p>这一 Part 走过的每一种方法，<b>骨子里都在攻这同一个 $\min G$</b>。它们看起来天差地别——有的「调位置」，有的「累积 $\lambda$」，有的「local/global」——但那都是<i>手段</i>。把它们摆在一起，分歧会一目了然地落在两件事上：<b>怎么解</b>，以及<b>有没有诚实地保留惯性项</b>。后者，正是 <a href="2-1-pbd.html">2.1</a> 揪出的 PBD 病根。</p>
+
+        <h2 id="the-table">谱系图：分歧在「怎么」，不在「什么」</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>方法</th>
+              <th>解什么</th>
+              <th>怎么解</th>
+              <th>惯性项</th>
+              <th>刚度是否物理</th>
+              <th>并行方式</th>
+              <th>收敛</th>
+              <th>主要局限</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>PBD</b><br>(Müller 2007)</td>
+              <td>$\min G(\mathbf x)$</td>
+              <td>约束投影 Gauss-Seidel（直接掰位置）</td>
+              <td><b>丢掉</b></td>
+              <td>否（随迭代/$h$ 漂移）</td>
+              <td>约束图着色</td>
+              <td>不收敛到良定义解</td>
+              <td>刚度非物理量</td>
+            </tr>
+            <tr>
+              <td><b>XPBD</b><br>(Macklin 2016)</td>
+              <td>$\min G(\mathbf x)$</td>
+              <td>KKT 系统 Gauss-Seidel（累积 $\lambda$）</td>
+              <td>保留</td>
+              <td>是（$\alpha=1/k$，时间步无关）</td>
+              <td>约束/对偶图着色</td>
+              <td>线性；近似 Hessian</td>
+              <td>对偶解法，高质量比崩</td>
+            </tr>
+            <tr>
+              <td><b>Projective Dynamics</b><br>(Bouaziz 2014)</td>
+              <td>$\min G(\mathbf x)$</td>
+              <td>local/global（投影 + 常数矩阵全局解）</td>
+              <td>保留</td>
+              <td>是</td>
+              <td>local 步逐约束并行</td>
+              <td>线性</td>
+              <td>仅特殊二次能量；撕裂要重分解</td>
+            </tr>
+            <tr>
+              <td><b>Newton</b></td>
+              <td>$\min G(\mathbf x)$</td>
+              <td>全局牛顿（组装并解整个 Hessian）</td>
+              <td>保留</td>
+              <td>是</td>
+              <td>全局稀疏求解（难并行）</td>
+              <td>二次（解附近）</td>
+              <td>每步重组装+重分解，贵；需 SPD 修正</td>
+            </tr>
+            <tr>
+              <td><b>VBD</b><br>(SIGGRAPH 2024)</td>
+              <td>$\min G(\mathbf x)$</td>
+              <td>逐顶点 block 坐标下降（每点一步 3×3 牛顿）</td>
+              <td>保留</td>
+              <td>是</td>
+              <td>顶点图着色（颜色数少）</td>
+              <td>单调下降，无条件稳定</td>
+              <td>局部法：高刚度比/超硬大系统收敛慢</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>从左往右读「解什么」那一列，五行全是 $\min G(\mathbf x)$——这是这张表最想让你记住的一点。<b>家族的分裂发生在「怎么解」和「惯性项」上，不在「解什么」上。</b></p>
+
+        <h2 id="reading-the-table">两条主轴：惯性项的诚实，与并行的代价</h2>
+        <p><b>第一条轴：惯性项。</b>只有 PBD 把它丢了，于是它独自落入「刚度非物理」的坑（<a href="2-1-pbd.html">2.1</a>）。XPBD 用 $\tilde\alpha$ 和累积 $\lambda$ 把它请回来（<a href="2-2-xpbd.html">2.2</a>），PD、Newton、VBD 则一开始就老实保留。这一列几乎单手解释了为什么 PBD 之后的所有方法都「更物理」。</p>
+        <p><b>第二条轴：怎么解 × 怎么并行。</b>PBD/XPBD 在<b>约束/对偶</b>侧做 Gauss-Seidel，要给约束图着色；PD 把非线性赶进可并行的 local 步、把全局解冻成常数矩阵；Newton 最准（二次收敛）但每步都要重组装、重分解整个 Hessian，又贵又难并行。每种方法都在「准、快、并行、稳」之间做了不同的取舍——没有免费的午餐，只有不同的账单。</p>
+
+        <div class="callout note">
+          <div class="c-h">primal 还是 dual，是一条暗线</div>
+          <p>XPBD 解的是<b>对偶</b>变量（约束力 $\lambda$），这让它在高质量比下崩：修正按逆质量分配，重物会压垮轻物。PD、Newton、VBD 解的是<b>原始</b>变量（位置本身）。VBD 正是抓住这条暗线，把自己定位成一个高质量比下不崩的 <span class="term">primal</span> 求解器——这笔账留到 <a href="../05-experiments/5-1-mass-ratio.html">5.1</a> 和 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 细算。</p>
+        </div>
+
+        <h2 id="tee-up-vbd">VBD 站在哪：在真正的 G 上做逐顶点 block 下降</h2>
+        <p>现在 VBD 的位置就清楚了。它<b>不</b>像 PBD/XPBD 那样退到约束/对偶侧，也<b>不</b>像 PD 那样要求能量长成特殊二次型，更<b>不</b>像 Newton 那样每步组装并分解整个全局 Hessian。它做的是一件直白得近乎朴素的事：</p>
+        <p><b>在真正的 $G(\mathbf x)$ 上，做逐顶点的 block coordinate descent。</b>一次只动一个顶点的 3 个自由度，对它的局部能量 $G_i$ 做<i>一步</i> 3×3 牛顿（保留完整的局部 Hessian，连惯性项），然后按 Gauss-Seidel 扫过所有顶点。它既拿到了 Newton 式的「最小化真正的 $G$、保留真 Hessian」，又通过「一次只解一个 3×3」避开了全局组装与分解的代价，还能用顶点图着色拿到近 Jacobi 的并行。</p>
+        <p>这就是 Part 3 的全部主题。你会看到「为什么动一个顶点带来的局部下降，恰好等于它带来的全局下降」，从而每一小步都让 $G$ 单调下降——<b>无条件稳定</b>由此而来。家族绕了一大圈，VBD 选了那条最直接、却被前人因为「太贵」而绕开的路，再用 block descent 把「贵」这件事消解掉。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) PBD、XPBD、Projective Dynamics、Newton、VBD <b>解的都是同一个 $\min G(\mathbf x)$</b>，分歧只在「怎么解」与「是否保留惯性项」；(2) 惯性项的诚实（只有 PBD 丢了）和 primal/dual 的选择（只有 XPBD 在对偶侧）是两条解释力最强的主轴；(3) VBD = 在真正的 $G$ 上做逐顶点 block coordinate descent——这正是 <a href="../03-vbd/3-1-block-descent.html">3.1</a> 要展开的核心思想。</p>
+        <p>下一节起进入 Part 3，我们从「一次只动一个顶点」这个最小的动作出发，看 VBD 如何凭它换来又快又稳的全局收敛。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

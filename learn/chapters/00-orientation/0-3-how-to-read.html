@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>怎么读这本书 · 两座桥 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="0-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 0 · Orientation · 0-3</div>
+        <h1>怎么读这本书 · 两座桥</h1>
+        <p class="lede">这本书有几个会反复出现的「装置」，提前认一下脸，后面读起来会顺很多。最重要的是<b>两座桥</b>：它们专门负责把新概念接到你脑子里已有的东西上——一座通向 GAMES103，一座通向你印象中的 PBD。</p>
+
+        <h2 id="two-bridges">两座桥：把新东西接到你已有的直觉上</h2>
+        <p>学一个新方法，最怕的不是公式难，而是「它和我已经会的那套到底什么关系」说不清。这本书的策略是：每当引入一个可能让你发虚的新概念，就用一座<b>桥</b>把它接回你熟悉的岸边。一共两座，颜色和口吻都不一样。</p>
+
+        <h3 id="bridge-g103">紫色桥 · 从 GAMES103 看</h3>
+        <p>第一座桥通向 <span class="term">GAMES103</span>——质点、弹簧、显式 / 隐式时间积分那套你亲手写过的东西。每当某个概念其实是你课上学过的某样东西的「换个说法」或「再走一步」，就会出现一座紫色的桥，帮你把它认出来。长这样：</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 隐式欧拉你早就解过，只是没起这个名字</div>
+          <p>你在课上写隐式积分时，面对的就是 $M(\mathbf x-\mathbf y)=h^2\mathbf f(\mathbf x)$ 这个非线性方程，然后用 Newton 去逼它。这本书会告诉你：这个方程其实是某个能量函数 $G(\mathbf x)$ 的<b>驻点条件</b>。同一件事，换个视角，VBD 的整条思路就顺了。看到紫色桥，就是在提醒你「这其实是你会的东西」。</p>
+        </div>
+
+        <h3 id="bridge-pbd">琥珀桥 · 从 PBD 看</h3>
+        <p>第二座桥通向 <span class="term">PBD</span>。这里我假设你对 PBD 的理解还停在那个朴素印象上：<i>预测一下位置，然后把粒子粗暴地掰到约束上、一遍遍迭代，迭代越多越「硬」</i>。这个心智模型不能算错，但它会让你低估 VBD、也看不清 PBD 自己的毛病。每当某处需要拿这个朴素印象来对照（通常是为了校正它），就会出现一座琥珀色的桥：</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 「掰位置」和「让能量下降」不是一回事</div>
+          <p>你印象里的 PBD 是「把约束硬推到零」。VBD 表面上也在直接更新位置、也按 Gauss-Seidel 一个个扫顶点，像极了 PBD。但它<b>不掰约束</b>，而是让每个顶点解一个小牛顿步，朝「让总能量 $G$ 下降」的方向走一点点。正是这一字之差，换来了 PBD 给不了的稳定性和物理正确性。琥珀桥的任务，就是不断把你这个朴素印象拿出来校准。</p>
+        </div>
+
+        <div class="callout note">
+          <div class="c-h">两座桥怎么用</div>
+          <p>看到<b>紫色（GAMES103）</b>桥，心态是「放松，这是我会的东西的延伸」；看到<b>琥珀色（PBD）</b>桥，心态是「注意，我的旧印象要被修正了」。它们不承载新的硬核推导——硬核内容在正文和公式里——桥只负责接驳直觉。</p>
+        </div>
+
+        <h2 id="conventions">几个贯穿全书的小约定</h2>
+        <p>除了两座桥，还有几个会一直出现的排版约定，认一下就好：</p>
+
+        <h3 id="chinese-english">中文叙述，英文术语</h3>
+        <p>正文用中文娓娓道来，讲「为什么」；但所有<b>架构术语、概念名、命令名、性能指标</b>一律保留英文——像 <span class="term">Gauss-Seidel</span>、<span class="term">incremental potential</span>、<span class="term">Hessian</span>、<span class="term">compliance</span>、<span class="term">Chebyshev</span> 这些。这不是偷懒，而是为了让你读完能<b>无缝衔接论文和代码</b>，而不是记一套只在中文语境里成立的译名。英文术语会用 <span class="term">这样的高亮</span> 标出；偶尔需要强调一个中文/斜体词时用 <span class="term-i">这样的样式</span>。</p>
+
+        <h3 id="callouts">两种提示框</h3>
+        <p>正文里会穿插两类带色块的提示。<b>note</b>（蓝色）是「顺手补一句、帮你理顺」的提示；<b>warn</b>（黄色）是「这里有坑 / 容易误解 / 别踩」的警告。例如：</p>
+
+        <div class="callout warn">
+          <div class="c-h">一个会反复出现的记号陷阱</div>
+          <p>有的论文把增量势能写成 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2 + E(\mathbf x)$，有的写成 $\frac12\lVert\mathbf x-\mathbf y\rVert_M^2 + h^2 E(\mathbf x)$。它们只差一个整体常数 $h^2$，最小值点完全相同。看到两种写法别慌——遇到这种「看着不一样其实一样」的地方，就是 warn 框该出场的时候。</p>
+        </div>
+
+        <h3 id="labs">可交互的小实验（lab）</h3>
+        <p>很多直觉，用文字讲十句不如你拖一下滑块看一眼。所以书里会嵌入一些可交互的 <span class="term">lab</span> 部件——你在 <a href="0-1-where-we-go.html">0.1</a> 已经玩过那根真在跑 VBD 的 strand 了。它们带一个 <span class="term-i">interactive</span> 角标，下方有一句话告诉你「该怎么玩、看什么」。这些不是装饰，是这本书最想让你动手的地方。</p>
+
+        <h3 id="search-theme">搜索与暗色模式</h3>
+        <p>右上角的 🔍 或随时按 <kbd>/</kbd> 唤出<b>搜索框</b>，可以按小节标题或术语快速跳转（↑↓ 选、Enter 跳、Esc 关）。旁边的 ☾ 切换<b>暗色模式</b>，夜里读护眼。左侧目录树和上一页 / 下一页都是自动生成的，跟着走就行。</p>
+
+        <h2 id="reading-order">推荐的阅读顺序</h2>
+        <p>这本书有一条精心安排的坡度，<b>强烈建议从 Part 1 顺着读到 Part 6</b>，不要跳：</p>
+        <ol>
+          <li><b>Part 1 · 数学地基</b>：补回那块发虚的拼图——隐式欧拉的变分真身：一步隐式欧拉 = 最小化能量 $G(\mathbf x)$。这是全书的地基，跳过它后面会处处卡壳。</li>
+          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，发现它们都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同。你对 PBD 的旧印象会在这里被校准。</li>
+          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点，为什么局部下降能保证全局下降，为什么又快又稳。</li>
+          <li><b>Part 4 · 读代码</b>：把 <a href="../04-code/4-2-forward-step.html">forwardStep()</a>、<a href="../04-code/4-3-solve.html">solve()</a>、Chebyshev 加速逐行读透，每行都对得上前面的公式。</li>
+          <li><b>Part 5 · 实验</b>：亲手复现论文招牌实验——高质量比、高刚度比、弯曲——理解每个实验在「考」VBD 的什么。</li>
+          <li><b>Part 6 + 附录</b>：VBD 的位置、局限与后续（AVBD），外加术语表、公式速查、参考文献。</li>
+        </ol>
+
+        <div class="callout note">
+          <div class="c-h">为什么先讲数学再读代码</div>
+          <p>很多人写过隐式积分，却说不清「它到底在求什么」。这本书坚持<b>先把「隐式欧拉 = 最小化一个能量」讲透，再去碰代码</b>——因为它是理解 VBD（以及 PBD / XPBD / Projective Dynamics 全家）的那把钥匙。先有钥匙，Part 4 的每一行代码才会自己解释自己。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>记住几个脸：紫色桥 = 接回 GAMES103（「这是我会的」），琥珀桥 = 接回并校准你对 PBD 的旧印象（「我得改一下认知」）；中文讲为什么、英文留术语；note 帮你顺、warn 提醒坑；lab 让你动手；<kbd>/</kbd> 搜索、☾ 切暗色。然后——从 Part 1 开始，顺着读。</p>
+        <p>地图也有了，读法也约定好了。下一节我们正式踏上 Part 1，去补那块最关键的数学拼图：<b>隐式欧拉，到底在求什么</b>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

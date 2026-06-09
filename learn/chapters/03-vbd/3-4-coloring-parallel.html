@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gauss-Seidel、Jacobi 与 graph coloring · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="3-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-4</div>
+        <h1>Gauss-Seidel、Jacobi 与 graph coloring</h1>
+        <p class="lede">到目前为止，我们的扫描都是<b>顺序</b>的：一个顶点更新完，下一个才动。这在一根 20 顶点的 strand 上无所谓，但在百万顶点的 GPU 场景里，「严格顺序」就是性能杀手。这一节讲 VBD 怎么既要 Gauss-Seidel 的快收敛、又要并行——靠的是给<b>顶点</b>图着色。</p>
+
+        <h2 id="gs-vs-jacobi">Gauss-Seidel vs Jacobi：一对老冤家</h2>
+        <p>更新一遍所有顶点，有两种读法：</p>
+        <table>
+          <thead><tr><th></th><th><span class="term">Gauss-Seidel</span></th><th><span class="term">Jacobi</span></th></tr></thead>
+          <tbody>
+            <tr><td>算 $\mathbf f_i,\mathbf H_i$ 用的邻居位置</td><td>这一遍里<b>最新</b>的（已更新的用新值）</td><td>全部来自<b>同一份旧</b>位置</td></tr>
+            <tr><td>更新方式</td><td>就地，逐个</td><td>先全算完，再统一写回</td></tr>
+            <tr><td>并行</td><td>难（有顺序依赖）</td><td>天然并行（互不依赖）</td></tr>
+            <tr><td>收敛</td><td>快</td><td>慢（信息一遍只传一格）</td></tr>
+            <tr><td>顺序相关</td><td>是（扫描次序影响结果）</td><td>否</td></tr>
+          </tbody>
+        </table>
+        <p>取舍很清楚：<span class="term">Gauss-Seidel</span> 收敛快但难并行——它要求处理顶点 $i$ 时邻居已经是新值，这就强行规定了先后；<span class="term">Jacobi</span> 全用旧值、互不打扰，可以一口气并行算完所有顶点，但信息每遍只向外传播一格，收敛慢。GPU 想要 Jacobi 的并行，物理想要 Gauss-Seidel 的快收敛。VBD 想<b>两个都要</b>。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 你迭代解线性系统时见过这对名字</div>
+          <p>解 $A\mathbf x=\mathbf b$ 时，Gauss-Seidel 把刚算出的分量立刻代回去用，Jacobi 则等一整轮算完再更新——课上通常说 Gauss-Seidel 收敛快约一倍但难并行。VBD 把同样的取舍搬到了非线性的逐顶点优化上，结论一致：顺序的快、并行的慢。下面的着色技巧，就是经典数值线性代数里「red-black ordering / multicolor Gauss-Seidel」那一招在仿真里的化身。</p>
+        </div>
+
+        <h2 id="coloring">关键招：给顶点图着色</h2>
+        <p>VBD 的妙处在于发现：Gauss-Seidel 之所以要顺序，只是因为<b>相邻</b>的两个顶点会互相影响——如果两个顶点<b>不相邻</b>（没有任何 force element 直接连着它们），那同时更新它们完全没有冲突，因为各自的 $\mathbf f_i$、$\mathbf H_i$ 都不依赖对方。</p>
+        <p>于是：给<b>顶点图</b>做 <span class="term">graph coloring</span>——给每个顶点染一种颜色，要求<b>任何一条 force element 的两个端点颜色不同</b>。这样一来，<b>同色</b>的顶点之间一定互不相邻，可以安全地<b>并行</b>（同色内部是 Jacobi：彼此用旧值，但反正彼此无关）；而不同颜色之间按顺序处理，颜色与颜色之间就构成了 Gauss-Seidel（后一个颜色读得到前一个颜色刚更新的新值）。一句话：</p>
+        <div class="callout">
+          <div class="c-h">同色 Jacobi 并行，跨色 Gauss-Seidel 顺序</div>
+          <p>把顶点按颜色分组。处理颜色 1（一整批顶点并行更新）→ 处理颜色 2（并行，但用得上颜色 1 的新值）→ … 一遍 sweep = 走完所有颜色。颜色数 = 一遍 sweep 里的顺序阶段数。颜色越少，并行度越高、同步开销越小。所以「图能用几种颜色染好」直接决定了 VBD 在 GPU 上跑多快。</p>
+        </div>
+
+        <h2 id="vertex-vs-constraint">为什么顶点着色比约束着色省颜色</h2>
+        <p>这里有一个 VBD 相对 PBD/XPBD 的结构性便宜。PBD/XPBD 是<b>约束</b>（对偶）求解器，它们要并行就得给<b>约束图 / dual graph</b> 着色——保证同色的约束不共享顶点。而 VBD 是<b>顶点</b>（primal）求解器，它给<b>顶点图</b>着色。</p>
+        <p>顶点图通常比约束/对偶图<b>稀疏得多</b>：一个顶点接的边数（度数），往往远小于一条约束周围纠缠的其它约束数。图越稀疏，需要的颜色越少。论文报告，对同样的网格，VBD 的<b>顶点着色所需颜色数，比 XPBD 的约束/对偶图着色少约一个数量级</b>。颜色少意味着一遍 sweep 的顺序阶段更少、GPU 同步更少、并行批次更大——这是 VBD 能在 GPU 上高效跑大场景的工程基础之一。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 同样要着色，但着的是不同的图</div>
+          <p>你如果在 GPU 上写过并行 XPBD，应该对「约束着色」不陌生：得把弹簧/约束分成若干批，同一批里没有两条约束共用顶点，才能并行投影。VBD 把着色对象从「约束」换成了「顶点」，而顶点图更稀疏，所以颜色数少了一截。再加上 VBD 是 primal、不按逆质量分配修正，它在高质量比下也不会像 XPBD 那样崩（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a>）。同样是「Gauss-Seidel + 着色并行」的骨架，换了内核就换了脾性。</p>
+        </div>
+
+        <h2 id="tinyvbd-reality">说句实话：TinyVBD 自己没着色</h2>
+        <div class="callout note">
+          <div class="c-h">TinyVBD 是单线程 CPU，做的是朴素顺序 Gauss-Seidel</div>
+          <p>别被上面这套并行叙事误导了去代码里找着色逻辑——<b>找不到</b>。TinyVBD 是个极简的单线程 CPU demo，它的 <code>solve()</code> 就是从 <code>iV=1</code> 一路顺序扫到末端的<b>纯 Gauss-Seidel</b>，没有任何 graph coloring、没有 GPU、没有并行批次。着色是<b>完整版 GPU VBD</b> 用来把这套顺序算法并行化的手段；在一根 20 顶点的 strand 上，顺序扫一遍快得很，根本不需要。这里讲它，是为了让你读懂论文里的并行部分、以及理解 VBD 为何能 scale 到百万顶点——而不是因为这份代码里有它。</p>
+        </div>
+        <p>这其实也是 TinyVBD 的价值所在：它把会让人分心的并行工程全剥掉了，只留下算法的数学骨架。等你彻底吃透了「逐顶点牛顿步 + 单调下降」，再回头看完整 VBD 的着色并行，就只是「把这套骨架铺到 GPU 上」的工程细节而已。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) Gauss-Seidel 用最新值、快但顺序，Jacobi 用旧值、慢但并行；(2) 给<b>顶点图</b>着色——同色顶点互不相邻、可并行（同色 Jacobi），跨色按序（Gauss-Seidel）——VBD 因此兼得快收敛与并行，且顶点着色比约束/对偶着色省约一个数量级的颜色；(3) <b>TinyVBD 本身是单线程 CPU、朴素顺序 Gauss-Seidel，并不着色</b>，着色是完整 GPU 版本的并行手段。</p>
+        <p>下一节回到一个埋了好几次的伏笔：VBD 解 $\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>强制 $\mathbf H_i$ 正定，也不做 line search——这听起来很危险，为什么它依然稳？</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

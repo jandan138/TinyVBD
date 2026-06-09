@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数据结构：Types.h 与 Strand.h · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="4-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 4 · Code Walkthrough · 4-1</div>
+        <h1>数据结构：Types.h 与 Strand.h</h1>
+        <p class="lede">读代码先读数据。在我们逐行解剖 <code>forwardStep()</code> / <code>solve()</code> 之前，先把 TinyVBD 摆弄的两样东西看清楚：一套薄薄的 Eigen typedef（<span class="term">Types.h</span>），和一根 strand 的全部状态（<span class="term">Strand.h</span>）。把字段和前面 Part 1/Part 3 的公式对上号，后面读算法就是「按图索骥」。</p>
+
+        <h2 id="types">Types.h：一层薄薄的 Eigen 别名</h2>
+        <p><span class="term">Types.h</span> 几乎没有逻辑，它只做三件事：选一个浮点类型、给 Eigen 矩阵起一堆短名字、定义几个宏。先看浮点与维度宏：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">Types.h</span><button class="cp">复制</button></div><pre><code>#define GRAVITY_AXIS 1
+
+#define POINT_VEC_DIMS 3
+#define F_FLATTEN_DIMS 9
+#define X_FLATTEN_DIMS 12
+
+#define SQR(x) ((x) * (x))
+#define CUBE(x) ((x) * (x) * (x))</code></pre></div>
+
+        <p><code>GRAVITY_AXIS 1</code> 就是说重力沿 <b>y 轴</b>（轴 0/1/2 = x/y/z）。这和 <code>main.cpp</code> 里 <code>gravity &lt;&lt; 0, -10, 0</code> 一致——重力指向 $-y$，模长 10。<code>SQR</code> 是个再普通不过的平方宏，但记住它：<a href="4-4-chebyshev.html">4.4</a> 的 Chebyshev omega 递推里 <code>SQR(pho)</code> 就是 $\rho^2$。</p>
+
+        <p>核心是这一组 typedef（都在 <code>namespace VBD</code> 内）：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">Types.h</span><button class="cp">复制</button></div><pre><code>typedef float FloatingType;
+typedef const float CFloatingType;
+typedef int32_t IdType;
+
+typedef Eigen::Matrix&lt;FloatingType, 3, 1&gt; Vec3;
+typedef Eigen::Matrix&lt;IdType, 2, 1&gt; Vec2I;
+typedef Eigen::Matrix&lt;FloatingType, POINT_VEC_DIMS, POINT_VEC_DIMS&gt; Mat3;
+typedef Eigen::Matrix&lt;FloatingType, POINT_VEC_DIMS, Eigen::Dynamic&gt; TVerticesMat;
+typedef Eigen::Matrix&lt;FloatingType, Eigen::Dynamic, 1&gt; VecDynamic;
+
+using Vec3Block = Eigen::Block&lt;TVerticesMat, 3, 1&gt;;</code></pre></div>
+
+        <p>三个名字会在全书反复出现，务必记牢：</p>
+        <ul>
+          <li><code>FloatingType = float</code>：整套仿真跑在 <b>单精度</b>上（源码里 <code>double</code> 那行被注释掉了）。后面看到 <code>1e8</code> 的 stiffness 时，心里要清楚精度只有 float。</li>
+          <li><code>TVerticesMat</code> = <code>Matrix&lt;float, 3, Dynamic&gt;</code>：<b>3×N 的顶点矩阵</b>，<b>每一列是一个顶点</b>的 $(x,y,z)$。strand 的位置、速度、惯性预测，全是这个形状。它是列主序的，「取第 i 个顶点」= 取第 i 列。</li>
+          <li><code>Vec3</code> / <code>Mat3</code>：单个顶点的 3 维向量、单个顶点的 3×3 矩阵。<a href="4-3-solve.html">4.3</a> 里每个顶点的力 <code>f</code> 是 <code>Vec3</code>，Hessian <code>h</code> 是 <code>Mat3</code>——这正是 VBD「一次只动一个顶点的 3 个自由度」在类型上的体现。</li>
+        </ul>
+        <p><code>Vec2I</code> 是一条边的两个整型顶点 id；<code>VecDynamic</code> 是动态长度的 float 向量（用来存每个顶点的质量、每条边的 rest 长度）。</p>
+
+        <div class="callout note">
+          <div class="c-h">RELEASE_ASSERT：失败就停下来给你看</div>
+          <p>Types.h 还定义了一个 <code>RELEASE_ASSERT(expr)</code> 宏（配 <code>AbstractAsserter</code>）：表达式为假时打印 <code>expr / 文件 / 行号</code>，执行一个可选的 debug 回调，<code>getchar()</code> 等你看一眼，然后 <code>exit(-1)</code>。它和标准 <code>assert</code> 的区别是 <b>Release 构建下也生效</b>——这是研究型代码常见的自保手段。TinyVBD 的热路径里其实主要用普通 <code>assert</code>（如 <code>from()</code> 里的尺寸检查），但这个宏放在工具箱里随时可用。</p>
+        </div>
+
+        <h2 id="mesh">Mesh 基类：一根 strand 的最小状态</h2>
+        <p><span class="term">Strand.h</span> 里先有一个极简的 <code>Mesh</code> 基类，它持有任何「一堆带质量的顶点」都需要的四件东西：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">Strand.h</span><button class="cp">复制</button></div><pre><code>struct Mesh
+{
+    TVerticesMat mVertPos;
+    TVerticesMat mVertPrevPos;
+    TVerticesMat mVelocity;
+    VecDynamic vertexMass;
+
+    Vec3Block vertex(int i) {
+        return mVertPos.block&lt;3, 1&gt;(0, i);
+    }
+};</code></pre></div>
+
+        <p><code>mVertPos</code> 是当前位置 $\mathbf x$，<code>mVertPrevPos</code> 是这一步开始前的位置 $\mathbf x^t$（用来在 <a href="4-5-main-loop.html">4.5</a> 的 <code>updateVelocity()</code> 里反算速度），<code>mVelocity</code> 是 $\mathbf v$，<code>vertexMass</code> 是每个顶点的质量 $m_i$。</p>
+        <p>关键是 <code>vertex(i)</code>：它返回 <code>mVertPos</code> 的<b>第 i 列的一个 3×1 block 引用</b>（不是拷贝）。所以 <code>strand.vertex(iV) += dx;</code> 是<b>原地</b>把第 iV 个顶点挪动 <code>dx</code>——这正是 <a href="4-3-solve.html">4.3</a> 里 Gauss-Seidel 每步落地的那一行。「返回引用、就地写回」是 Gauss-Seidel（而非 Jacobi）的关键：下一个顶点立刻看到上一个顶点的新位置。</p>
+
+        <h2 id="vbdstrand">VBDStrand：补上弹簧、邻接与历史</h2>
+        <p><code>VBDStrand : public Mesh</code> 在 <code>Mesh</code> 之上加了弹簧网络和算法需要的历史量：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">Strand.h</span><button class="cp">复制</button></div><pre><code>struct VBDStrand : public Mesh
+{
+public:
+    std::vector&lt;Vec2I&gt; edges;
+    std::vector&lt;FloatingType&gt; edgesStiffness;
+    std::vector&lt;std::vector&lt;int&gt;&gt; vertAdjacentEdges;
+    size_t nEdges;
+    FloatingType stiffness;
+    FloatingType stiffnessSkipSpring;
+    VecDynamic orgLengths;
+    TVerticesMat mVelocitiesPrev;
+    TVerticesMat inertia;
+    size_t numVerts;
+
+    TVerticesMat prevprevPos;
+    bool hasVelocitiesPrev = false;
+    bool hasApproxAcceleration = false;</code></pre></div>
+
+        <p>逐个对上号：</p>
+        <ul>
+          <li><code>edges</code>：每条弹簧的两个端点 id（<code>Vec2I</code>）。<code>edgesStiffness</code>：每条边的刚度 $k$（注意是<b>逐边</b>存的，为高刚度比实验留了口子，见 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a>）。<code>orgLengths</code>：每条边的 rest 长度 $l_0$。</li>
+          <li><code>vertAdjacentEdges</code>：<b>每个顶点的邻接边 id 列表</b>（一个 vector of vector）。这是全章最该记住的字段——<a href="4-3-solve.html">4.3</a> 里组装第 $i$ 个顶点的力 $\mathbf f_i$ 与 Hessian $\mathbf H_i$ 时，正是遍历 <code>vertAdjacentEdges[iV]</code> 把每条邻接弹簧的贡献累加上去。它就是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 里那个「force elements 集合 $\mathcal F_i$」的代码化身。</li>
+          <li><code>inertia</code>：惯性预测位置 $\mathbf y$（<a href="4-2-forward-step.html">4.2</a> 里算出来）。<code>mVelocitiesPrev</code>：上一帧速度 $\mathbf v^{t-1}$，<code>hasVelocitiesPrev</code> 标记它是否已经有了——服务于自适应初始化（<a href="4-2-forward-step.html">4.2</a>）。</li>
+          <li><code>prevprevPos</code>：迭代历史 $\mathbf x^{(n-2)}$，只给 Chebyshev 加速用（<a href="4-4-chebyshev.html">4.4</a>）。</li>
+        </ul>
+
+        <h2 id="builders">两个 from(...)：怎么把一根 strand 装起来</h2>
+        <p><code>VBDStrand</code> 有两个 <code>from(...)</code> 重载，都从「顶点位置 + 质量 + 边长 + 刚度」构建出上面这些字段，区别只在<b>刚度怎么给</b>。先看<b>统一刚度</b>那个（带可选 skip spring）的核心循环：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">Strand.h · from（统一刚度）</span><button class="cp">复制</button></div><pre><code>vertAdjacentEdges.resize( pos.size());
+std::vector&lt;FloatingType&gt; lengthesNew;
+for (size_t i = 0; i &lt; lengthes.size(); ++i) {
+    Vec2I edge;
+    edge &lt;&lt; i, i + 1;
+    int edgeId = edges.size();
+    edges.push_back(edge);
+
+    vertAdjacentEdges[i].push_back(edgeId);
+    vertAdjacentEdges[i+1].push_back(edgeId);
+    edgesStiffness.push_back(stiffness);
+    lengthesNew.push_back(lengthes[i]);
+    if (addSkipSpring &amp;&amp; i &lt; lengthes.size() - 1)
+    {
+        edgeId = edges.size();
+        edge &lt;&lt; i, i + 2;
+        edges.push_back(edge);
+        vertAdjacentEdges[i].push_back(edgeId);
+        vertAdjacentEdges[i + 2].push_back(edgeId);
+        edgesStiffness.push_back(stiffnessSkipSpring);
+        lengthesNew.push_back(lengthes[i] + lengthes[i+1]);
+    }
+}</code></pre></div>
+
+        <p>主循环每一圈做一条「结构弹簧」：连接相邻顶点 $i$ 与 $i{+}1$，rest 长度就是给定的 <code>lengthes[i]</code>，刚度统一是 <code>stiffness</code>。注意它<b>同时把这条边登记到两个端点</b>的邻接表里（<code>vertAdjacentEdges[i]</code> 和 <code>[i+1]</code>）——这就是为什么后面一个顶点能找到「我连着哪些弹簧」。</p>
+        <p>下半段是 <span class="term">skip spring</span>：当 <code>addSkipSpring</code> 为真，额外连一条 $i \to i{+}2$ 的弹簧，刚度用单独的 <code>stiffnessSkipSpring</code>（默认 <code>1e2</code>），rest 长度取 <code>lengthes[i] + lengthes[i+1]</code>（两段之和）。一根纯靠相邻弹簧串起来的 strand 是<b>没有抗弯能力</b>的——它能像面条一样随便对折。跳一格的弹簧给它一个「保持伸直」的倾向，<b>近似了 bending（弯曲）刚度</b>。默认实验 <code>initializeTilted()</code> 就开了它（<code>skipSpringStrength=100</code>），细节见 <a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 邻接表就是约束图，只不过这里按顶点存</div>
+          <p>在 PBD 里你也维护一张「约束清单」，挨个投影。VBD 的 <code>vertAdjacentEdges</code> 是同一张图的<b>另一种切法</b>：不是「对每条约束做点什么」，而是「对每个顶点，找出所有影响它的约束」。这个转置正是 block coordinate descent 的前提——只有先知道「谁影响我」，才能为单个顶点组出局部的 $\mathbf f_i$、$\mathbf H_i$（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）。</p>
+        </div>
+
+        <p>第二个 <code>from(...)</code> 重载把最后一个参数换成 <code>std::vector&lt;FloatingType&gt; stiffness_in</code>，直接 <code>edgesStiffness = stiffness_in;</code> 收下<b>逐边刚度数组</b>，循环里不再 push 统一刚度、也不造 skip spring。<code>initializeStiffRatio()</code> 用它造出交替的 <code>1e4 / 1e8</code> 刚度，专门去拷打 VBD 在高刚度比下的收敛（<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a>）。</p>
+
+        <div class="callout">
+          <div class="c-h">一个边角：第二个 from 里的 push_back(stiffness)</div>
+          <p>逐边刚度版的循环里有一行 <code>edgesStiffness.push_back(stiffness);</code>，但 <code>edgesStiffness</code> 在循环前已被整段赋成 <code>stiffness_in</code> 了，所以这次 push 实际把数组又往后追加了一截（而 <code>stiffness</code> 成员此重载里没被设置）。这不影响结果，因为后续 <code>solve()</code> 只按 <code>edgeId</code> 索引前半段真正用到的刚度。提一句是为了你读源码时不被它绊住——真正决定刚度的是构造时传入的 <code>stiffness_in</code>。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) <code>TVerticesMat</code> 是 3×N 的「每列一个顶点」矩阵，<code>vertex(i)</code> 返回可写的列引用——VBD「就地更新单个顶点」全靠它；(2) <code>VBDStrand</code> 把状态分成三类：弹簧网络（<code>edges/edgesStiffness/orgLengths</code>）、邻接（<code>vertAdjacentEdges</code>，组装 $\mathbf f_i/\mathbf H_i$ 的图）、历史（<code>inertia/mVertPrevPos/mVelocitiesPrev/prevprevPos</code>）；(3) <code>from(...)</code> 造出结构弹簧 $i\!-\!i{+}1$，可选的 skip spring $i\!-\!i{+}2$ 近似弯曲，逐边刚度版为高刚度比实验留口。</p>
+        <p>数据就位。下一节进 <code>forwardStep()</code>：看这一步开始时，惯性 $\mathbf y$ 怎么算、初始猜测怎么聪明地「预判重力」。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

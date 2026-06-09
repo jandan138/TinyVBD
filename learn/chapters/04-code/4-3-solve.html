@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>solve()：一次 Gauss-Seidel sweep 逐行解剖 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="4-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 4 · Code Walkthrough · 4-3</div>
+        <h1>solve()：一次 Gauss-Seidel sweep 逐行解剖</h1>
+        <p class="lede">这是全书所有铺垫的兑现点。<code>solve()</code> 一次调用 = 一遍 <span class="term">Gauss-Seidel sweep</span>：从头到尾扫过每个顶点，给每个顶点解一个 3×3 牛顿步。整本书讲的 $G$、$\mathbf f_i$、$\mathbf H_i$、弹簧 Hessian，全在这二十几行里。我们一行一行把它和公式对上。</p>
+
+        <h2 id="whole">先看全貌</h2>
+        <p>把 <code>solve()</code> 完整放出来，然后拆：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · solve()</span><button class="cp">复制</button></div><pre><code>void solve() {
+    float dtSqrReciprocal = 1.f / (params.dt * params.dt);
+    auto&amp; edges = strand.edges;
+    for (size_t iV = 1; iV &lt; strand.numVerts; iV++)
+    {
+        Mat3 h = Mat3::Zero();
+        Vec3 f = Vec3::Zero();
+
+        f = strand.vertexMass(iV) * (strand.inertia.col(iV) - strand.vertex(iV))* (dtSqrReciprocal);
+        h += strand.vertexMass(iV) * dtSqrReciprocal * Mat3::Identity();
+        for (size_t iNeiE = 0; iNeiE &lt; strand.vertAdjacentEdges[iV].size(); iNeiE++)
+        {
+            int edgeId1 = strand.vertAdjacentEdges[iV][iNeiE];
+
+            if (edgeId1 != -1)
+            {
+                IdType v1 = edges[edgeId1][0];
+                IdType v2 = edges[edgeId1][1];
+                Vec3 diff = strand.mVertPos.col(v1) - strand.mVertPos.col(v2);
+                FloatingType l = diff.norm();
+                FloatingType l0 = strand.orgLengths(edgeId1);
+                // evaluate hessian
+                Mat3 h_1_1;
+                FloatingType stiffness_ = strand.edgesStiffness[edgeId1];
+                h_1_1 = stiffness_ * (Mat3::Identity() - (l0 / l) * (Mat3::Identity() - diff * diff.transpose() / (l * l)));
+                h += h_1_1;
+
+                if (v1 == iV)
+                {
+                    f += (stiffness_ * (l0 - l) / l) * diff;
+
+                }
+                else {
+                    f -= (stiffness_ * (l0 - l) / l)* diff;
+                }
+
+            }
+        }
+
+        Vec3 dx = h.colPivHouseholderQr().solve(f);
+
+        strand.vertex(iV) += dx;
+
+    }
+}</code></pre></div>
+
+        <p>骨架是：外层循环扫每个顶点 → 为它备一个 3×3 的 <code>h</code> 和 3×1 的 <code>f</code> → 先填惯性项 → 内层循环把每条邻接弹簧的贡献累加进去 → 解 3×3 线性系统得到 <code>dx</code> → 就地挪动顶点。这正是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 的 $\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$。下面逐块对公式。</p>
+
+        <h2 id="loop">外层循环与那个 1/dt²</h2>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 顶层</span><button class="cp">复制</button></div><pre><code>float dtSqrReciprocal = 1.f / (params.dt * params.dt);
+for (size_t iV = 1; iV &lt; strand.numVerts; iV++)</code></pre></div>
+        <p><code>dtSqrReciprocal</code> 就是 $1/h^2$，全函数复用。循环从 <code>iV=1</code> 起——<b>跳过 0 号 pinned 顶点</b>（它被 <a href="4-2-forward-step.html">4.2</a> 钉死，不参与求解）。每个 <code>iV</code> 是一次独立的「block」：只动这一个顶点的 3 个自由度，其余全当固定。这就是 <span class="term">block coordinate descent</span>（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）落到代码里的样子。</p>
+
+        <h2 id="inertia-term">惯性项：f 和 h 的第一块</h2>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 惯性项</span><button class="cp">复制</button></div><pre><code>f = strand.vertexMass(iV) * (strand.inertia.col(iV) - strand.vertex(iV))* (dtSqrReciprocal);
+h += strand.vertexMass(iV) * dtSqrReciprocal * Mat3::Identity();</code></pre></div>
+        <p>这两行就是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 里 $\mathbf f_i$、$\mathbf H_i$ 的<b>惯性部分</b>：</p>
+        <div class="math-block">$$\mathbf f_i \mathrel{+}= \frac{m_i}{h^2}\big(\mathbf y_i - \mathbf x_i\big),\qquad \mathbf H_i \mathrel{+}= \frac{m_i}{h^2}\mathbf I$$</div>
+        <p>对照：<code>vertexMass(iV)</code> 是 $m_i$，<code>inertia.col(iV)</code> 是惯性目标 $\mathbf y_i$，<code>vertex(iV)</code> 是当前位置 $\mathbf x_i$，<code>dtSqrReciprocal</code> 是 $1/h^2$。<b>力 $\mathbf f$ 是负梯度</b>：$-\nabla_i G$ 的惯性部分是 $-\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i)=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$，正是代码里 <code>(inertia - x)</code> 的方向——它把顶点往惯性碗底 $\mathbf y_i$ 拉。Hessian 的惯性部分 $\frac{m_i}{h^2}\mathbf I$ <b>恒正定</b>，是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里「即使弹簧 Hessian 不定也能稳」的那块定海神针。</p>
+
+        <h2 id="springs">内层循环：每条邻接弹簧的贡献</h2>
+        <p>现在遍历这个顶点的邻接弹簧——用的正是 <a href="4-1-data-structures.html">4.1</a> 里的 <code>vertAdjacentEdges[iV]</code>（force elements 集合 $\mathcal F_i$）。先取边、取几何量：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 取边</span><button class="cp">复制</button></div><pre><code>int edgeId1 = strand.vertAdjacentEdges[iV][iNeiE];
+if (edgeId1 != -1)
+{
+    IdType v1 = edges[edgeId1][0];
+    IdType v2 = edges[edgeId1][1];
+    Vec3 diff = strand.mVertPos.col(v1) - strand.mVertPos.col(v2);
+    FloatingType l = diff.norm();
+    FloatingType l0 = strand.orgLengths(edgeId1);
+    FloatingType stiffness_ = strand.edgesStiffness[edgeId1];</code></pre></div>
+        <p><code>v1, v2</code> 是这条弹簧的两端，<code>diff</code> $=\mathbf d=\mathbf x_{v1}-\mathbf x_{v2}$ 是弹簧向量，<code>l</code> $=\lVert\mathbf d\rVert$ 是当前长度，<code>l0</code> $=l_0$ 是 rest 长度，<code>stiffness_</code> $=k$ 是这条边的刚度。和 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的记号一一对应。（<code>edgeId1 != -1</code> 是个安全判：邻接表里 -1 代表空槽，本 strand 的 <code>from()</code> 不会塞 -1，但留着保险。）</p>
+
+        <h3 id="spring-h">弹簧 Hessian：h_1_1</h3>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 弹簧 Hessian</span><button class="cp">复制</button></div><pre><code>h_1_1 = stiffness_ * (Mat3::Identity() - (l0 / l) * (Mat3::Identity() - diff * diff.transpose() / (l * l)));
+h += h_1_1;</code></pre></div>
+        <p>这一行是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 推出来的弹簧 Hessian，直接抄进代码：</p>
+        <div class="math-block">$$\mathbf H_{aa} = k\Big[\mathbf I - \frac{l_0}{l}\Big(\mathbf I - \frac{\mathbf d\mathbf d^\top}{l^2}\Big)\Big]$$</div>
+        <p>对照：<code>diff * diff.transpose()</code> 是外积 $\mathbf d\mathbf d^\top$，除以 <code>(l*l)</code> 即 $/l^2$。整块乘 <code>stiffness_</code>=$k$。把它的物理读出来：沿弹簧方向的特征值是 $k$（拉伸方向永远硬）；垂直方向的特征值是 $k(1-l_0/l)$——<b>当弹簧被压缩（$l&lt;l_0$）时这个值为负，$\mathbf H_{aa}$ 不定</b>。这正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里那个「弹簧单独看可能不定」的来源。VBD 不对它做 SPD 投影，靠的就是上面那块恒正定的惯性 Hessian 把整个 <code>h</code> 兜回正定附近。注意代码无脑 <code>+=</code> 累加、不做任何 clamp——这是 VBD 的故意设计。</p>
+
+        <h3 id="spring-f">弹簧力：那个 ± 号</h3>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 弹簧力</span><button class="cp">复制</button></div><pre><code>if (v1 == iV)
+{
+    f += (stiffness_ * (l0 - l) / l) * diff;
+}
+else {
+    f -= (stiffness_ * (l0 - l) / l)* diff;
+}</code></pre></div>
+        <p>弹簧对端点 $a$ 的力是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的</p>
+        <div class="math-block">$$\mathbf f = k\,\frac{l_0-l}{l}\,\mathbf d,\qquad \mathbf d=\mathbf x_{v1}-\mathbf x_{v2}$$</div>
+        <p>系数 <code>stiffness_*(l0-l)/l</code> 就是 $k\frac{l_0-l}{l}$，乘上 <code>diff</code>=$\mathbf d$。<b>± 号取决于当前顶点 <code>iV</code> 是这条弹簧的哪一端</b>：<code>diff</code> 是按 $\mathbf x_{v1}-\mathbf x_{v2}$ 定义的，所以它天然是「对 v1 的力」。若 <code>iV == v1</code>，直接 <code>+=</code>；若 <code>iV</code> 是另一端 v2，力反向，<code>-=</code>。物理含义很直白：弹簧被拉长（$l&gt;l_0$，$l_0-l&lt;0$）时，力把两端往中间拽；被压短时往外推。每条邻接弹簧都把它对 <code>iV</code> 的那一份力加进 <code>f</code>，加完就是完整的 $\mathbf f_i$。</p>
+
+        <div class="callout note">
+          <div class="c-h">为什么 H 只累加 h_1_1、不管 ±号</div>
+          <p>力是向量、有方向，换端点要翻号；但 Hessian $\mathbf H_{aa}$ 对两个端点是<b>同一个 3×3 块</b>（$\partial^2 E/\partial\mathbf x_a^2 = \partial^2 E/\partial\mathbf x_b^2$，因为弹簧能量只依赖 $\mathbf d=\mathbf x_a-\mathbf x_b$）。所以 <code>h += h_1_1</code> 不分 v1/v2，无条件累加——这不是偷懒，是对的。</p>
+        </div>
+
+        <h2 id="newton">3×3 牛顿步与就地更新</h2>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 解 &amp; 更新</span><button class="cp">复制</button></div><pre><code>Vec3 dx = h.colPivHouseholderQr().solve(f);
+strand.vertex(iV) += dx;</code></pre></div>
+        <p>累加完，<code>h</code> 是完整的 $\mathbf H_i$、<code>f</code> 是完整的 $\mathbf f_i$。最后两行就是一步牛顿：</p>
+        <div class="math-block">$$\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i \mathrel{+}= \Delta\mathbf x_i$$</div>
+        <p><code>colPivHouseholderQr().solve(f)</code> 是 Eigen 解这个 3×3 系统 $\mathbf H_i\,\Delta\mathbf x = \mathbf f_i$ 的方式（列主元 QR，对 3×3 又稳又快，不必显式求逆）。<code>strand.vertex(iV) += dx</code> 借助 <a href="4-1-data-structures.html">4.1</a> 的「返回列引用」<b>就地</b>把顶点挪过去。就地是关键：循环里下一个顶点 <code>iV+1</code> 计算它的 <code>diff</code> 时，立刻读到 <code>iV</code> 的<b>新</b>位置——这就是 <span class="term">Gauss-Seidel</span>（用最新值），而非 Jacobi（统一用旧值）。<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a> 讲的就是怎么靠图着色在 GPU 上既保 Gauss-Seidel 的收敛、又拿到并行。</p>
+
+        <div class="callout">
+          <div class="c-h">一次 sweep 还不够：solve() 要被调很多次</div>
+          <p><code>solve()</code> 只走<b>一遍</b>所有顶点（一次 sweep）。<a href="4-5-main-loop.html">4.5</a> 的主循环每个 substep 会调它 <code>numIterations</code> 次（默认 100），让 $G$ 一遍遍下降、逼近 $\arg\min G$。单次 sweep 不解出精确解，但 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 保证了每个局部牛顿步都让全局 $G$ 单调下降——所以反复扫就稳稳收敛。想看慢动作的逐顶点能量下降，回 <a href="../03-vbd/3-1-block-descent.html">3.1</a> 的 <code>vbd-sweep</code> 部件。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>把整段映射一句话记牢：<b>外层扫顶点（跳过 pinned 0）→ 惯性项给 $\mathbf f_i,\mathbf H_i$ 打底（$\frac{m}{h^2}(\mathbf y-\mathbf x)$、$\frac{m}{h^2}\mathbf I$，恒正定）→ 遍历 <code>vertAdjacentEdges</code>，每条弹簧累加 Hessian <code>h_1_1</code>（= $k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$）和带 ± 号的力（= $k\frac{l_0-l}{l}\mathbf d$）→ <code>dx = H⁻¹f</code> 解 3×3 → <code>vertex(iV) += dx</code> 就地写回（Gauss-Seidel）</b>。前面 1.2/1.4/3.3 推的每个公式，在这里都能用手指点到对应的那一行。</p>
+        <p>下一节：当我们想让这串 sweep <b>更快</b>收敛——Chebyshev 加速怎么用一个 omega 把收敛曲线压陡，又怎么在 ρ 调太大时翻车。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

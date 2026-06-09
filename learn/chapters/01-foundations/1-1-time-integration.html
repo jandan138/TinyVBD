@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F=ma 与时间积分：explicit vs implicit Euler · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="1-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 1 · The Variational View · 1-1</div>
+        <h1>F=ma 与时间积分：explicit vs implicit Euler</h1>
+        <p class="lede">在跳进 VBD 之前，我们先把 GAMES103 那块地基拍结实：从 $F=ma$ 到一步步往前推时间，三种 Euler 谁稳谁炸、为什么。这一节的结论会直接逼出下一节的主角——隐式欧拉，以及它「贵在哪、为什么贵」。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 这一节是复习，但带着一个新问题去复习</div>
+          <p>质点、弹簧、显式/隐式积分，你在 GAMES103 都写过。这里不重讲一遍代码，而是带一个问题回看它：<b>为什么显式欧拉一调大时间步或刚度就炸，隐式却怎么都不炸？</b>把这个「为什么」想透，你就站在了理解 VBD「无条件稳定」的起点上。</p>
+        </div>
+
+        <h2 id="fma">从 F=ma 到「一步步往前推」</h2>
+        <p>一切都从牛顿第二定律开始。一个质量为 $m$ 的质点，位置 $\mathbf x$，受力 $\mathbf f$，满足</p>
+        <div class="math-block">$$m\,\ddot{\mathbf x} = \mathbf f(\mathbf x),\qquad \text{即}\quad \dot{\mathbf x}=\mathbf v,\ \ \dot{\mathbf v}=M^{-1}\mathbf f(\mathbf x).$$</div>
+        <p>这是一组关于时间的<span class="term-i">连续</span>常微分方程。计算机不会解连续，只会一小步一小步往前算：把时间切成步长 $h$（代码里就是 <code>dt</code>，TinyVBD 默认 $h=1/60$），用当前已知的量去估计下一刻 $\mathbf x^{t+1},\mathbf v^{t+1}$。<b>怎么估</b>——具体把右端的力和速度取在哪个时刻——就是三种 Euler 的分水岭。</p>
+
+        <h2 id="three-eulers">三种 Euler：力取在哪一刻</h2>
+        <p>我们用同一组速度-位置更新模板，只换「右端取在 $t$ 还是 $t+1$」：</p>
+        <table>
+          <thead><tr><th>方法</th><th>速度更新</th><th>位置更新</th></tr></thead>
+          <tbody>
+            <tr><td><span class="term">Forward (explicit) Euler</span></td><td>$\mathbf v^{t+1}=\mathbf v^t+hM^{-1}\mathbf f(\mathbf x^t)$</td><td>$\mathbf x^{t+1}=\mathbf x^t+h\mathbf v^t$</td></tr>
+            <tr><td><span class="term">Semi-implicit (symplectic) Euler</span></td><td>$\mathbf v^{t+1}=\mathbf v^t+hM^{-1}\mathbf f(\mathbf x^t)$</td><td>$\mathbf x^{t+1}=\mathbf x^t+h\mathbf v^{t+1}$</td></tr>
+            <tr><td><span class="term">Backward (implicit) Euler</span></td><td>$\mathbf v^{t+1}=\mathbf v^t+hM^{-1}\mathbf f(\mathbf x^{t+1})$</td><td>$\mathbf x^{t+1}=\mathbf x^t+h\mathbf v^{t+1}$</td></tr>
+          </tbody>
+        </table>
+        <p>差别看似微不足道，无非是 $\mathbf f$ 里写 $\mathbf x^t$ 还是 $\mathbf x^{t+1}$、位置里用 $\mathbf v^t$ 还是 $\mathbf v^{t+1}$。但正是这点差别决定了「炸不炸」。注意最后一行：backward Euler 用<span class="term-i">未来</span>的力 $\mathbf f(\mathbf x^{t+1})$ 来更新——而 $\mathbf x^{t+1}$ 本身还没算出来。它出现在等式两边，这就是「隐式」二字的来历，也是它贵的根源。</p>
+
+        <h2 id="oscillator">放到弹簧上：一维谐振子</h2>
+        <p>要看清稳定性，最干净的试金石是一根线性弹簧拉着的质点，写成标量形式 $\ddot x=-\omega^2 x$（$\omega=\sqrt{k/m}$ 是固有频率，刚度 $k$ 越大、质量 $m$ 越小，$\omega$ 越大、振得越快）。真实解是不衰不增的正弦振荡。我们关心：离散一步后，振幅是被放大了还是缩小了？把每种方法写成「下一刻状态 = 某个 $2\times2$ 矩阵 $\times$ 当前状态」，这个矩阵的<b>谱半径</b>（最大特征值模）就是每步的振幅放大倍数 $G$：$G&gt;1$ 必然指数爆炸，$G=1$ 振幅守恒，$G&lt;1$ 则被数值地拖小。记关键无量纲量 $\;\xi=h\omega\;$（时间步乘以频率），三种方法的命运全由它决定：</p>
+
+        <div class="math-block">$$
+        G_{\text{forward}}=\sqrt{1+\xi^2}\;&gt;\;1,\qquad
+        G_{\text{symplectic}}=1\ (\text{当 }\xi&lt;2),\qquad
+        G_{\text{backward}}=\frac{1}{\sqrt{1+\xi^2}}\;&lt;\;1.
+        $$</div>
+
+        <p>三行公式，把这一节要讲的全说尽了，逐个拆开看。</p>
+
+        <h3 id="forward-explodes">Forward Euler：放大倍数恒 &gt; 1，必炸</h3>
+        <p>$G_{\text{forward}}=\sqrt{1+\xi^2}$，无论 $\xi$ 多小都<b>严格大于 1</b>。也就是说，纯显式欧拉对谐振子<span class="term-i">永远</span>在往振幅里注入能量，只是 $\xi$ 小时注得慢、看着像稳定，$\xi$ 一大就肉眼可见地指数发散。它每步都凭空造能量，是个「永动机」，物理上根本说不通。这就是你在 GAMES103 里把弹簧调硬一点、时间步调大一点，画面立刻飞出屏幕的数学原因。</p>
+
+        <div class="callout warn">
+          <div class="c-h">「调小 dt 就好了」治标不治本</div>
+          <p>缩小 $h$ 能让 $\xi$ 变小、爆炸来得晚，但 $G&gt;1$ 这个事实没变——能量仍在持续注入，只是慢。而且硬弹簧（大 $k$）意味着大 $\omega$，要压住它得把 $h$ 砍到极小，每秒上千步，慢到不能用。显式欧拉的稳定性是<b>有条件</b>的，且条件随刚度恶化。</p>
+        </div>
+
+        <h3 id="symplectic">Symplectic Euler：守恒，但只在 ξ &lt; 2 内</h3>
+        <p>半隐式（辛）欧拉只改了一个字——位置更新用<span class="term-i">刚算出的新速度</span> $\mathbf v^{t+1}$ 而非旧速度。就这一改，放大倍数变成精确的 $G=1$：振幅既不涨也不掉，能量长期守恒。这就是为什么游戏物理和 GAMES103 的弹簧 demo 大多默认用它——便宜（和显式一样只算一次 $\mathbf f(\mathbf x^t)$，不用解方程）又稳。</p>
+        <p>但它的稳定是<b>有条件</b>的：上面的 $G=1$ 只在 $\xi=h\omega&lt;2$ 时成立。一旦 $h\omega\ge 2$（步子太大或弹簧太硬），特征值跑出单位圆，它照样发散。对一根 stiffness $=10^8$ 的硬弹簧，$\omega$ 大得吓人，$h=1/60$ 远远越过这条线——辛欧拉同样救不了 TinyVBD 默认那种硬场景。</p>
+
+        <h3 id="backward-stable">Backward Euler：无条件稳定（代价是数值阻尼）</h3>
+        <p>隐式欧拉的放大倍数 $G_{\text{backward}}=1/\sqrt{1+\xi^2}$，对<b>任意</b> $\xi&gt;0$ 都严格小于 1。这就是传说中的<span class="term">unconditional stability</span>：无论时间步多大、弹簧多硬，振幅每步都被拉小，系统<b>绝不发散</b>。你可以放心地用 $h=1/60$ 去仿真 $10^8$ 刚度的弹簧——这正是 TinyVBD 默认配置敢那么干的底气。</p>
+        <p>天下没有白拿的稳定。$G&lt;1$ 意味着隐式欧拉在<b>偷偷吃掉能量</b>：本该永远振荡的弹簧会慢慢停下来，这叫<span class="term">numerical damping</span>（数值阻尼）。$\xi$ 越大，阻尼越凶。所以隐式欧拉换来的不是「物理精确」，而是「无论如何都不炸、宁可偏软也不爆」——对图形仿真，这笔买卖太划算了：观众能容忍稍微软一点的布料，但绝不能容忍场景突然爆飞。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">三种 Euler 谁先炸</span></div>
+          <div class="lab-body" data-widget="euler-stability"></div>
+          <div class="lab-cap">拖大 dt 或刚度，看 forward Euler 最先发散，implicit 永远不炸。</div>
+        </div>
+
+        <h2 id="cliffhanger">我们想要隐式——可它又贵又非线性</h2>
+        <p>结论已经摆在面前：图形仿真要的是隐式欧拉那种「怎么都不炸」的稳定性。但回看上面的更新式，麻烦也一并暴露了——未知的 $\mathbf x^{t+1}$ 出现在力 $\mathbf f(\mathbf x^{t+1})$ 里。把速度消掉、整理一下，隐式欧拉一步其实是要解这样一个方程：</p>
+        <div class="math-block">$$M(\mathbf x^{t+1}-\mathbf y)=h^2\,\mathbf f(\mathbf x^{t+1}),\qquad \mathbf y=\mathbf x^t+h\mathbf v^t+h^2M^{-1}\mathbf f_{ext}.$$</div>
+        <p>这里 $\mathbf y$ 是「纯靠惯性会漂到哪」的预测位置（下一节细讲）。要命的是，弹性力 $\mathbf f$ 对 $\mathbf x$ 是<b>非线性</b>的，于是这是一坨关于 $\mathbf x^{t+1}$ 的非线性方程组，没法一步解出来。GAMES103 的标准答案是 Newton 迭代：每步重新组装、求解一个大稀疏线性系统——又难写、又慢、还可能不收敛。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 大家都在躲这个非线性方程</div>
+          <p>正因为「老实解隐式欧拉」太贵，图形学里冒出一大批<b>近似</b>它的快算法——PBD、XPBD、Projective Dynamics 都是。你印象里 PBD「粗暴掰位置、反复迭代」的做派，本质就是用极便宜的方式去逼近上面这个方程的解。它们各有各的近似、各有各的病（Part 2 会逐一算账）。而 VBD 的野心是：既要 PBD 那样便宜、可局部迭代，又要老老实实逼近<span class="term-i">真正</span>的隐式欧拉解、不留近似的后遗症。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 同一个 $F=ma$，力取在 $t$ 还是 $t+1$，决定了显式/辛/隐式三种欧拉；(2) 对谐振子，显式放大倍数恒 $&gt;1$（必炸）、辛欧拉仅在 $h\omega&lt;2$ 守恒、隐式无条件 $&lt;1$（不炸，代价是数值阻尼）；(3) 我们想要隐式，但它把未知位置塞进了力里，是个又贵又非线性的方程。</p>
+        <p>下一节 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 给出这本书的关键一跃：那个让人头疼的非线性方程，其实是某个能量函数 $G(\mathbf x)$ 的「谷底条件」——把「解方程」换成「找谷底」，隐式欧拉的整张地图会豁然开朗，VBD 也就有了立足之地。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

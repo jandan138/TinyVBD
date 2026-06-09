@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VBD 在谱系里的位置、局限与 AVBD · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="6-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 6 · The Bigger Picture · 6-1</div>
+        <h1>VBD 在谱系里的位置、局限与 AVBD</h1>
+        <p class="lede">书快读完了，是时候退后一步，把 VBD 放回它所在的谱系，看清它到底赢在哪、又输在哪。一个诚实的收尾不该只夸它好——理解它的边界，和理解它的招牌一样重要。</p>
+
+        <h2 id="where-it-sits">VBD 站在谱系的哪一格</h2>
+        <p>用一句话给 VBD 定位：它是<b>在真正的增量势能 $G(\mathbf x)$ 上做的、per-vertex 的 <span class="term">block coordinate descent</span></b>。这一句话里每个词都来之不易，我们把它拆开，对照 <a href="../02-family/2-4-family-tree.html">2.4</a> 的谱系图复盘一遍。</p>
+        <p>先回忆那张谱系图的主轴（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）：PBD、XPBD、Projective Dynamics、Newton、VBD <b>都在解同一个 $\min G(\mathbf x)$</b>，分歧只在「怎么解」。VBD 的「怎么解」有三个同时成立的特征，正是它的坐标：</p>
+        <ul>
+          <li><b>对象是真正的 $G$。</b>它直接最小化完整的增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$，而不是某个约束违反量的近似。每个顶点的局部牛顿步用的是<b>完整的局部 Hessian</b> $\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j \partial^2 E_j/\partial\mathbf x_i^2$，惯性项加弹性项一项不少（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）。</li>
+          <li><b>更新顺序是 Gauss-Seidel，收敛快。</b>一次只动一个顶点，且立刻用上刚更新过的邻居——这是 <span class="term">Gauss-Seidel</span> 而非 <span class="term">Jacobi</span>，所以信息在一次 sweep 内就能往前串一截，收敛比纯 Jacobi 快（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）。</li>
+          <li><b>并行度却接近 Jacobi。</b>靠对<b>顶点图</b>做 <span class="term">graph coloring</span>：同色顶点互不相邻、可并行更新，颜色数远少于 XPBD 要着色的约束/对偶图。于是 VBD 拿到了「Gauss-Seidel 的收敛 + 近 Jacobi 的并行」这个看似矛盾的组合（<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a>）。</li>
+        </ul>
+        <p>还有一个隐性但关键的坐标：VBD 是 <span class="term">primal</span> 求解器——它直接在<b>位置</b>这个原始变量上下降，而不是像 XPBD 那样去解一套 <span class="term">dual</span>（对偶 / 约束力 $\lambda$）系统。这一条决定了它在高质量比下的命运，下面会展开。</p>
+
+        <h2 id="wins-over-xpbd">复盘它相对 XPBD 的几个赢面</h2>
+        <p>这本书的主线是「从 PBD 到 VBD」，所以最值得对照的是 XPBD。把前面各章算过的账汇总，VBD 的赢面有四条，且都能追到它「最小化真正的 $G$ + primal + 完整 Hessian」这个根上：</p>
+        <ul>
+          <li><b>解的是真东西。</b>XPBD 本质是约束近似，且只保留惯性项那部分 Hessian（丢掉了弹性项的二阶信息）；大时间步 $h$ 或少迭代时，它会偏离真正的隐式欧拉解。VBD 最小化完整的 $G$、保留完整局部 Hessian，每步保证 $G$ 单调下降（<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>），不会越解越偏。</li>
+          <li><b>扛得住高质量比。</b>这是全书最戏剧化的一幕（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a>）：XPBD 是 dual 求解器，修正按逆质量分配，一根末端重 1000× 的 strand 会被「轻的拽不动重的」逼到崩溃；VBD 是 primal，直接解位置，高质量比对它没有这种结构性压力。TinyVBD 默认跑的 <code>initializeTilted()</code> 就是这个 1:1000 实验。</li>
+          <li><b>不替你决定初始化。</b>XPBD 把初始位置强制成惯性预测；VBD 不强制任何初始化，这恰恰是它能做<b>自适应初始化</b>的前提——自由下落的顶点带上完整重力、被托住的顶点停在原位，避免把叠放物初始化成穿插的自由下落态（<a href="../04-code/4-2-forward-step.html">4.2</a>）。</li>
+          <li><b>稳，且不靠打补丁稳。</b>它无条件稳定来自「单调下降」这把尺子，而不是靠对 Hessian 做 SPD 投影或 line search；惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定，把局部系统兜住，所以即便弹簧被压缩、弹性 Hessian 不定，整体也立得住（<a href="../03-vbd/3-5-stability.html">3.5</a>）。</li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">一句话记住它的位置</div>
+          <p>VBD = 在真正的 $G$ 上做 per-vertex block coordinate descent，用顶点图着色换来「Gauss-Seidel 收敛 + 近 Jacobi 并行」，且是 primal、保留完整局部 Hessian、单调下降。它不是「又一个调位置的 PBD 变体」，而是把隐式欧拉的最小化问题<b>正面、增量、可并行地</b>解掉。</p>
+        </div>
+
+        <h2 id="honest-limits">诚实地交代它的局限</h2>
+        <p>没有银弹。VBD 的强项和弱项是同一枚硬币的两面——它是个<b>局部下降法</b>，这让它稳、可并行、扛质量比，但也带来三处真实的短板。</p>
+
+        <h3 id="limit-local">1. 信息传播慢：超硬、超高分辨率系统不理想</h3>
+        <p>因为一次只动一个顶点、靠 Gauss-Seidel + 着色串联，信息每个 step 大约只能传播 ~(#colors × #iterations) 远。对一根 20 顶点的 strand 这绰绰有余；但对一个<b>高分辨率、又非常硬</b>的系统，要把一端的扰动传到另一端就需要很多次迭代，收敛会拖慢。这种场景里，一个直接面对全局耦合的 <span class="term">Newton</span> 求解器（解整个大稀疏系统）反而可能更划算。局部方法的代价，就是它看不到「远处」。</p>
+
+        <h3 id="limit-stiffness-ratio">2. 高刚度比下收敛差</h3>
+        <p>这是 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 专门考的软肋。注意它和高<b>质量</b>比是两回事：高质量比 VBD 不怕，高<b>刚度</b>比（<span class="term">high stiffness ratio</span>，比如相邻弹簧 1:10000）才是它的痛点。当系统里同时存在极软和极硬的部分，局部下降在硬的方向上步子迈不开、收敛极慢。TinyVBD 的 <code>initializeStiffRatio()</code>（交替刚度 1e4/1e8）就是用来亲手撞这堵墙的——你会看到它迟迟收不干净。</p>
+
+        <h3 id="limit-collision">3. 惩罚式碰撞不保证无穿透</h3>
+        <p>完整版 VBD 用<b>惩罚力</b>（penalty）处理接触：穿透越深、回推力越大。这在能量框架里很自然，但惩罚力是「软」的——它把穿透当作要最小化的能量项去压，而不是一道<b>硬约束</b>。于是理论上不保证零穿透，尤其在大穿透或高刚度比叠加时。TinyVBD 这根 strand 干脆没有碰撞，所以这一条你在 demo 里碰不到，但在用完整 VBD 时要心里有数。</p>
+
+        <div class="callout warn">
+          <div class="c-h">别把「无条件稳定」误读成「无条件正确」</div>
+          <p>VBD 无条件稳定，指的是它<b>不会发散</b>（$G$ 永远在下降）。但「不发散」不等于「这一帧已经收敛到隐式欧拉的精确解」。迭代次数不够时，结果会偏软 / 偏迟钝——它稳稳地停在一个还没下到谷底的位置。稳定性和精度是两件事，迭代数（<a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>）买的是后者。</p>
+        </div>
+
+        <h2 id="avbd">后续：AVBD 补上硬约束与高刚度比</h2>
+        <p>上面的局限不是终点。VBD 作者团队在一年后给出了直接的回应——<b><span class="term">AVBD（Augmented Vertex Block Descent）</span>，SIGGRAPH 2025</b>。它在 VBD 的 block coordinate descent 骨架上，引入<b>增广拉格朗日（augmented Lagrangian）</b>的处理来对付<b>硬约束</b>和<b>高刚度比</b>。</p>
+        <p>直觉上：纯惩罚法（软）和纯拉格朗日法（硬约束、但难解）各有所长，augmented Lagrangian 是二者的融合——既保留惩罚项带来的良态，又通过显式维护一个拉格朗日乘子把约束逼到真正满足。这恰好对症 VBD 那两处短板：高刚度比下惩罚法迈不开步，而 augmented Lagrangian 能把「极硬」当作约束来精确满足，而不是当作一个越来越陡、越来越难下降的能量碗去硬啃。如果你想继续往下走，AVBD 是 VBD 之后最自然的下一站（见 <a href="../appendix/a-3-references.html">参考文献</a>）。</p>
+
+        <h2 id="closing">合上这本书</h2>
+        <p>到这里，你已经把 TinyVBD 从头到尾走通了一遍。回头看这条坡道：你先补回了那块发虚的拼图——<b>一步隐式欧拉 = 最小化增量势能 $G$</b>（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）；然后用这把统一的尺子，把 PBD、XPBD、Projective Dynamics 摆进同一张谱系图（Part 2）；接着理解了 VBD 的精髓——<b>一次只动一个顶点的 block coordinate descent，局部下降即全局下降</b>（Part 3）；再把这套思想在 TinyVBD ~400 行代码里逐行对上号（Part 4）；最后亲手跑了高质量比、高刚度比、弯曲这些招牌实验，摸清了它的脾气和边界（Part 5）。</p>
+        <p>更重要的是，你现在拥有的不只是「VBD 怎么写」，而是一套能读懂<b>整个 position/optimization-based 仿真家族</b>的视角。下次再遇到一个新方法，你会本能地问：它在最小化什么？它是 primal 还是 dual？它的更新是 Gauss-Seidel 还是 Jacobi？它保留了多少 Hessian？——这几个问题，足以让你迅速把任何新方法放回谱系里。</p>
+        <p>谢谢你读到这里。剩下的附录是给你随时回查的：<a href="../appendix/a-1-glossary.html">术语表</a>、<a href="../appendix/a-2-cheatsheet.html">公式与符号速查</a>、<a href="../appendix/a-3-references.html">参考文献</a>。去把 TinyVBD 跑起来，拖一拖那根 strand，剩下的就交给好奇心了。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>弹簧的能量、力与 Hessian · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="1-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 1 · The Variational View · 1-4</div>
+        <h1>弹簧的能量、力与 Hessian</h1>
+        <p class="lede">前面 $E(\mathbf x)$ 一直是个抽象符号。这一节把它落到一根真实的 Hookean 弹簧上：写出能量、求出力、再求出 Hessian——然后撞见一个关键事实：弹簧被<b>压缩</b>时，Hessian 在垂直方向的特征值会变负、矩阵变得<span class="term-i">不定</span>。这正是 <code>solve()</code> 里 <code>h_1_1</code> 那一行，也是 VBD 局部求解必须直面的硬骨头。</p>
+
+        <h2 id="energy">一根弹簧的能量 E(x)</h2>
+        <p>取一根弹簧，两端点 $\mathbf x_a,\mathbf x_b$，rest length 为 $l_0$，stiffness 为 $k$。记方向向量与当前长度</p>
+        <div class="math-block">$$\mathbf d=\mathbf x_a-\mathbf x_b,\qquad l=\lVert\mathbf d\rVert.$$</div>
+        <p>Hookean 弹簧的能量就是「拉伸量的平方」乘以半刚度：</p>
+        <div class="math-block">$$E=\tfrac12 k\,(l-l_0)^2.$$</div>
+        <p>它在 $l=l_0$（恰好等于 rest 长度）时为零、为最小，往两边——无论拉长还是压短——都涨上去。把整根 strand 上所有弹簧的 $E$ 加起来，就是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那个 $G(\mathbf x)$ 里的弹性势能项。下面这根弹簧的全部物理，都从这一行长出来。</p>
+
+        <h2 id="force">力 = 能量的负梯度</h2>
+        <p>力是能量对位置的负梯度 $\mathbf f=-\partial E/\partial\mathbf x_a$。链式法则：$\partial E/\partial l=k(l-l_0)$，而 $\partial l/\partial\mathbf x_a=\mathbf d/l$（单位方向）。合起来，作用在端点 $a$ 上的力是</p>
+        <div class="math-block">$$\mathbf f_a=-\,\frac{\partial E}{\partial\mathbf x_a}=k\,\frac{l_0-l}{l}\,\mathbf d,$$</div>
+        <p>端点 $b$ 取负号（作用力与反作用力）。读一下符号：当 $l&gt;l_0$（被拉长），$l_0-l&lt;0$，力沿 $-\mathbf d$，把 $a$ 往 $b$ 拉回去；当 $l&lt;l_0$（被压短），$l_0-l&gt;0$，力沿 $+\mathbf d$，把 $a$ 往外推开。弹簧总想回到 rest 长度，符合直觉。这一行正是 <code>solve()</code> 里 <code>±stiffness*(l0-l)/l*diff</code> 的来历。</p>
+
+        <h2 id="hessian">Hessian：力对位置的导数</h2>
+        <p>VBD 每个顶点要做一步牛顿，光有力 $\mathbf f$ 不够，还要力的导数——也就是能量的二阶导 <span class="term">Hessian</span>。对端点 $a$ 自身的 $3\times3$ 块（在二维里就是 $2\times2$，道理一样），把上面的力再对 $\mathbf x_a$ 求一次导，得到</p>
+        <div class="math-block">$$\mathbf H_{aa}=k\Big[\mathbf I-\frac{l_0}{l}\Big(\mathbf I-\frac{\mathbf d\,\mathbf d^\top}{l^2}\Big)\Big].$$</div>
+        <p>这个式子初看吓人，其实结构很清楚。$\frac{\mathbf d\mathbf d^\top}{l^2}$ 是「沿弹簧方向」的投影矩阵，$\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2}$ 则是「垂直于弹簧方向」的投影。换句话说，$\mathbf H_{aa}$ 在<b>沿弹簧</b>和<b>垂直弹簧</b>两个方向上各有一个特征值——它们的故事完全不同。</p>
+
+        <h3 id="eigenvalues">两个特征值：一个永远正，一个会变负</h3>
+        <p>把 $\mathbf H_{aa}$ 分别作用在「沿 $\mathbf d$」和「垂直 $\mathbf d$」的方向上，特征值一眼就读出来：</p>
+        <ul>
+          <li><b>沿弹簧方向</b>：垂直投影那项为零，剩 $\mathbf H_{aa}\mathbf d=k\,\mathbf d$，特征值 $=k$。<b>永远是正的</b>，且就等于刚度——沿着弹簧拉伸，永远是「越拉越费力」的稳定方向。</li>
+          <li><b>垂直弹簧方向</b>：沿弹簧投影那项为零，特征值 $=k\big(1-\tfrac{l_0}{l}\big)$。它的符号取决于 $l$ 和 $l_0$ 的大小：<b>拉伸</b>（$l&gt;l_0$）时为正；恰好 rest（$l=l_0$）时为零；<b>压缩</b>（$l&lt;l_0$）时 $\frac{l_0}{l}&gt;1$，于是这个特征值<b>变负</b>。</li>
+        </ul>
+        <div class="math-block">$$\lambda_{\parallel}=k\;(&gt;0\ \text{恒成立}),\qquad \lambda_{\perp}=k\Big(1-\frac{l_0}{l}\Big)\;\xrightarrow{\,l&lt;l_0\,}\;\text{负}.$$</div>
+        <p>一个特征值正、一个负，意味着压缩状态下 $\mathbf H_{aa}$ <b>不再正定，而是<span class="term-i">indefinite</span>（不定）</b>。物理上这正是<span class="term">buckling</span>（屈曲）方向：一根被压短的杆，往侧向偏一点点能量反而下降，所以它不愿待在直的状态、想弯掉。负特征值忠实地编码了这种「侧向不稳定」。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">一根弹簧的 E、f、H</span></div>
+          <div class="lab-body" data-widget="spring-hessian"></div>
+          <div class="lab-cap">拖动端点：压缩时垂直方向的 Hessian 特征值变负（H 不定）。</div>
+        </div>
+
+        <h2 id="code-h11">代码对照：这就是 solve() 里的 h_1_1</h2>
+        <p>上面那个 $\mathbf H_{aa}$ 不是黑板演算，它一字不差地躺在 TinyVBD 的 <code>solve()</code> 里：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp</span><button class="cp">复制</button></div><pre><code>Vec3 diff = strand.mVertPos.col(v1) - strand.mVertPos.col(v2);   // d = x_a - x_b
+FloatingType l  = diff.norm();                                   // l = |d|
+FloatingType l0 = strand.orgLengths(edgeId1);                    // rest length l0
+Mat3 h_1_1;
+h_1_1 = stiffness_ * (Mat3::Identity()
+        - (l0 / l) * (Mat3::Identity() - diff * diff.transpose() / (l * l)));
+h += h_1_1;</code></pre></div>
+        <p>逐项对得上：<code>diff</code> 是 $\mathbf d$，<code>l</code> 是 $l$，<code>l0</code> 是 $l_0$，<code>diff*diff.transpose()/(l*l)</code> 就是 $\frac{\mathbf d\mathbf d^\top}{l^2}$。整句 <code>h_1_1 = stiffness*(I - (l0/l)*(I - dd^T/l^2))</code> 与公式 $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$ 完全一致。<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 整段逐行读透，这里你只需认出：那一行<b>真的可能给你一个不定矩阵</b>。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 这就是隐式积分要做「SPD 投影」的原因</div>
+          <p>GAMES103 讲隐式积分常会提一句：组装出的 Hessian（或 $M-h^2\nabla\mathbf f$）有时不正定，Newton 一步可能走错方向甚至发散，于是要做 <span class="term">SPD projection</span>——把负特征值强行拍正，或退回 line search。负特征值从哪来？正是上面这个压缩弹簧的 $\lambda_\perp&lt;0$。你当年「为保险起见投一下影」的那个操作，针对的就是这一节亲手算出的不定性。</p>
+        </div>
+
+        <h2 id="inertia-saves">惯性项 m/h²·I 是怎么帮上忙的</h2>
+        <p>好消息是：VBD 每个顶点真正要解的，不是孤零零的弹簧 Hessian，而是它<b>加上惯性项</b>之后的局部 Hessian（见 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a>）：</p>
+        <div class="math-block">$$\mathbf H_i=\underbrace{\frac{m_i}{h^2}\mathbf I}_{\text{恒正定}}+\sum_{j}\mathbf H_{aa}^{(j)}.$$</div>
+        <p>惯性项 $\frac{m_i}{h^2}\mathbf I$ 是各向同性的正定矩阵，它给每个特征值都<b>加上一个正的 $\frac{m_i}{h^2}$ 偏置</b>。于是那个会变负的 $\lambda_\perp=k(1-l_0/l)$，实际进入求解的是 $\frac{m_i}{h^2}+k(1-l_0/l)$——只要质量不太小、时间步不太大，这个偏置足以把它顶回正数，整个 $\mathbf H_i$ 重新正定，牛顿步方向可靠。这就是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那句「惯性项保证问题不病态」的具体兑现。</p>
+
+        <div class="callout warn">
+          <div class="c-h">但偏置不是万能的</div>
+          <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 这点正偏置可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。Newton 类方法到这里要么投影、要么 line search 才能保稳。VBD 选了另一条路：它<b>不强制把局部 Hessian 投成 SPD</b>，而是靠一套别的机制（行列式阈值、单调下降保证）照样稳。这条路怎么走，正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 的主题。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 一根 Hookean 弹簧 $E=\tfrac12 k(l-l_0)^2$，力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$，Hessian $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$，就是 <code>solve()</code> 的 <code>h_1_1</code>；(2) 它沿弹簧的特征值恒为 $k$，垂直方向为 $k(1-l_0/l)$——<b>压缩时变负</b>，$\mathbf H$ 不定（屈曲方向）；(3) 永远正定的惯性项 $\frac{m}{h^2}\mathbf I$ 给所有特征值加正偏置，多数情况下把它顶回正定，但不是万能。</p>
+        <p>带着「局部 Hessian 可能不定」这个事实，我们就有了进入 Part 3 的票。<a href="../03-vbd/3-5-stability.html">3.5</a> 会讲 VBD 如何不靠 SPD 投影也能稳，<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 里这套力与 Hessian 的装配逐行读完。Part 1 的地基到此打齐——隐式欧拉是什么、为什么、长什么样，你都拿到手了。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

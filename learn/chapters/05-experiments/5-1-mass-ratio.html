@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>高质量比：XPBD 为何崩、VBD 为何不崩 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="5-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 5 · Experiments · 5-1</div>
+        <h1>高质量比：XPBD 为何崩、VBD 为何不崩</h1>
+        <p class="lede">这是 TinyVBD 的<b>默认实验</b>，也是 VBD 论文最响亮的招牌之一。一根又轻又细的链子，末端挂着一个比每节链都重 <b>1000 倍</b>的重锤。对 XPBD 这是一道送命题；对 VBD 它几乎不费力。这一节我们把「为什么」讲透。</p>
+
+        <h2 id="setup">实验设置：1000× 重锤吊在轻链上</h2>
+        <p>跑起来就是 <code>initializeTilted()</code>，<code>initialize()</code> 里默认调的就是它。参数全部来自真实代码：</p>
+        <ul>
+          <li><b>20 个顶点</b>，间距 <code>dis = 0.05</code>，初始 <code>initHeight = 2.0</code>，整条链按 <code>tanAngle = 0.57735</code> 即 <b>30°</b> 向上倾斜摆放；</li>
+          <li><b>stiffness = 1e8</b>——极硬的弹簧，硬到近乎不可拉伸；</li>
+          <li><b>质量</b>：前 19 个顶点 <code>m0 = 1</code>，最末端那个顶点 <code>m1 = 1000</code>——质量比正好 <b>1000×</b>；</li>
+          <li><b>skip spring 打开</b>（<code>addSkipSpring = true</code>，<code>skipSpringStrength = 100</code>），给链子一点抗弯刚度，见 <a href="5-3-skip-spring-iterations.html">5.3</a>；</li>
+          <li>第 0 个顶点被 pin 住（<code>mVelocity.col(0).setZero()</code>），整条链悬吊在它下面。</li>
+        </ul>
+        <p>把它想象成：一根近乎不可拉伸的细绳，绳头钉在天花板，绳尾系着一个千倍重的铁球。重力一拉，所有张力都集中到那些又轻又硬的链节上。这正是一道<b>压力测试</b>：质量分布极不均匀，弹簧又硬到求解器最难伺候。</p>
+
+        <h2 id="why-stress">为什么高质量比是道难题</h2>
+        <p>难点不在「硬」，而在「质量比悬殊」。一个 1000× 的重锤吊在 1× 的轻链下面，意味着求解器在同一步里要同时照顾两种截然不同的尺度：重锤几乎不动，轻链却要被它狠狠地拽。谁来分配「张力」，决定了求解器会不会崩。这里 <span class="term">primal</span> 与 <span class="term">dual</span> 两种解法分道扬镳。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> XPBD 按逆质量分配修正，重物纹丝不动</div>
+          <p>回忆 <a href="../02-family/2-2-xpbd.html">2.2</a>：XPBD 是 <span class="term">dual</span>（对偶）求解器，它解的是约束力 / Lagrange multiplier。每处理一个约束，它把位置修正<b>按逆质量 $w_i = 1/m_i$ 分配</b>给两端：$\Delta\mathbf x_i = w_i\nabla_i C\,\Delta\lambda$。重锤的 $w = 1/1000$ 小得可怜，轻链的 $w = 1$ 大一千倍——于是同一个 $\Delta\lambda$ 几乎全砸在轻链那一端，重锤纹丝不动。</p>
+        </div>
+
+        <p>这就是病根。把张力写出来看：链节越靠近绳头，它下面挂的总重量越大，需要承受的张力也越大。但 XPBD 的逐约束 Gauss-Seidel 在一次 sweep 里只能把每个约束局部地推一点点，而每一点修正又被逆质量按比例「打折」到轻的那一端。结果是<b>重锤这一侧的修正被严重低估</b>，而轻链被反复抽打、过度拉伸。更要命的是：哪怕你把 compliance 设成 0（无穷硬，退回 PBD），也救不回来——</p>
+
+        <div class="callout warn">
+          <div class="c-h">无穷大的刚度也压不过质量比</div>
+          <p>直觉上你会觉得「弹簧够硬就不会被拉长」。但在 dual 求解器里，刚度只决定约束<i>想</i>把误差推到多小，质量比却决定每次迭代<i>能</i>推动多少。质量比悬殊时，迭代收敛极慢，有限迭代根本到不了那个「硬」的解——于是轻的一侧被拉爆、整条链像被甩出去一样。<b>刚度无穷大，也无法弥补质量比带来的病态</b>。这正是 dual 求解器在高质量比下崩掉的本质。</p>
+        </div>
+
+        <h2 id="why-vbd-holds">VBD 为什么稳如老狗：primal 直接平衡力</h2>
+        <p>VBD 是 <span class="term">primal</span> 求解器——它不解约束力，而是直接对每个顶点求位置。回忆 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 和 Part 3：在每个顶点上，VBD 做一步局部牛顿，平衡的是<b>完整</b>的局部力，其中包含那一项惯性力：</p>
+        <div class="math-block">$$\mathbf f_i = -\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i)\;-\;\sum_{j\in\mathcal F_i}\frac{\partial E_j}{\partial\mathbf x_i},\qquad \mathbf H_i = \frac{m_i}{h^2}\mathbf I + \sum_{j\in\mathcal F_i}\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$$</div>
+        <p>关键在惯性项里的系数 $m_i/h^2$。对那个 1000× 的重锤，这一项<b>同样被放大 1000 倍</b>：它的 Hessian 对角线很大、它对偏离预测位置 $\mathbf y_i$ 的「抵抗」也很大。换句话说，重锤的质量不是被当成「逆质量权重去打折修正」，而是<b>实打实地进了它自己那个 $3\times3$ 牛顿系统</b>。重的顶点解出来该往哪走，就稳稳地往哪走；轻链顶点解它自己的小系统，把张力直接、对称地平衡掉。质量比在这里不是病态来源，只是各个顶点 Hessian 上不同大小的数字而已。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 这其实就是隐式欧拉本该有的样子</div>
+          <p>你在 GAMES103 里写的隐式欧拉，组装的全局矩阵就是 $M/h^2 + \nabla^2 E$，质量本来就在对角线上、本来就该这么平衡力。VBD 只是把这件事拆成逐顶点的 $3\times3$ 小问题来做（block coordinate descent），但<b>没有像 XPBD 那样把质量降格成逆质量权重</b>。所以它继承了隐式欧拉对质量比的天然鲁棒——高质量比对它根本不构成压力。</p>
+        </div>
+
+        <h2 id="js-port">JS 端复现：1000× 重锤只拉伸约 1%</h2>
+        <p>本教程里那个能拖动的 <code>strand-lab</code>（见 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 与 <a href="5-4-experiment-menu.html">5.4</a>）是 VBD 核心的 JavaScript 移植，它复现了同样的现象：把末端质量比推到 1000×、弹簧设得很硬，整条链在重力下也只<b>过度拉伸约 1%</b>，保持紧绷，不会被甩飞。这正是 primal 求解器面对高质量比的从容。</p>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">高质量比：VBD vs PBD-style 并排</span></div><div class="lab-body" data-widget="mass-ratio"></div><div class="lab-cap">把末端质量比推到 1000×、迭代数压低：左边 VBD 保持紧绷，右边 PBD-style 明显被拉垮。</div></div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 默认实验 <code>initializeTilted()</code> 是一道高质量比压力测试——20 节轻硬链吊一个 1000× 重锤；(2) XPBD 是 dual 求解器，按逆质量分配修正，重物压垮轻物，连无穷大刚度也救不回；(3) VBD 是 primal 求解器，质量直接进每个顶点的牛顿系统（$m_i/h^2$），高质量比对它毫无压力，1000× 重锤也只拉伸约 1%。下一节 <a href="5-2-stiffness-ratio.html">5.2</a> 我们诚实地翻到硬币另一面：VBD 也有它真正怕的东西——高<b>刚度</b>比。VBD 在整个谱系中的最终定位见 <a href="../06-closing/6-1-place-and-limits.html">6.1</a>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

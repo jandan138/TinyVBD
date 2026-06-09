@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>高刚度比：VBD 的软肋 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="5-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 5 · Experiments · 5-2</div>
+        <h1>高刚度比：VBD 的软肋</h1>
+        <p class="lede">上一节 VBD 把 1000× 质量比轻松拿下，看起来无懈可击。这一节我们诚实地翻到另一面：VBD 也有真正怕的东西——不是高质量比，而是高<b>刚度</b>比。这是论文白纸黑字承认的弱点，也是理解「VBD 是局部下降法」的最好窗口。</p>
+
+        <h2 id="setup">实验设置：软硬交替的链</h2>
+        <p>这次切换到 <code>initializeStiffRatio()</code>（在 <code>initialize()</code> 里把 <code>initializeTilted()</code> 注释掉、取消下一行注释即可）。它构造一条<b>刚度软硬交替</b>的短链，参数来自真实代码：</p>
+        <ul>
+          <li><b>5 个顶点</b>，间距 <code>dis = 0.05</code>，同样 30° 倾斜摆放；</li>
+          <li><b>刚度交替</b>：<code>stiffness1 = 1e4</code> 与 <code>stiffness2 = 1e8</code>，按 <code>iV % 2</code> 交替赋给每条边——一条软（1e4）、一条硬（1e8）、再软、再硬……<b>刚度比正好 1 : 10000</b>；</li>
+          <li><b>质量均匀</b>：<code>m0 = m1 = 0.1</code>，所有顶点一样重——刻意把上一节那个质量比变量去掉，<b>只留刚度比这一个压力源</b>；</li>
+          <li>skip spring 仍然打开（<code>skipSpringStrength = 100</code>）。</li>
+        </ul>
+        <p>注意源码里 outPath 命名带 <code>stiffnessRatio48</code>——这里的 48 指 $10^8/10^4 = 10^4$ 量级的刚度比这一族实验（论文 Fig.23 的 ~1:10000 设置）。质量已经被抹平成均匀，所以这条链<b>唯一</b>的难点就是软硬悬殊。</p>
+
+        <h2 id="why-hard">为什么高刚度比对 VBD 难</h2>
+        <p>要点只有一句：<b>VBD 是一个局部下降法（local descent method）</b>。它一次只动一个顶点，信息靠 Gauss-Seidel sweep 一节一节往外传。每做一次完整 sweep，影响范围大约只扩散 ~(颜色数 × 迭代数) 这么远（见 <a href="../03-vbd/3-4-coloring-parallel.html">3.4</a>）。当链上同时混着极软和极硬的弹簧时，这个「局部传播」就跟不上了：</p>
+        <ul>
+          <li><b>硬弹簧（1e8）</b>几乎不可拉伸，它两端顶点必须<i>一起</i>动才不破坏约束——但局部下降一次只动一个顶点，硬段就像被「锁住」，需要很多很多次 sweep 才能把信息从一端传到另一端协调好；</li>
+          <li><b>软弹簧（1e4）</b>则相反，它愿意被拉长，于是在迭代还没收敛时，重力的负担更多地落在软段上，软段被<b>过度拉伸</b>，而硬段几乎不动。</li>
+        </ul>
+        <p>从能量看，整条链的增量势能 $G$ 仍然在<b>单调下降</b>——VBD 永远稳、不会爆（这点和上一节一样可靠）。问题不在稳定性，在<b>收敛速度</b>：刚度比越悬殊，迭代矩阵的条件数越糟，局部下降把 $G$ 推到真正谷底所需的 sweep 数就越多。论文把这记成 VBD 的明确弱点（Fig.23，约 1:10000 刚度比时收敛变差）。</p>
+
+        <div class="callout warn">
+          <div class="c-h">稳 ≠ 收敛快：别把两件事混为一谈</div>
+          <p>VBD 的「无条件稳定」说的是<b>不会发散</b>——哪怕 1 次迭代，能量也只降不升。但「收敛到隐式欧拉的真解」是另一回事，需要足够多次迭代。高刚度比下，这条短链在 100 次迭代里看起来还在「软段过拉、硬段锁死」的半收敛态——它稳，但还没到位。</p>
+        </div>
+
+        <h2 id="commented-variants">代码里那些注释掉的「converged」变体</h2>
+        <p>这正是 <code>initializeStiffRatio()</code> 里一堆被注释掉的配置存在的理由。它们刻意把迭代数从 100 拉到 <b>20000</b>，就是为了让你看清：要让这条软硬链真正收敛到位，到底要花多少次迭代。</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · initializeStiffRatio()</span><button class="cp">复制</button></div><pre><code>//int numVerts = 3;
+//params.numIterations = 20000;
+//params.accelerationRho = 0.0;
+//params.outPath = "...\\Test5_3Verts_stiffnessRatio48_converged";
+
+//int numVerts = 10;
+//params.numIterations = 20000;
+//params.outPath = "...\\Test6_10Verts_stiffnessRatio48_accelerated_converged";
+
+int numVerts = 5;            // 当前生效的配置
+params.numIterations = 100;
+params.accelerationRho = 0.0;</code></pre></div>
+        <p>把这些 <code>_converged</code> 变体（20000 迭代）跑出来的结果，和默认的 100 迭代结果对比，你就能直观看到：100 次迭代下软段还在过拉，而到了 20000 次它才真正绷紧到正确位形。换言之，<b>这些注释不是废代码，而是论文弱点的可复现证据</b>。另外还有把 <code>accelerationRho</code> 调到 0.08 的「accelerated」变体——Chebyshev 加速（<a href="../04-code/4-4-chebyshev.html">4.4</a>）能缓解、但不能根治高刚度比带来的慢收敛。</p>
+
+        <h2 id="contrast">对照：质量比轻松、刚度比吃力</h2>
+        <p>把 <a href="5-1-mass-ratio.html">5.1</a> 和本节并排，VBD 的性格就清楚了：</p>
+        <table>
+          <thead><tr><th>压力源</th><th>对应实验</th><th>VBD 表现</th><th>根因</th></tr></thead>
+          <tbody>
+            <tr><td>高<b>质量</b>比（1000×）</td><td><code>initializeTilted()</code></td><td>轻松，只拉伸约 1%</td><td>质量直接进每顶点 Hessian 的 $m_i/h^2$，是 primal 求解器的天然优势</td></tr>
+            <tr><td>高<b>刚度</b>比（1:10000）</td><td><code>initializeStiffRatio()</code></td><td>稳但收敛慢，需很多迭代</td><td>局部下降，信息每 sweep 只传播有限远，软硬悬殊时条件数差</td></tr>
+          </tbody>
+        </table>
+        <p>这不是矛盾，而是同一套机制的两面：VBD 把质量稳稳地放在每个顶点的局部牛顿系统里（所以不怕质量比），但它放弃了全局直接求解、改用局部 sweep 传播信息（所以怕刚度比）。Newton 这类全局法在高刚度比上可能更优，代价是每步要解大稀疏系统。</p>
+
+        <div class="callout note">
+          <div class="c-h">后续工作怎么补这个洞</div>
+          <p>SIGGRAPH 2025 的 <span class="term">AVBD</span>（Augmented VBD）用增广拉格朗日把硬约束显式拎出来，正是为了改善高刚度比与硬约束这类 VBD 的软肋。VBD 在整个谱系里的定位、局限与 AVBD 的接力，留到 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 收尾时一并讲。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) <code>initializeStiffRatio()</code> 用 5 顶点、1e4/1e8 交替刚度（1:10000）、均匀质量，专门暴露 VBD 的软肋；(2) VBD 是局部下降法，信息每 sweep 只传播有限远，软硬悬殊时收敛慢（软段过拉、硬段锁死），这是论文 Fig.23 记录的明确弱点；(3) 代码里 20000 迭代的 <code>_converged</code> 注释变体，正是用来展示真正收敛要多少迭代。下一节 <a href="5-3-skip-spring-iterations.html">5.3</a> 我们换个旋钮，看 skip spring（弯曲）与迭代数怎么影响结果。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

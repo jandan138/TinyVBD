@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PBD：粗暴调位置的真相，与它的病 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="2-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 2 · The Family Tree · 2-1</div>
+        <h1>PBD：粗暴调位置的真相，与它的病</h1>
+        <p class="lede">你对 <span class="term">PBD</span> 的印象是「预测一下位置，再把粒子硬掰到约束上、反复迭代」。这个印象<b>没错</b>——这一节我们先把它讲准、讲全，看清真实的 PBD 到底每一步在做什么；然后再用上一节的 $G(\mathbf x)$ 一刀切开它的病根。</p>
+
+        <h2 id="recall-mental-model">先把你脑中的 PBD 校准成真实的 PBD</h2>
+        <p><span class="term">Position Based Dynamics</span>（Müller et al. 2007）确实就是「调位置、迭代」，但它的流程比课堂印象更有章法。一帧分三步走。</p>
+        <p><b>第一步，预测（predict）。</b>先不管任何约束，让每个粒子纯靠惯性和外力漂一步，得到一个候选位置 $\mathbf x^\ast$：</p>
+        <div class="math-block">$$\mathbf x^\ast = \mathbf x + h\,\mathbf v + h^2\,\mathbf f_{ext}/m$$</div>
+        <p>认得吧——这正是上一节惯性预测位置 $\mathbf y$ 的同一个东西。PBD 也是从「如果什么约束都不管会漂到哪」起步的。</p>
+        <p><b>第二步，投影约束（constraint projection）。</b>这是 PBD 的灵魂。每条约束写成 $C(\mathbf x)=0$（比如一根弹簧：$C=\lVert\mathbf x_a-\mathbf x_b\rVert-l_0$，违反量就是拉伸量）。PBD 按 <span class="term">Gauss-Seidel</span> 顺序一条条扫过去，每碰到一条违反的约束，就沿它的梯度方向把相关粒子推一把，让 $C$ 朝零走：</p>
+        <div class="math-block">$$\Delta\mathbf x_i = -s\,w_i\,\nabla_i C,\qquad s = \frac{C}{\sum_j w_j\lVert\nabla_j C\rVert^2},\qquad w_i = \frac{1}{m_i}$$</div>
+        <p>这里 $w_i=1/m_i$ 是逆质量：越重的粒子被推得越少（分母里的 $\sum_j w_j\lVert\nabla_j C\rVert^2$ 把修正量按逆质量分配给约束涉及的所有粒子）。标量 $s$ 是把这条约束<i>一次</i>推到零所需的步长。一遍扫完叫一次迭代；通常一帧要扫好几遍，因为 Gauss-Seidel 改了 A 又会破坏刚改好的 B。</p>
+        <p><b>第三步，回填速度（velocity update）。</b>所有迭代做完、位置定下来后，速度是从位置变化<i>反推</i>出来的：</p>
+        <div class="math-block">$$\mathbf v = \frac{\mathbf x - \mathbf x_{old}}{h}$$</div>
+        <p>注意这个顺序：PBD 是<b>先改位置、再由位置定速度</b>，而不是像传统积分那样先有力、再有加速度、再有速度。这是 "position based" 这个名字的来历，也是它简单、稳健、好实现的根源。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 「硬掰」不是比喻，就是字面意思</div>
+          <p>那个 $\Delta\mathbf x_i=-s\,w_i\nabla_i C$ 干的事，几何上就是：沿约束梯度，把粒子<i>挪</i>到让 $C=0$ 的那个位形上去。没有力、没有加速度、没有时间步出现在这一步里——它就是纯粹的几何位移。这就是你脑中「粗暴调位置」的真身。它之所以稳，正是因为它不碰「力 → 速度」那条容易爆炸的链，而是直接操作位置。代价我们马上就讲。</p>
+        </div>
+
+        <h2 id="the-disease">病根：刚度是 solver 设置的产物，不是物理量</h2>
+        <p>PBD 好用，但有个让人头疼的毛病：<b>同一根弹簧，到底有多「硬」，取决于你迭代了几次、时间步取多大</b>。</p>
+        <p>想象一根被重物拉着的链。每次约束投影，都把它往「rest length」方向拽一点。迭代一次，只拽回一点点，链看起来很软；迭代十次，拽回很多，链看起来很硬；迭代一百次，几乎完全回到 rest length，硬得像钢筋。可你<b>什么物理参数都没改</b>——只是改了 solver 的迭代次数。时间步也一样：$h$ 变了，每帧投影的累积效果也变，刚度跟着漂。</p>
+        <p>真正的 PBD 实现里通常给约束加一个 stiffness 系数 $k\in[0,1]$，每次投影只施加 $k$ 那一部分。但这只是把问题换了个样子：有效刚度依然和迭代次数纠缠在一起，$k$ 不是一个有物理单位（N/m）的量，换个迭代次数它代表的「硬度」就变了。<span class="term-i">你没法说"这根弹簧的劲度系数是多少牛顿每米"，因为 PBD 里压根没有这个良定义的量。</span></p>
+
+        <div class="callout warn">
+          <div class="c-h">这不是调参问题，是结构问题</div>
+          <p>很多人第一次遇到这个现象，会以为「多调调迭代次数就好了」。不是的。问题在于 PBD 的解<b>不收敛到一个良定义的位形</b>——迭代次数越多，它收敛到的目标本身就在移动（越来越硬）。换句话说，你增加迭代不是在更精确地逼近某个"正确答案"，而是在逼近一个<i>不同的</i>、更硬的答案。这让 PBD 的结果难以预测、难以跨场景复用、也难以和真实材料参数对齐。</p>
+        </div>
+
+        <h2 id="why-via-G">为什么会这样：它扔掉了惯性项</h2>
+        <p>上一节 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 我们埋了一个伏笔，现在来收。隐式欧拉一步，本质是最小化</p>
+        <div class="math-block">$$G(\mathbf x) = \underbrace{\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2}_{\text{惯性项 (inertia)}} \;+\; \underbrace{E(\mathbf x)}_{\text{弹性势能}}$$</div>
+        <p>这两项在拔河：惯性项把解锚在预测位置 $\mathbf y$ 附近（动量、外力的贡献都在这儿），弹性项把解拉向「约束满足」的位形。平衡点（$\arg\min G$）才是隐式欧拉那一步的<b>正确</b>答案。</p>
+        <p>现在看 PBD 干了什么：它的约束投影<b>只盯着把约束推到零</b>——也就是只在最小化 $E$ 那一项（约束违反量的平方和），<b>完全没有惯性项当锚</b>。预测位置 $\mathbf y$ 只是用来生成第一步的候选，投影阶段一旦开始，惯性项就被丢在脑后，不再参与任何一次 $\Delta\mathbf x$ 的计算。</p>
+        <p>没有惯性项这个锚，迭代就成了「无脑往纯弹性最优滑」：迭代越多，越接近「所有约束都精确满足」的位形，越偏离那个本该停下的、惯性与弹性妥协的平衡点。于是「有效刚度随迭代次数变化」——因为你迭代的次数，决定了你在「锚住的妥协点」和「纯弹性最优」之间滑了多远。<b>病根就是这一项被丢掉了。</b></p>
+
+        <div class="callout note">
+          <div class="c-h">那 PBD 就一无是处了？</div>
+          <p>当然不是。PBD 极其简单、极其稳健、几乎不会爆炸，在游戏和实时场景里横行十余年自有道理——很多时候你<i>要的</i>就是「看起来对、不炸、能跑得飞快」，并不在乎弹簧的劲度系数是不是物理上良定义。但当你需要<b>可预测、可复用、和真实材料对齐</b>的仿真时，这个病就致命了。下一节的 XPBD 正是冲着治这个病来的。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 真实的 PBD = predict（$\mathbf x^\ast=\mathbf x+h\mathbf v+h^2\mathbf f_{ext}/m$）→ Gauss-Seidel 约束投影（$\Delta\mathbf x_i=-s\,w_i\nabla_i C$）→ 由位置反推速度（$\mathbf v=(\mathbf x-\mathbf x_{old})/h$），「硬掰位置」是字面意思；(2) 它的病是<b>有效刚度依赖迭代次数与时间步</b>，不收敛到良定义的解；(3) 病根在于它只最小化弹性项 $E$、<b>丢掉了 $G$ 里的惯性项</b>，没有锚，迭代越多越往纯弹性最优滑。</p>
+        <p>下一节 <a href="2-2-xpbd.html">2.2</a>，我们看 XPBD 如何用 <span class="term">compliance</span> $\alpha$ 和 Lagrange multiplier $\lambda$ 把惯性的物理信息重新塞回投影里，让刚度变回一个时间步/迭代无关的物理量——并用一个 widget 让你亲眼看到 PBD 漂、XPBD 不漂。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

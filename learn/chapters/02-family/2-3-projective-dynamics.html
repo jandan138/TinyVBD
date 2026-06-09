@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projective Dynamics：local/global · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="2-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 2 · The Family Tree · 2-3</div>
+        <h1>Projective Dynamics：local/global</h1>
+        <p class="lede">家族里还有一条迥异的路线：Projective Dynamics（Bouaziz et al. 2014；mass-spring 版可追到 Liu et al. 2013）。它要解的还是同一个 $\min G(\mathbf x)$，但通过把弹性能写成一种特殊的二次型，把整个求解拆成可以并行的 local 步和一个<b>矩阵恒定、可预分解</b>的 global 步——这让它在 GAMES103 之后成了「又快又稳」的代名词。</p>
+
+        <h2 id="special-quadratic">把能量写成一种特殊二次型</h2>
+        <p>Projective Dynamics（下称 <span class="term">PD</span>）的出发点和我们一样：隐式欧拉那一步等价于最小化</p>
+        <div class="math-block">$$G(\mathbf x) = \frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2 + E(\mathbf x)$$</div>
+        <p>但 PD 对弹性能 $E$ 提出一个苛刻的要求：它必须能写成下面这种<b>特殊二次型</b>，每条约束 $i$ 贡献一项</p>
+        <div class="math-block">$$E(\mathbf x) = \sum_i \frac{w_i}{2}\,\bigl\lVert A_i S_i\,\mathbf q - B_i\,\mathbf p_i \bigr\rVert^2$$</div>
+        <p>这串符号别被吓到，拆开看：$\mathbf q$ 是顶点位置（系统未知量），$S_i$ 把和约束 $i$ 相关的那几个顶点「选」出来，$A_i$、$B_i$ 是常数矩阵，$w_i$ 是权重（对应刚度）。真正的新角色是 $\mathbf p_i$——一个<b>辅助投影变量（auxiliary projection variable）</b>。它代表「满足约束的理想几何形状」，并且和位置 $\mathbf q$ <i>解耦</i>，可以独立去求。</p>
+        <p>对一根弹簧来说，这一切落地后异常朴素：$\mathbf p_i$ 就是「把当前这条边的方向保留下来、长度拉到 rest length $l_0$」的那个向量。能量在说：让真实边长 $\mathbf q$ 尽量贴近这个理想长度 $\mathbf p_i$。整个 PD 的巧妙，就是把「投影到理想形状」（求 $\mathbf p$）和「拼回一个协调的整体位形」（求 $\mathbf q$）这两件事掰开成两步。</p>
+
+        <h2 id="local-step">Local 步：每条约束各自投影，天然并行</h2>
+        <p>固定位置 $\mathbf q$，对每条约束独立求它的最优 $\mathbf p_i$。因为约束之间在这一步<b>互不耦合</b>，所以可以<b>完全并行</b>地一次性算完所有 $\mathbf p_i$。</p>
+        <p>对弹簧，这一步简单到只是一次归一化：取当前边向量 $\mathbf d=\mathbf x_a-\mathbf x_b$，把它缩放到 rest length——</p>
+        <div class="math-block">$$\mathbf p_i = l_0\,\frac{\mathbf d}{\lVert\mathbf d\rVert}$$</div>
+        <p>就是「保持方向、长度设成 $l_0$」。没有求解线性系统，没有迭代，每条约束一个除法。这就是 "projective"（投影）这个名字的来历：把当前位形<i>投影</i>到「约束满足的流形」上，得到一个理想目标 $\mathbf p_i$。</p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 你大概率已经写过 PD 而不自知</div>
+          <p>GAMES103 讲 mass-spring 隐式积分时，那套「先把每根弹簧投影到 rest length，再解一个全局线性系统把所有顶点拼回去，反复几轮」的做法，正是 Liu et al. 2013 的 local/global 求解——也就是 mass-spring 版的 Projective Dynamics。你当时可能只觉得它「比 Newton 好写、跑得还快」，没意识到背后是把 $E$ 写成那个特殊二次型换来的。这一节就是给那段经验补上名字和原理。</p>
+        </div>
+
+        <h2 id="global-step">Global 步：一个常数矩阵，预分解一次</h2>
+        <p>反过来，固定刚算出的所有 $\mathbf p_i$，去求让 $G$ 最小的位置 $\mathbf q$。因为 $E$ 是关于 $\mathbf q$ 的二次型、惯性项也是二次的，对 $\mathbf q$ 求极小就是解一个<b>线性系统</b>：</p>
+        <div class="math-block">$$\Bigl(\tfrac{M}{h^2} + \sum_i w_i\,A_i^\top A_i\Bigr)\,\mathbf q = \mathbf b(\mathbf p)$$</div>
+        <p>盯住左边那个矩阵 $\frac{M}{h^2}+\sum_i w_i A_i^\top A_i$：$M$、$h$、$A_i$、$w_i$ <b>全是常数</b>，和顶点当前位置、和 $\mathbf p$ 都无关。换句话说，<b>这个矩阵在整个仿真过程中恒定不变</b>。</p>
+        <p>这就是 PD 速度的全部秘密。一个不变的对称正定矩阵，可以在仿真开始前<b>预分解（prefactorize）一次</b>——做一次 <span class="term">Cholesky</span> 分解，存下来。之后每次 global 步，只有右端 $\mathbf b(\mathbf p)$ 随 $\mathbf p$ 变，解线性系统退化成一次廉价的前代/回代（back-substitution），不必重新分解那个昂贵的大矩阵。Local 与 global 交替几轮，$G$ 单调下降，收敛到隐式欧拉解。</p>
+
+        <div class="callout note">
+          <div class="c-h">对照一下 Newton 为什么慢</div>
+          <p>真正的 Newton 每次迭代都要重新组装当前位形下的 Hessian 并重新分解——因为 Hessian 随 $\mathbf x$ 变。PD 用「特殊二次型 + 辅助变量 $\mathbf p$」这一手，硬是把随位形变化的非线性<b>全部赶进了 local 步那个廉价的逐约束投影里</b>，让 global 步的矩阵冻成常数。代价、便利与限制，是同一枚硬币的两面——见下。</p>
+        </div>
+
+        <h2 id="limitations">代价：能量形式受限、线性收敛、撕裂要重分解</h2>
+        <p>常数矩阵带来的速度不是白来的，它对应三条实打实的限制。</p>
+        <p><b>一、只能表达那种特殊二次能量。</b>PD 的全部魔法都建立在「$E$ 能写成 $\sum\frac{w}{2}\lVert A S\mathbf q-B\mathbf p\rVert^2$」之上。很多真实材料的能量（一般的非线性弹性、复杂本构）塞不进这个模子，或只能用它近似——这是 PD 表达力上的天花板。</p>
+        <p><b>二、线性收敛。</b>Local/global 是一种交替最小化，收敛是<b>线性</b>的（每轮误差按固定比例缩小），不像 Newton 那样在解附近二次收敛。要很高精度时，PD 需要的轮数会明显多于 Newton。</p>
+        <p><b>三、改连通性就得重分解。</b>那个被预分解的矩阵 $\frac{M}{h^2}+\sum_i w_i A_i^\top A_i$ 的结构，编码了网格的连接关系。一旦连通性变了——<b>撕裂、断裂、拓扑变化</b>——矩阵就变了，预分解作废，必须重新做一次昂贵的 Cholesky。对以撕裂、切割为卖点的场景，这是个不小的痛点。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) PD 解的还是同一个 $\min G(\mathbf x)$，但要求 $E$ 写成特殊二次型 $\sum\frac{w}{2}\lVert A_i S_i\mathbf q-B_i\mathbf p_i\rVert^2$，引入辅助投影变量 $\mathbf p$；(2) local 步对每条约束独立投影（弹簧就是归一化到 rest length，可并行），global 步解一个<b>常数矩阵</b> $\frac{M}{h^2}+\sum_i w_i A_i^\top A_i$ 的线性系统——预分解一次 Cholesky，之后只换右端，所以快；(3) 限制是能量形式受限、线性收敛、改连通性（撕裂）要重分解。</p>
+        <p>到这里，家族的三条支路——PBD、XPBD、PD——都摆上了桌。下一节 <a href="2-4-family-tree.html">2.4</a> 我们把它们和 Newton、VBD 一起列成一张谱系图，看清一件事：<b>它们解的是同一个 $\min G(\mathbf x)$，分歧只在「怎么解」</b>——并由此自然引出 VBD 走的那条全新的路。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

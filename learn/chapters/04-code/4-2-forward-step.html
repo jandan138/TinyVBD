@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>forwardStep()：惯性与自适应初始化 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="4-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 4 · Code Walkthrough · 4-2</div>
+        <h1>forwardStep()：惯性与自适应初始化</h1>
+        <p class="lede">每个 substep 的第一件事就是 <code>forwardStep()</code>。它做两件事：算出惯性预测位置 $\mathbf y$（<a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 拔河里那个「锚」），再为接下来的迭代<b>挑一个聪明的初始猜测</b> $\mathbf x^{(0)}$。第二件事正是论文里的<span class="term">adaptive initialization</span>——VBD 才有的自由。</p>
+
+        <h2 id="gravity-inertia">重力、pin、惯性 y</h2>
+        <p>函数开头三行就把惯性这一项备齐了：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · forwardStep()</span><button class="cp">复制</button></div><pre><code>strand.mVelocity.colwise() += params.dt * params.gravity;
+strand.mVelocity.col(0).setZero();
+
+strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;
+
+strand.mVertPrevPos = strand.mVertPos;
+// initial step
+// strand.mVertPos = strand.inertia;</code></pre></div>
+
+        <p>逐行读：</p>
+        <ul>
+          <li><code>mVelocity.colwise() += dt * gravity</code>：给<b>每一列（每个顶点）</b>的速度加上重力带来的那一截 $h\,\mathbf g$。这是把外力先积进速度。</li>
+          <li><code>mVelocity.col(0).setZero()</code>：把第 0 个顶点的速度清零——这就是<b>把 strand 的根 pin 住</b>。整本书里 0 号顶点都是固定挂点（吊着的那一端），它永远不动。<a href="4-3-solve.html">4.3</a> 的 <code>solve()</code> 循环从 <code>iV=1</code> 开始、<a href="4-5-main-loop.html">4.5</a> 的 <code>updateVelocity()</code> 也会再清一次，都是为这件事。</li>
+          <li><code>inertia = mVertPos + mVelocity * dt</code>：这就是惯性预测位置 $\mathbf y$。展开看就是 $\mathbf y = \mathbf x^t + h(\mathbf v^t + h\,\mathbf g) = \mathbf x^t + h\,\mathbf v^t + h^2\,\mathbf g$——和 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 给出的 $\mathbf y = \mathbf x^t + h\mathbf v^t + h^2 M^{-1}\mathbf f_{ext}$ 严丝合缝（这里外力只有重力、按加速度给，所以是 $h^2\mathbf g$）。</li>
+          <li><code>mVertPrevPos = mVertPos</code>：把这一步开始时的位置 $\mathbf x^t$ 存一份，留给末尾反算速度。</li>
+        </ul>
+        <p>注意那行被注释掉的 <code>// strand.mVertPos = strand.inertia;</code>：最朴素的做法就是「直接拿惯性位置当初始猜测」。TinyVBD 没这么干，而是往下走自适应初始化。但它留着这行，等于在告诉你：<b>$\mathbf y$ 是 baseline，下面要做得更好</b>。</p>
+
+        <div class="callout note">
+          <div class="c-h">inertia 这个字段后面一直在用</div>
+          <p><code>strand.inertia</code>（也就是 $\mathbf y$）算完后<b>不会再变</b>，会被 <a href="4-3-solve.html">4.3</a> 的 <code>solve()</code> 反复读取：每个顶点的惯性力 <code>f = m*(inertia - x)/dt²</code> 就是拿当前 $\mathbf x$ 和这个固定的 $\mathbf y$ 比。$\mathbf y$ 是这一步里惯性碗的碗底，整步不动；动的是 $\mathbf x$，一点点被推向 $\arg\min G$。</p>
+        </div>
+
+        <h2 id="adaptive">自适应初始化：预判每个顶点该不该「自由下落」</h2>
+        <p>朴素初始化 $\mathbf x^{(0)}=\mathbf y$ 有个隐患：$\mathbf y$ 假设<b>每个顶点都吃满一个 $h^2\mathbf g$ 的重力位移</b>。对正在自由下落的顶点没问题；但对一个<b>被弹簧或接触托住</b>的顶点（比如叠在别人上面、或者被硬弹簧拽着），它本来这一步几乎不该动，你却先把它往下挪了 $h^2 g$——于是初始就<b>过度穿插 / 过度拉伸</b>，迭代还得费劲把它拉回来。论文 Eq.17 的自适应初始化就治这个。先算「这一步的近似加速度」：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · forwardStep()</span><button class="cp">复制</button></div><pre><code>TVerticesMat accelerationApprox;
+if (strand.hasVelocitiesPrev)
+{
+    accelerationApprox = (strand.mVelocity - strand.mVelocitiesPrev) / params.dt;
+    strand.hasApproxAcceleration = true;
+}
+
+FloatingType gravNorm = 10.f;
+Vec3 gravDir;
+gravDir &lt;&lt; 0, -1, 0;</code></pre></div>
+
+        <p><code>accelerationApprox = (v - vPrev)/dt</code> 是用<b>前后两帧速度差</b>估出来的加速度 $\tilde{\mathbf a} \approx (\mathbf v^t - \mathbf v^{t-1})/h$。<code>gravDir = (0,-1,0)</code> 是重力方向，<code>gravNorm = 10</code> 是重力模长（和 <code>gravity</code> 一致）。只有当上一帧速度已存在（<code>hasVelocitiesPrev</code>，即非第一帧）时才有得算。然后逐顶点决定初始猜测：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · forwardStep()</span><button class="cp">复制</button></div><pre><code>FloatingType accelerationComponent = 0.f;
+if (strand.hasApproxAcceleration) {
+    for (int iV = 0; iV &lt; strand.numVerts; iV++)
+    {
+        accelerationComponent = accelerationApprox.col(iV).dot(gravDir);
+        accelerationComponent = accelerationComponent &lt; gravNorm ? accelerationComponent : gravNorm;
+        accelerationComponent = accelerationComponent &gt; 1e-5f ? accelerationComponent : 0.f;
+        strand.mVertPos.col(iV) = strand.mVertPrevPos.col(iV) + params.dt * strand.mVelocitiesPrev.col(iV)
+            + params.dt * params.dt * gravDir * accelerationComponent;
+    }
+}
+else
+{
+        strand.mVertPos = strand.inertia;
+}</code></pre></div>
+
+        <p>核心是 <code>accelerationComponent</code> 这个标量，对每个顶点单独算，对应论文里的 $\tilde a$：</p>
+        <ol>
+          <li><code>= accelerationApprox.col(iV).dot(gravDir)</code>：把该顶点的近似加速度<b>投影到重力方向</b>。一个真在自由下落的顶点，加速度 $\approx(0,-g,0)$，点乘 $(0,-1,0)$ 得 $\approx +g=10$；一个被托住、几乎不加速的顶点，投影 $\approx 0$。</li>
+          <li><code>&lt; gravNorm ? ... : gravNorm</code>：上夹到 <code>gravNorm=10</code>（不允许比纯重力还猛）。</li>
+          <li><code>&gt; 1e-5f ? ... : 0.f</code>：下夹到 0（负的或几乎为零，就当 0，别往上弹）。</li>
+        </ol>
+        <p>于是 $\tilde a$ 被钳在 $[0, 10]$：<b>自由下落的顶点 $\tilde a\approx 10$</b>（约等于满重力），<b>被托住的顶点 $\tilde a\approx 0$</b>。最后那行就是论文 Eq.17 的初始猜测：</p>
+        <div class="math-block">$$\mathbf x^{(0)}_i = \mathbf x^{t}_i + h\,\mathbf v^{t-1}_i + h^2\,\hat{\mathbf g}\,\tilde a_i$$</div>
+        <p>对照代码：<code>mVertPrevPos</code> 是 $\mathbf x^t$，<code>mVelocitiesPrev</code> 是 $\mathbf v^{t-1}$，<code>gravDir*accelerationComponent</code> 就是 $\hat{\mathbf g}\,\tilde a_i$。换句话说：<b>该落的顶点，初始猜测就带上几乎完整的重力位移（接近 $\mathbf y$）；不该落的顶点，初始猜测几乎停在原地</b>，避免把一摞静止物体初始化成互相穿插的自由下落态。第一帧没有历史，就老老实实回退到 <code>mVertPos = inertia</code>（即 $\mathbf x^{(0)}=\mathbf y$）。</p>
+
+        <div class="callout">
+          <div class="c-h">一个细节：这里用的是 vPrev，不是 v</div>
+          <p>留意末行积分用的是 <code>mVelocitiesPrev</code>（$\mathbf v^{t-1}$）而非刚加完重力的 <code>mVelocity</code>。直觉上这是把「上一帧的运动趋势」往前推一格，再单独按 $\tilde a$ 补重力——而 $\tilde a$ 本身已经从前后帧速度差里读出了「这个顶点最近到底有没有在加速下落」。两件事合起来，就是「沿用旧动量 + 只给真在下落的顶点补重力」。</p>
+        </div>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 为什么 XPBD 做不了这一手</div>
+          <p>XPBD 的初始化是被钉死的：必须 predict $\mathbf x^*=\mathbf x+h\mathbf v+h^2\mathbf f_{ext}/m$，因为它的 Lagrange multiplier $\lambda$ 推导依赖这个特定起点。VBD 不一样——它只是在<b>最小化 $G(\mathbf x)$</b>，从哪个 $\mathbf x^{(0)}$ 起步都行，只要每步让 $G$ 下降就保证收敛（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>、<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>）。<b>「不强制某种初始化」正是 VBD 能做自适应初始化的前提</b>。给优化器一个更好的起点，就少迭代几次、也更不容易在第一步就穿插——这是把「最小化视角」换成实打实性能的又一处兑现。</p>
+        </div>
+
+        <p>把它接回 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 那场拔河：惯性碗的碗底是 $\mathbf y$。自适应初始化做的，是<b>不把所有顶点都先扔到碗底</b>，而是按「它最近是不是真在被重力主导」决定起点离碗底多近。被弹力/接触拉着的顶点（拔河里弹性那头赢的顶点），干脆先别动——这正是优化器最想要的热启动。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) <code>forwardStep()</code> 先把重力积进速度、pin 住 0 号顶点、算出惯性 $\mathbf y=\mathbf x^t+h\mathbf v^t+h^2\mathbf g$（存进 <code>inertia</code>，整步不变）；(2) 它不止步于 $\mathbf x^{(0)}=\mathbf y$，而是逐顶点算一个钳在 $[0,10]$ 的 $\tilde a$——自由下落的取满重力、被托住的取 0——给出更聪明的初始猜测（论文 Eq.17）；(3) 这种自由来自 VBD「只需让 $G$ 下降、不强制初始化」的本性，是 XPBD 给不了的。</p>
+        <p>初始猜测就位。下一节是全书的中心：把 <code>solve()</code> 这一次 Gauss-Seidel sweep 逐行拆开，让每一行都对上 <a href="../03-vbd/3-3-newton-step.html">3.3</a> / <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的公式。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>代码地图：7 个文件，一次 simulate() · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="0-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 0 · Orientation · 0-2</div>
+        <h1>代码地图：7 个文件，一次 simulate()</h1>
+        <p class="lede">在钻进任何一行代码之前，先花五分钟拿到一张地图。TinyVBD 一共就 7 个文件，真正的算法集中在两个里；一次完整的仿真，骨架也只有「初始化 → 逐帧推进」两层循环。看清这张图，后面读代码就不会迷路。</p>
+
+        <h2 id="seven-files">七个文件，各管一摊</h2>
+        <p>整个工程没有构建系统的层层嵌套，也没有第三方框架——唯一的外部依赖是 <span class="term">Eigen3</span>（纯头文件的线性代数库）。下面这张表就是全部家当，按「你会花多少时间读它」从多到少排列：</p>
+
+        <table>
+          <thead>
+            <tr><th>文件</th><th>是什么</th><th>你要花多少注意力</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>main.cpp</code></td>
+              <td>仿真器本体。装着 <code>StrandSim</code> 结构：所有初始化配置（<code>initializeTilted</code> 等）、<code>forwardStep()</code>、<code>solve()</code>、Chebyshev 加速、<code>simulate()</code> 主循环、以及把结果写成 JSON 的 <code>saveOutputs()</code>。</td>
+              <td><b>几乎全部。</b>这本书 Part 4 会把它逐行读完。</td>
+            </tr>
+            <tr>
+              <td><code>Strand.h</code></td>
+              <td>数据结构。<code>Mesh</code> 基类持有顶点位置 / 速度 / 质量；<span class="term">VBDStrand</span> 在它之上加 <code>edges</code>、<code>edgesStiffness</code>、<code>vertAdjacentEdges</code>、<code>orgLengths</code>、<code>inertia</code> 等，并用两个 <code>from(...)</code> 把一根 strand 装配出来。</td>
+              <td><b>很多。</b><a href="../04-code/4-1-data-structures.html">4.1</a> 专讲。</td>
+            </tr>
+            <tr>
+              <td><code>Types.h</code></td>
+              <td>类型别名与宏。<code>FloatingType=float</code>、一堆 Eigen typedef（<code>Vec3</code>、<code>Mat3</code>、<code>TVerticesMat</code>=3×N 顶点矩阵…）、<code>SQR/CUBE</code> 宏、<code>GRAVITY_AXIS=1</code>（y 轴向上）、以及 <code>RELEASE_ASSERT</code>。</td>
+              <td><b>扫一眼即可</b>，需要时回查。</td>
+            </tr>
+            <tr>
+              <td><code>json.hpp</code></td>
+              <td>nlohmann 的单头文件 JSON 库。<b>纯粹用来把每帧顶点位置序列化</b>到磁盘，和算法毫无关系。</td>
+              <td><b>不用读</b>，当黑盒。</td>
+            </tr>
+            <tr>
+              <td><code>VisualizeStrand.blend</code></td>
+              <td>一个 Blender 工程。把输出的 JSON 序列转成 obj 网格，让你能在 3D 里看这根 strand 怎么甩。</td>
+              <td><b>看结果时才用</b>，<a href="../04-code/4-5-main-loop.html">4.5</a> 会讲。</td>
+            </tr>
+            <tr>
+              <td><code>CMakeLists.txt</code></td>
+              <td>构建脚本。指明唯一依赖 Eigen3，生成可执行文件。</td>
+              <td><b>编译时用一次。</b></td>
+            </tr>
+            <tr>
+              <td><code>README.md</code></td>
+              <td>一页纸说明：这是 SIGGRAPH 2024 论文 Vertex Block Descent 的极简 demo，默认跑 high mass ratio 实验，输出 JSON 给 blend 可视化。</td>
+              <td><b>读一遍。</b></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout note">
+          <div class="c-h">真正的算法只藏在两个文件里</div>
+          <p>把 <code>json.hpp</code>（IO 黑盒）和那些辅助文件刨掉，你会发现整套 <span class="term">Vertex Block Descent</span> 其实就活在 <code>main.cpp</code> + <code>Strand.h</code> 里，加起来不过几百行。这正是 TinyVBD 的价值：论文完整版要在 GPU 上跑上亿自由度，而这里把同一套数学剥到只剩骨架，让你能一眼看穿。</p>
+        </div>
+
+        <h2 id="call-chain">一次 simulate() 从头到尾发生了什么</h2>
+        <p><code>main()</code> 干的事简单到近乎潦草：造一个 <code>StrandSim</code>，调 <code>initialize()</code>，再调 <code>simulate()</code>。难点全在 <code>simulate()</code> 这一个调用里。我们先在高空俯瞰它的调用链，不抠细节：</p>
+
+        <div class="math-block">$$
+        \texttt{initialize()} \;\rightarrow\; \underbrace{\texttt{simulate()}}_{\text{逐帧}}:\quad
+        \texttt{forwardStep()} \;\rightarrow\; \big(\underbrace{\texttt{solve()}}_{\times\,\text{numIterations}}\big) \;\rightarrow\; \texttt{updateVelocity()} \;\rightarrow\; \texttt{saveOutputs()}
+        $$</div>
+
+        <p>逐层拆开来读，每一层都对应后面一整节：</p>
+        <ul>
+          <li><b><code>initialize()</code></b>：选一个实验配置（默认 <code>initializeTilted()</code>，即 20 顶点、末端质量 1000× 的 high mass ratio 实验），把 strand 的顶点、边、刚度、rest length 全部装配好，并建好输出文件夹。</li>
+          <li><b><code>forwardStep()</code></b>（每帧一次，<a href="../04-code/4-2-forward-step.html">4.2</a>）：施加重力、pin 住第 0 个顶点、算出惯性预测位置 <span class="term-i">inertia</span> $\mathbf y$，再给这一帧的求解定一个聪明的<b>初始猜测</b>（自适应初始化）。这一步把「这帧要解的最小化问题」摆好。</li>
+          <li><b><code>solve()</code></b>（每帧重复 <code>numIterations</code> 次，<a href="../04-code/4-3-solve.html">4.3</a>）：<b>一次完整的 Gauss-Seidel sweep</b>——从顶点 1 扫到末尾，每个顶点解一个 3×3 的牛顿步、就地更新自己的位置。这就是 VBD 的心脏。可选地，每次 sweep 后做一次 Chebyshev 加速（<a href="../04-code/4-4-chebyshev.html">4.4</a>）。</li>
+          <li><b><code>updateVelocity()</code></b>（每帧一次）：位置已经收敛，用 $(\mathbf x-\mathbf x^{t})/h$ 反推出新速度，再 pin 住 0 号顶点的速度。</li>
+          <li><b><code>saveOutputs()</code></b>：把这一帧的顶点位置写成一个 JSON 文件（<code>A00000001.json</code>…，字段 <code>pos</code>）。</li>
+        </ul>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 这个外壳你太熟了</div>
+          <p>「每帧：施加外力 → 解出新位置 → 更新速度 → 输出」——这就是你写过无数遍的时间积分主循环骨架，<code>forwardStep</code> / <code>updateVelocity</code> 对应的正是 GAMES103 里的 predict 与 velocity update。唯一被换掉的，是中间「解出新位置」那一块：别人用一次大线性求解或一堆约束投影，VBD 用的是「重复 <code>numIterations</code> 次、每次扫一遍所有顶点」的 block coordinate descent。整本书的重头戏，就是这个被换掉的内核。</p>
+        </div>
+
+        <h2 id="loop-skeleton">主循环的真实骨架</h2>
+        <p>下面是 <code>simulate()</code> 去掉调试输出后的骨架，直接来自 <code>main.cpp</code>。注意它就是<b>两层 for 循环</b>：外层数帧，内层是 substep；每个 substep 里再嵌一层 <code>numIterations</code> 的迭代。读到这里你不需要懂每一行，只要看清这副「帧 → substep → 迭代」的三层结构：</p>
+
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · simulate()</span><button class="cp">复制</button></div><pre><code>void simulate() {
+    saveOutputs();
+    params.dt = params.dt / params.substeps;
+    TVerticesMat prevIterPos;
+    prevIterPos.resizeLike(strand.mVertPos);
+
+    for (frameId = 1; frameId &lt; params.numFrames; frameId++)
+    {
+        for (step = 0; step &lt; params.substeps; step++)
+        {
+            forwardStep();                 // 惯性 + 自适应初始化
+            float omega = 1.f;
+            for (iter = 0; iter &lt; params.numIterations; iter++)
+            {
+                prevIterPos = strand.mVertPos;
+                solve();                   // 一次 Gauss-Seidel sweep
+
+                if (params.useAcceleration)
+                {
+                    omega = getAcceleratorOmega(iter + 1, params.accelerationRho, omega);
+                    applyAccelerator(omega);          // Chebyshev 加速
+                    strand.prevprevPos = prevIterPos;
+                }
+            }
+            updateVelocity();              // x 反推 v
+        }
+        saveOutputs();                     // 写这一帧的 JSON
+    }
+}</code></pre></div>
+
+        <div class="callout">
+          <div class="c-h">默认参数（来自 SimulatorParams）</div>
+          <p>默认 <code>numFrames=300</code>、<code>substeps=1</code>、<code>numIterations=100</code>、<code>dt=1/60</code>、<code>gravity=(0,-10,0)</code>、<code>useAcceleration=false</code>。也就是说默认<b>不开 substep、不开 Chebyshev 加速</b>，每帧老老实实做 100 次完整 sweep。这些数字后面调实验时（Part 5）都会被你亲手改动。</p>
+        </div>
+
+        <div class="callout warn">
+          <div class="c-h">一个可以诚实指出的小坑：输出路径</div>
+          <p>代码里 <code>outPath</code> 写死成 Windows 风格的 <code>C:\Data\...</code>，而建文件夹的 <code>createFolder</code> 只在 <code>_WIN32</code> 下真正生效。换到 Linux / macOS 上跑，你得先把这个路径改成本地能写的目录，否则 JSON 写不出来。这跟算法无关，纯粹是 demo 的工程细节。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) 七个文件里真正承载算法的只有 <code>main.cpp</code> 和 <code>Strand.h</code>，其余是 IO、可视化和构建的配角；(2) 一次 <code>simulate()</code> 是「帧 → substep → 迭代」三层循环，每帧走 <code>forwardStep</code> → 多次 <code>solve</code> → <code>updateVelocity</code> → <code>saveOutputs</code>；(3) 这副外壳就是经典的时间积分主循环，被 VBD 替换掉的只有「解新位置」那一块。</p>
+        <p>这只是高空俯瞰——每个函数到底在算什么、为什么这么算，<b>Part 4 会带你逐行读透</b>。但在读代码之前，下一节先约定一下「这本书怎么读」：两座反复出现的桥，以及一些贯穿全书的小约定。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

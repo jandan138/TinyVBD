@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>为什么局部下降 = 全局下降 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="3-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-2</div>
+        <h1>为什么局部下降 = 全局下降</h1>
+        <p class="lede">上一节我撂了一句没证的话：每个顶点的局部牛顿步，都让<b>全局</b> $G$ 单调下降。这句话是 VBD 全部稳定性的根。它听起来该是显然的——但其中有一个容易绊倒人的细节：$G$ 并不等于各个 $G_i$ 之和。这一节把这件事说清楚。</p>
+
+        <h2 id="not-a-sum">陷阱：G 不是 ΣG_i</h2>
+        <p>先拆掉一个想当然。你可能以为「既然每个顶点优化自己的 $G_i$，那把所有 $G_i$ 加起来就是 $G$」。<b>不对。</b>原因是：一条弹簧 $E_j$ 连着两个顶点 $a$ 和 $b$，它同时出现在 $G_a$ 的求和里、也出现在 $G_b$ 的求和里。如果把所有 $G_i$ 加起来，每条内部弹簧的能量都被<b>数了两遍</b>。所以</p>
+        <div class="math-block">$$\sum_i G_i(\mathbf x)\;\neq\;G(\mathbf x)\qquad(\text{共享的弹簧被重复计数})$$</div>
+        <p>这意味着我们不能用「$\sum G_i$ 下降所以 $G$ 下降」这种偷懒的方式论证。好在我们根本不需要它——真正成立的是一个更精确、也更漂亮的等式。</p>
+
+        <h2 id="the-key-equality">关键：动一个顶点时，ΔG_i = ΔG</h2>
+        <p>关键观察非常简单：当我们<b>只移动顶点 $i$</b>、其余顶点全部钉死时，$G$ 里到底有多少项会变化？</p>
+        <ul>
+          <li>顶点 $i$ 自己的惯性项 $\frac{m_i}{2h^2}\lVert\mathbf x_i-\mathbf y_i\rVert^2$ —— 会变。</li>
+          <li>与 $i$ 相邻的弹簧 $E_j,\ j\in\mathcal F_i$ —— 会变（它们的一个端点是 $i$）。</li>
+          <li>所有<b>不</b>碰 $i$ 的项——别的顶点的惯性项、不含 $i$ 的弹簧——全是常数，纹丝不动。</li>
+        </ul>
+        <p>而「会变的那些项」加起来，<b>恰好就是 $G_i$ 的定义</b>。于是：只移动 $\mathbf x_i$ 时，$G$ 的改变量等于 $G_i$ 的改变量，二者一字不差：</p>
+        <div class="math-block">$$G(\ldots,\mathbf x_i+\Delta\mathbf x_i,\ldots)-G(\ldots,\mathbf x_i,\ldots)\;=\;G_i(\mathbf x_i+\Delta\mathbf x_i)-G_i(\mathbf x_i)$$</div>
+        <p>注意这<b>并不</b>要求 $G=\sum G_i$。重复计数的问题在这里根本不出现——因为别的顶点没动，它们那些「被数第二遍」的弹簧此刻是常数，进不了改变量。所以哪怕 $G\neq\sum G_i$，单顶点移动这件事仍然让「局部改变量」与「全局改变量」严格相等。这就是 VBD 名字里 <span class="term-i">block</span> 的全部底气。</p>
+
+        <div class="callout note">
+          <div class="c-h">形式化的一句话</div>
+          <p>固定除 $i$ 外的所有顶点，把 $G$ 视为 $\mathbf x_i$ 的函数，记为 $G|_{\mathbf x_i}$。则 $G|_{\mathbf x_i}$ 与 $G_i$ <b>至多相差一个与 $\mathbf x_i$ 无关的常数</b>（那个常数正是所有不含 $i$ 的项之和）。因此二者有<b>相同的梯度、相同的 Hessian、相同的下降方向</b>：$\nabla_{\mathbf x_i}G=\nabla_{\mathbf x_i}G_i=-\mathbf f_i$，$\nabla^2_{\mathbf x_i}G=\nabla^2_{\mathbf x_i}G_i=\mathbf H_i$。所以对 $G_i$ 做的那一步牛顿，就是对 $G$（限制在 $\mathbf x_i$ 方向上）做的那一步牛顿。</p>
+        </div>
+
+        <h2 id="descent">从「相等」到「单调下降」</h2>
+        <p>有了上面的等式，逻辑链就闭合了。VBD 给顶点 $i$ 走的那一步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，是沿着 $G_i$（因而也是 $G$）的下降方向走的——只要这一步确实降低了 $G_i$（步长得当时成立，<a href="../03-vbd/3-5-stability.html">3.5</a> 讨论为何这里几乎总成立、且不需要 line search），它就<b>同样幅度地</b>降低了 $G$。把一次 sweep 里的每一步串起来：</p>
+        <div class="math-block">$$G^{(0)}\;\ge\;G^{(1)}\;\ge\;G^{(2)}\;\ge\;\cdots$$</div>
+        <p>每动一个顶点，$G$ 要么下降、要么持平，<b>从不上升</b>。这就是上一节 <span class="term-i">vbd-sweep</span> 部件里你看到的那条只跌不涨的曲线背后的道理。</p>
+
+        <h2 id="convergence">为什么这就是无条件稳定</h2>
+        <p>把单调下降和一个简单的事实放在一起，稳定性就出来了。$G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$ 这个能量是<b>下有界</b>的（惯性项 $\ge0$，弹性势能 $\ge0$）。一个单调不增、又有下界的序列，必然收敛到一个有限值——它不可能跑到 $-\infty$，更不可能震荡着飞到 $+\infty$。</p>
+        <p>「不会飞到 $+\infty$」这句翻译成物理就是：<b>系统不会爆炸</b>。无论时间步 $h$ 多大、每帧只迭代几次，每一步 sweep 都只会让能量更低或不变，于是位置、速度都被这个有界的能量牢牢摁住。这正是 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 里你拖着末端 1000× 质量、把迭代数压到很低也炸不掉那根 strand 的根本原因：稳定性不是靠调参调出来的，是这条单调下降链<b>从数学上</b>保证的。这就是为什么人们说 VBD <span class="term-i">unconditionally stable</span>。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 投影没有这把尺子</div>
+          <p>对照 PBD 就看得很清楚它缺了什么。PBD 的约束投影把粒子掰到约束流形上，但它<b>不盯着任何标量目标</b>——没有一个像 $G$ 这样的能量在背后单调下降。所以它<b>给不出</b>「这一步让某个全局量变小」的保证：不同约束的投影会互相打架，迭代多了刚度还会漂（<a href="../02-family/2-1-pbd.html">2.1</a>）。PBD 的「稳」是工程经验上的稳，VBD 的稳是<b>有下界的单调序列必收敛</b>这条定理给的稳。一个是没散，一个是证明了不会散。这是这两类方法最根本的分水岭。</p>
+        </div>
+
+        <div class="callout">
+          <div class="c-h">和 1.2 那把「下降的尺子」对上了</div>
+          <p>还记得 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 说把 root-finding 换成 minimization「带来了一把下降的尺子」吗？这一节就是在兑现那句话。正因为隐式欧拉的真身是 $\min G$，我们才有一个标量 $G$ 可以盯着下降；也正因为单顶点移动让局部下降严格等于全局下降，这把尺子才能被 block coordinate descent 一节一节地用下去。变分视角不是装饰，它是稳定性证明的地基。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) $G\neq\sum G_i$（共享弹簧被双重计数），但这不碍事；(2) <b>只移动一个顶点时</b>，$G$ 的改变量与 $G_i$ 的改变量严格相等——因为别的项都是常数——所以局部下降 = 全局下降；(3) 于是每步 sweep 让有下界的 $G$ 单调不增 → 必收敛 → <span class="term-i">unconditional stability</span>，而 PBD 的投影没有这种全局能量保证。</p>
+        <p>下一节，我们把这个局部牛顿步真正拆开：$\mathbf f_i$ 和 $\mathbf H_i$ 各由哪些项装配而成，弹簧的力与 Hessian 怎么塞进去，那个 $3\times3$ 系统长什么样。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

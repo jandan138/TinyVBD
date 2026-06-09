@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>不强制 SPD：稳定性从哪来 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="3-5">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-5</div>
+        <h1>不强制 SPD：稳定性从哪来</h1>
+        <p class="lede">我们埋了好几次伏笔：VBD 解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时，<b>不</b>检查 $\mathbf H_i$ 是不是正定，也<b>不</b>做 line search。这在 Newton 方法的世界里近乎"鲁莽"——不定的 Hessian 可能给出上坡方向，没有 line search 步长可能过头。VBD 凭什么这么浪还稳？这一节把三条理由说清楚。</p>
+
+        <h2 id="the-worry">先说清楚担心的是什么</h2>
+        <p>经典 Newton（以及 Projective Dynamics）通常会把 Hessian 做 <span class="term">SPD projection</span>——强行把负特征值掀到正、或加阻尼，确保 $\mathbf H$ 正定，这样 $\mathbf H^{-1}\mathbf f$ 才保证是个下降方向；再配上 line search 控制步长，免得冲过头让能量反升。这两道保险是 Newton 类方法的标配。</p>
+        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l<l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
+
+        <h2 id="reason-1">理由一：惯性项是永远正定的压舱石</h2>
+        <p>$\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$ 的第一块——惯性项 $\frac{m_i}{h^2}\mathbf I$——是<b>恒正定</b>的各向同性块，三个特征值都等于 $\frac{m_i}{h^2}$。对合理的时间步 $h$，这个值并不小（$h$ 在分母上、还平方），它给整个 $\mathbf H_i$ 的谱<b>抬了一个正的底</b>。</p>
+        <div class="math-block">$$\lambda_{\min}(\mathbf H_i)\;\ge\;\frac{m_i}{h^2}+\lambda_{\min}\Big(\textstyle\sum_j\tfrac{\partial^2 E_j}{\partial\mathbf x_i^2}\Big)$$</div>
+        <p>弹簧块的最负特征值是 $k(1-l_0/l)$，只有在压缩时为负、且有界。只要惯性那一项 $\frac{m_i}{h^2}$ 够大，把弹簧块那点负的抬过零，$\mathbf H_i$ 就仍是正定的，$\mathbf H_i^{-1}\mathbf f_i$ 就仍是货真价实的下降方向。这正是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那条「惯性项保证问题不病态」的 callout 在逐顶点层面的兑现：<b>时间步把 Hessian 拉回正定附近，是 VBD 不必做 SPD 投影的第一根支柱。</b></p>
+
+        <h2 id="reason-2">理由二：真退化了，就跳过这个顶点</h2>
+        <p>那万一惯性也兜不住——弹簧压得极狠、$\mathbf H_i$ 真的接近奇异呢？办法朴素得令人发笑：<b>这一遍就别动这个顶点了。</b>判据是看 $\mathbf H_i$ 的行列式：若 $|\det(\mathbf H_i)|\le\varepsilon$（接近奇异），跳过它，等下一遍迭代再说。</p>
+        <p>为什么这样没问题？因为这是 <span class="term">Gauss-Seidel</span>：这个顶点跳过了，但它的<b>邻居照样在动</b>。邻居一动，这个顶点周围的几何就变了，下一遍它的 $\mathbf H_i$ 极可能就不再奇异——所以它<b>不会一直卡在奇异态</b>，迟早会被更新。跳过一个顶点一两遍，对一帧上百次迭代的整体收敛毫无影响。</p>
+        <div class="callout note">
+          <div class="c-h">代码里的真实情况：QR 求解 + det 阈值</div>
+          <p>TinyVBD 的 <code>solve()</code> 用的是 Eigen 的 <code>h.colPivHouseholderQr().solve(f)</code>——列主元 QR 本身就对接近奇异的 $\mathbf H_i$ 很稳健，不会像直接求逆那样炸出垃圾。论文里那个「$|\det(\mathbf H_i)|\le\varepsilon$ 就跳过」的策略，我们在本教程的 JS 移植（<span class="term-i">vbd-sweep</span> 等部件）里如实镜像了：算一下行列式，太小就把这个顶点的 $\Delta\mathbf x_i$ 置零、留到下一遍。两种写法殊途同归——核心都是<b>不让一个退化的局部 Hessian 把仿真带飞</b>。</p>
+        </div>
+
+        <h2 id="reason-3">理由三：有全局下降兜底，不需要 line search</h2>
+        <p>最后一根支柱回到 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 的那条定理。Newton 之所以离不开 line search，是怕某一步冲过头让能量反升、失去单调性。而 VBD 有一个更强的结构性保证：<b>整个 sweep 让全局 $G$ 单调下降</b>，且 $G$ 下有界，所以序列必收敛。论文据此<b>直接关掉了 line search</b>——在实践中，逐顶点的牛顿步几乎总落在「让 $G_i$（因而 $G$）下降」的安全区里，省下逐步回溯的开销。</p>
+        <p>把三条合起来看：惯性项把 Hessian 大多数时候摁成正定（理由一），偶尔真退化就跳过、靠邻居松动它（理由二），而单调下降这把大尺子在宏观上保证整盘棋不会走崩（理由三）。三层兜底叠在一起，VBD 才敢省掉 SPD 投影和 line search 这两道在 Newton 里必备的保险，还照样稳。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> "鲁莽"得有底气，和 PBD 的"鲁莽"不一样</div>
+          <p>PBD 也"鲁莽"——它不算 Hessian、不管能量，直接把粒子掰到约束上。但 PBD 的鲁莽没有兜底：迭代多了刚度漂、约束互相打架，稳是经验上的稳。VBD 的"鲁莽"（不投影、不 line search）背后却站着三层保险，尤其是那条<b>可证明的单调下降</b>。所以同样是"不老实算大系统"，PBD 是省事，VBD 是<b>省得有数学依据</b>。</p>
+        </div>
+
+        <p>这也正是你在 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 那个 <span class="term-i">strand-lab</span> 里体验到的鲁棒性的来源：把末端质量调到 1000×、把迭代数压到很低、用大时间步甩它，它就是不炸。现在你知道，这"不炸"不是调出来的运气，而是这三层兜底 + 单调下降合力给的保证。后面 <a href="../05-experiments/5-1-mass-ratio.html">Part 5</a> 的压力测试会把这份鲁棒性推到极限——高质量比、高刚度比——看它在哪里依旧稳、又在哪里露出局部方法的软肋。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) VBD 解析地解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，<b>不</b>对 $\mathbf H_i$ 做 SPD 投影、也<b>不</b> line search；(2) 它靠三层兜底依然稳——惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定、多数时候把 $\mathbf H_i$ 撑成正定；真接近奇异（$|\det|\le\varepsilon$）就跳过该顶点、靠邻居松动它；全局单调下降保证无需 line search；(3) 这份鲁棒性正是 0.1 里那根怎么甩都不炸的 strand 的来源。</p>
+        <p>Part 3 到此把 VBD 的算法内核讲完了。接下来 Part 4 进代码：把 <code>forwardStep()</code>、<code>solve()</code>、Chebyshev 加速逐行读透，每一行都对得上这三章的公式。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
