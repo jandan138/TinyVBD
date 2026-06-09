@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPD 投影与 Rayleigh damping · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-2</div>
+        <h1>SPD 投影与 Rayleigh damping</h1>
+        <p class="lede">在 TinyVBD 那根 strand 上，我们做了一个大胆的决定：解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>对局部 Hessian 做 <span class="term">SPD projection</span>，全靠惯性项 + 行列式阈值 + 单调下降三层兜底（<a href="../03-vbd/3-5-stability.html">3.5</a>）。那是因为 strand 只有弹簧、只有一种会变负的特征值，惯性项几乎总能压住。可一旦上了 Newton 的 production 规模——cloth 的 Neo-Hookean membrane、tet 的 volumetric、bending、还有接触——元件的 Hessian 不定起来更凶、更频繁。这一节看 Newton 怎么在每个元件层面把这件事按死：把 per-element Hessian 直接<b>投成 SPD</b>，再配上一个干净的 Rayleigh damping。</p>
+
+        <h2 id="why-project">为什么 production 要在元件层面投影</h2>
+        <p>回忆 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个核心事实：一根被压缩的弹簧，Hessian 在垂直方向特征值 $k(1-l_0/l)$ 会变负，矩阵不定——这是 <span class="term">buckling</span>（屈曲）方向的忠实编码。strand 里只有这一种元件、这一种负特征值来源，所以 TinyVBD 敢赌「惯性项 $\frac{m_i}{h^2}\mathbf I$ 多半能把它顶回正」。</p>
+        <p>但 Newton 的 cloth 用的是 stable <span class="term">Neo-Hookean</span> membrane，能量里那个体积/面积项 $(J_s-\alpha)$ 在<b>压缩</b>（$J_s&lt;\alpha$，面积被压小）时同样会让 Hessian 出现负特征值——和压缩弹簧一模一样的毛病，只是来自一个更复杂的能量。tet 的 volumetric、bending 也各有自己的不定方向。把这么多元件的负特征值叠到一个顶点的 $\mathbf H_i$ 上，惯性项不一定每次都兜得住。Newton 的选择不是赌，而是在<b>每个元件装配进 $\mathbf H_i$ 之前</b>，先把它那一块的 Hessian 投成 SPD（positive semi-definite）。</p>
+
+        <h2 id="membrane-clamp">membrane 的 SPD-clamp：max(0, ·)</h2>
+        <p>以 membrane 为例，Newton 的实现里那一步极其朴素。能量 $\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2$ 装配 per-vertex Hessian 时，体积项贡献一个标量系数 $s=\lambda_\text{NH}(J_s-\alpha)$；Newton 直接对它做一次<b>下截断</b>：</p>
+        <div class="math-block">$$s_\text{clamp}=\max\!\big(0,\;\lambda_\text{NH}\,(J_s-\alpha)\big).$$</div>
+        <p>当面积被压缩到 $J_s&lt;\alpha$，$s$ 本会变负、把 Hessian 块拉向不定；$\max(0,\cdot)$ 把它<b>夹到 0</b>，于是这一块退化成「只保留恒正定部分」的 PSD 近似。代码注释把它讲得很白：这是 membrane per-vertex 块的 <span class="term-i">tight PSD clamp</span>。装配进 $\mathbf H_i$ 的，永远是已经投过影的块——$\mathbf H_i$ 从源头就难再不定。</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># --- Hessian (per-vertex 3x3, SPD-projected) ---
+# max(0, s) is the tight PSD clamp for the membrane per-vertex block.
+s_clamp = wp.max(0.0, s)   # s = lmbd_nh * (J_s - alpha)
+r = s_clamp * inv_J_s
+c1 = lmbd_nh - r</code></pre></div>
+
+        <h2 id="stable-nh">stable Neo-Hookean：让 rest state 无应力</h2>
+        <p>上面那个 $\lambda_\text{NH}$ 不是随手写的 Lamé 参数。Newton 按 <span class="term">Smith 2018 §3.4</span> 的 stable Neo-Hookean 约定，把用户给的 Lamé 参数换算成 NH 能量里真正用的参数：</p>
+        <div class="math-block">$$\mu_\text{NH}=\mu_\text{Lamé},\qquad \lambda_\text{NH}=\lambda_\text{Lamé}+\mu_\text{Lamé}.$$</div>
+        <p>再配上 $\alpha=1+\mu_\text{NH}/\lambda_\text{NH}$，这套约定保证一件要紧的事：在 rest configuration（$F$ 为等距、$J_s=1$）下能量的梯度恰好为零，也就是<b>静止状态无应力</b>（stress-free）。否则材料一放进场景就自己鼓一下、缩一下，rest 形状都站不稳。这是 production 弹性必须做对、而 strand 那种纯 Hookean 弹簧天然不需要操心的细节——弹簧的 $E=\frac12 k(l-l_0)^2$ 在 $l=l_0$ 处梯度本就为零。</p>
+
+        <div class="callout warn">
+          <div class="c-h">naive（不投影）Hessian 会怎样拖垮 production 求解器</div>
+          <p>设想 Newton 不做这一步：直接把元件原始的、可能不定的 Hessian 累加进 $\mathbf H_i$。一旦合成的 $\mathbf H_i$ 带了负特征值，$\mathbf H_i^{-1}\mathbf f_i$ 就<b>可能指向上坡</b>——这一步不是在降 $G$，而是在升 $G$；轻则这个顶点抖、收敛变慢，重则在高刚度大网格上把整块 cloth 推爆。strand 上靠「惯性项 + det 阈值跳过」兜底，是因为不定来得稀、来得弱；放大到上百万顶点、多种元件，这种侥幸不再成立。<b>SPD projection 的作用，就是从每个元件源头掐掉负特征值</b>，让累加出来的 $\mathbf H_i$ 结构性地保持半正定，每一步都是可靠的下降方向。而 VBD 自带的惯性项 $\frac{m_i}{h^2}\mathbf I$ 仍在帮忙——它给 PSD 的 $\mathbf H_i$ 再抬一个严格为正的底，把「半正定」顶成「正定」，$3\times3$ 求逆稳稳可解。两道一起上，才是 production 该有的保险。</p>
+        </div>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个负特征值，两种处理哲学</div>
+          <p>你在 strand 上亲眼见过：压缩弹簧 → 垂直方向特征值 $k(1-l_0/l)$ 变负 → 局部 $\mathbf H$ 不定（<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的 <span class="term-i">spring-hessian</span> 部件拖一下就能看到）。TinyVBD 的回应是「<b>不投影、赌惯性项</b>」（<a href="../03-vbd/3-5-stability.html">3.5</a>）：靠 $\frac{m_i}{h^2}\mathbf I$ 抬底、det 太小就跳过、单调下降兜大局——三层兜底，省掉 SPD 投影的开销，在单根 strand 上够用。Newton 面对的是同样的负特征值（只是从 Neo-Hookean、tet、bending 多个能量里冒出来、更密更猛），但它不能赌：在每个元件上<b>提前 $\max(0,\cdot)$ 投成 SPD</b>，再让惯性项接力。一句话——<b>$\min G(\mathbf x)$ 没变，压缩元件会让 Hessian 不定这件事也没变；变的是「单根赌惯性」升级成了「整网在 GPU 上逐元件 SPD 投影 + 惯性接力」。</b></p>
+        </div>
+
+        <h2 id="rayleigh">Rayleigh damping：D = kd·ke</h2>
+        <p>稳定性还有另一面：耗散。TinyVBD 对阻尼的处理很轻——弹簧带一个 <code>damping</code> 项，本质是把速度相关的耗散塞进力里，简单直接。Newton 走的是更规整的 <span class="term">Rayleigh damping</span> 约定：阻尼系数不是一个独立的物理量，而是<b>正比于刚度</b>——</p>
+        <div class="math-block">$$D=k_d\cdot k_e,$$</div>
+        <p>其中 $k_e$ 是元件刚度，$k_d$ 是一个<b>无量纲</b>的 Rayleigh 系数（<code>solver_vbd.py</code> 注明 VBD 把 <code>kd</code> 解释为 dimensionless Rayleigh coefficient）。这样写有两个好处：一是阻尼自动随刚度缩放，硬的地方阻尼也大、软的地方阻尼也小，不用为每种材料单独标定一个绝对阻尼；二是 $k_d$ 无量纲，跨场景搬运不会因单位变化而错。membrane 与 volumetric 各自有对应的 Frobenius/trace 形式耗散项接进这套约定。</p>
+        <div class="callout note">
+          <div class="c-h">无量纲约定的一个反作用力</div>
+          <p>正因为 $D=k_d\cdot k_e$ 把阻尼绑在刚度上，一个看起来不大的 $k_d$ 配上很硬的 $k_e$ 也可能耗散过猛。Newton 文档就专门提醒：某些 joint limit 的默认 <code>kd</code>（如 $10^1$）在这套 Rayleigh 约定下会产生 excessive damping，用到时要显式调小。这是「约定优雅」换来的代价——你得记住它是<b>相对</b>刚度的系数，不是绝对阻尼值。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) production VBD 在<b>每个元件</b>把 Hessian 投成 SPD（membrane 用 $s_\text{clamp}=\max(0,\lambda_\text{NH}(J_s-\alpha))$ 这种 tight PSD clamp），从源头掐掉压缩带来的负特征值，再让 VBD 自带的惯性项 $\frac{m_i}{h^2}\mathbf I$ 把半正定顶成正定；(2) stable Neo-Hookean 用 $\lambda_\text{NH}=\lambda_\text{Lamé}+\mu_\text{Lamé}$（Smith 2018 §3.4）保证 rest state 无应力；(3) 阻尼用无量纲 Rayleigh 约定 $D=k_d\cdot k_e$，比 TinyVBD 把阻尼直接塞进弹簧力更规整、可移植，但要记得它是相对刚度的系数。</p>
+        <p>到这里，元件的力、Hessian、SPD 投影、阻尼都齐了——一个 cloth/soft body 顶点该装配的能量项全部就位。但 production 仿真还差最后、也最难的一块：物体不能互相穿插。下一节 <a href="../09-elasticity-collision/9-3-collision.html">9.3</a> 进入 <span class="term">self-collision</span> 与 <span class="term">penetration-free</span>——Newton 怎么用 BVH 检测 vertex-triangle / edge-edge 接触、怎么在每色 sweep 后做保守截断保证不穿透，而这正是 TinyVBD 那根 strand <b>完全没有</b>的一整块世界。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

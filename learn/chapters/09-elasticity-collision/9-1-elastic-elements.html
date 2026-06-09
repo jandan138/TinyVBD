@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>弹性元件谱 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-1</div>
+        <h1>弹性元件谱</h1>
+        <p class="lede">在 TinyVBD 里，<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根 strand 只认识一种 force element：弹簧。可一块真实的布、一团软体，要的远不止这个。这一节把 Newton particle VBD 支持的整套弹性元件铺开来看——<span class="term">Neo-Hookean membrane</span>、<span class="term">volumetric Neo-Hookean</span>、<span class="term">dihedral bending</span>、<span class="term">spring</span>——并点破一件事：它们各自只是往 <a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 那个 per-vertex 装配里，多塞一个 $\mathbf f$ 块和一个 $\mathbf H$ 块而已。讲完，我们把一块真在跑 VBD 的布请上台。</p>
+
+        <h2 id="same-assembly">同一个装配口，多种元件往里叠</h2>
+        <p>先把 <a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 的结论钉死：每个顶点 $i$ 解的还是那一步牛顿</p>
+        <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf f_i=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)-\sum_{j\in\mathcal F_i}\frac{\partial E_j}{\partial\mathbf x_i},\qquad \mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_{j\in\mathcal F_i}\frac{\partial^2 E_j}{\partial\mathbf x_i^2}.$$</div>
+        <p>惯性项那块谁都一样。变的只是求和里那一项项 $E_j$——它来自哪种 <span class="term">force element</span>。strand 上 $\mathcal F_i$ 全是弹簧；一块布上，$\mathcal F_i$ 可能同时含三角形膜、二面角弯曲、几根加强弹簧。每种元件贡献一个 $3\times3$ 的力块与 Hessian 块，<b>累加进同一个 $\mathbf f_i$ / $\mathbf H_i$</b>。VBD 的好处正在这里：装配口是统一的，加一种材料就是多写一个 <code>evaluate_*_force_hessian</code> 的 <span class="term">@wp.func</span>，主循环一行不用动。</p>
+
+        <h2 id="membrane">Neo-Hookean membrane：布的面内能量</h2>
+        <p>一块布最核心的元件是<b>三角形膜</b>。它管的是面内的拉伸与剪切：把三角形拉大、压扁、斜剪，都要花能量。和弹簧不同，它的能量不写在「边长」上，而写在 <span class="term">deformation gradient</span> $\mathbf F$ 上——把 rest 三角形映到当前三角形的那个线性变换。布是个二维面嵌在三维里，所以 $\mathbf F$ 是个 $3\times2$ 矩阵（两列 $\mathbf f_0,\mathbf f_1$）。</p>
+        <p>Newton 用的是 <span class="term">stable Neo-Hookean</span> 能量（Smith et al. 2018 改写到 shell 上）：</p>
+        <div class="math-block">$$\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2,\qquad I_c=\operatorname{tr}(\mathbf F^\top\mathbf F),\quad J_s=\sqrt{\det(\mathbf F^\top\mathbf F)},\quad \alpha=1+\frac{\mu}{\lambda}.$$</div>
+        <p>直觉拆开看：$I_c$ 是两列的长度平方之和，惩罚「整体被拉伸」；$J_s$ 是当前三角形与 rest 三角形的<b>面积比</b>，$(J_s-\alpha)^2$ 惩罚「面积变化」。那个 $\alpha=1+\mu/\lambda$ 不是随手写的——它让 rest 状态（$\mathbf F$ 是等距映射）恰好应力为零，省掉「松弛后还有残余张力」的毛病。代码里还要做一道 Lamé 参数转换 $\mu_{NH}=\mu$、$\lambda_{NH}=\lambda+\mu$（Smith 2018 §3.4），这是 stable NH 的标准约定。</p>
+        <div class="callout note">
+          <div class="c-h">为什么 Hessian 要 SPD 投影</div>
+          <p>和压缩弹簧一样（<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个变负的 $\lambda_\perp$），膜在被压缩时局部 Hessian 也会出现负特征值。Newton 在这里做 <span class="term">SPD projection</span>：用 <code>s_clamp = max(0, s)</code> 把惹事的那一项的系数夹到非负，保证喂给牛顿步的 $\mathbf H_i$ 正定、$\Delta\mathbf x_i$ 方向可靠。注意这正是 TinyVBD <b>没</b>做的——strand 靠惯性偏置和行列式阈值兜底，cloth 维度更高、更刚，索性把投影做实。下一节 <a href="9-2-spd-damping.html">9.2</a> 专讲它。</p>
+        </div>
+        <p>下面是这块膜元件的核心几行（已删去 damping 与组装样板），看它如何从 $\mathbf F$ 一路算到力与 Hessian：</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># Deformation gradient F = [f0, f1]  (3x2，两列向量)
+f0 = x01 * DmInv00 + x02 * DmInv10
+f1 = x01 * DmInv01 + x02 * DmInv11
+
+# J_s = 面积比 = sqrt(det(F^T F))
+J_s = wp.sqrt(wp.max(f0_dot_f0 * f1_dot_f1 - f0_dot_f1 * f0_dot_f1, 1.0e-20))
+
+# stable Neo-Hookean 参数 (Smith 2018, §3.4): mu_NH = mu, lambda_NH = lambda + mu
+mu_nh  = mu
+lmbd_nh = lmbd + mu
+alpha  = 1.0 + mu_nh / lmbd_safe
+
+# First Piola-Kirchhoff stress: P = mu*F + lambda*(J_s - alpha)*[g0, g1]
+s = lmbd_nh * (J_s - alpha)
+P_col0 = mu_nh * f0 + s * g0
+P_col1 = mu_nh * f1 + s * g1
+force = -(P_col0 * df0_dx + P_col1 * df1_dx)
+
+# Hessian (per-vertex 3x3, SPD-projected): max(0, s) 是紧的 PSD 夹取
+s_clamp = wp.max(0.0, s)
+hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code></pre></div>
+
+        <h2 id="volumetric">Volumetric Neo-Hookean：软体的体积能量</h2>
+        <p>把布换成一块软体（橡皮、肌肉、果冻），网格从三角形变成<b>四面体</b> tet。此时 $\mathbf F$ 是堂堂正正的 $3\times3$ 矩阵，能量也升级成体积版 Neo-Hookean：</p>
+        <div class="math-block">$$\psi=\frac{\mu}{2}\,(I_1-3-2\ln J)+\frac{\lambda}{2}\,(J-1)^2,\qquad I_1=\operatorname{tr}(\mathbf F^\top\mathbf F),\quad J=\det\mathbf F.$$</div>
+        <p>读法和膜版同构：$I_1$ 项管形变（剪切+拉伸），$(J-1)^2$ 项管体积变化，$J$ 是体积比。那个 $-2\ln J$ 是 Neo-Hookean 的招牌——当 $J\to0$（体积被压到塌缩），$\ln J\to-\infty$，能量爆炸，于是材料<b>天然抗拒翻面/塌陷</b>，这是线性弹性给不了的。元件的角色完全不变：算出力块与 Hessian 块，叠进顶点的 $\mathbf f_i/\mathbf H_i$。从 strand 的弹簧到 tet 的体积能量，变的只是「$E_j$ 长什么样」，装配机理一字未改。</p>
+
+        <h2 id="bending">Dihedral bending：让布不愿意折</h2>
+        <p>光有膜，布会像保鲜膜一样软塌塌，没有「抗弯」。<span class="term">dihedral bending</span> 元件补上这点：它盯着共享一条内部边的两个三角形之间的<b>二面角</b> $\theta$，谁想把布折起来就向谁要能量：</p>
+        <div class="math-block">$$E=\frac{k\,L_{\text{rest}}}{2}\,(\theta-\theta_{\text{rest}})^2.$$</div>
+        <p>$\theta_{\text{rest}}$ 是 rest 折角（平的布是 $0$），$L_{\text{rest}}$ 把刚度按边长缩放。一个干净的工程细节：<b>边界边被跳过</b>——一条没有「对面三角形」的边压根构不成二面角。代码开头那个 <code>== -1</code> 判断就是干这个的，对应 FACTS 里「boundary edges skipped」。整段从两个三角法向算 $\theta$、再写 $\dfrac{\partial E}{\partial\theta}=k\,L_{\text{rest}}(\theta-\theta_{\text{rest}})$，结构上和弹簧的「先标量能量、再链式法则铺到顶点」一模一样，只是几何量从「边长」换成了「夹角」。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> spring 元件同形，cloth 只是多叠了几种</div>
+          <p>你已经把 TinyVBD 那根 strand 的单弹簧 Hessian 吃透了：$\mathbf H_{aa}=k\big[\mathbf I-\tfrac{l_0}{l}\big(\mathbf I-\tfrac{\mathbf d\mathbf d^\top}{l^2}\big)\big]$，力 $\mathbf f=k\tfrac{l_0-l}{l}\mathbf d$。Newton 的 <span class="term">spring</span> 元件<b>与它同形</b>（用 <code>spring_rest_length / stiffness / damping</code>，力与 Hessian 是同一套公式）。真正的区别只有一句话：cloth 不过是在这根弹簧之外，又往同一个 $\mathbf f_i/\mathbf H_i$ 里叠加了 membrane、bending、（软体时还有）tet 几种 force element。<b>装配口没变，下降原理没变，变的只是邻接元件的种类</b>。你那根 strand 放大成一块布，就是这么发生的。</p>
+        </div>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive · capstone</span><span class="lab-t">一块真在跑 VBD 的 2D cloth</span></div><div class="lab-body" data-widget="cloth-lab"></div><div class="lab-cap">调 stiffness / 迭代数 / bending，拖动顶点，切 show colors 看并行分组。这就是把你那根 strand 放大成一块布。</div></div>
+
+        <h2 id="capstone-note">玩这块布时，盯住三件事</h2>
+        <p>这个 <span class="term">cloth-lab</span> 是整个 Newton 篇的压轴——你前面学的每一块，现在都在它里面同时转着。玩的时候建议有意识地看三处：</p>
+        <ul>
+          <li><b>stiffness</b>：调高，布更绷、抗拉；调低，布更软、垂得更狠。这是膜元件 $\mu,\lambda$ 在起作用。</li>
+          <li><b>bending</b>：调高，布抗折、会保持平整甚至打卷；调到零，布软塌得像液面。这是二面角元件在干活。</li>
+          <li><b>show colors</b>：切开看顶点的 graph coloring 分组——同色顶点不共享 force element，可在 GPU 上并行更新（<a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a>）。把迭代数压很低，它依旧不炸——这还是 VBD 那块招牌：单调下降、无条件稳定，只是从一根 strand 长成了一块布。</li>
+        </ul>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) Newton particle VBD 是一<b>谱</b>弹性元件——membrane（布，$\mathbf F$ 为 $3\times2$）、volumetric NH（软体，$\mathbf F$ 为 $3\times3$）、dihedral bending（抗折）、spring（与 TinyVBD 同形）；(2) 每种元件只贡献一个力块与 Hessian 块，<b>叠进 8.4 那个统一的 per-vertex 装配</b>，主循环不变；(3) 高维更刚的膜/体积能量在压缩下 Hessian 会不定，于是 Newton 在这里做实了 <span class="term">SPD projection</span>——这是 strand 没做、cloth 必须做的一步。</p>
+        <p>那道 SPD 投影到底怎么把负特征值拍正、又怎么不破坏物理，还有让布「甩两下就停」的 <span class="term">Rayleigh damping</span> 是怎么挂进力与 Hessian 的——下一节 <a href="9-2-spd-damping.html">9.2</a> 把这两件事讲透。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

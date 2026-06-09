@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>self-collision 与 penetration-free · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-3</div>
+        <h1>self-collision 与 penetration-free</h1>
+        <p class="lede">前两节我们把布料的弹性元件和 production 稳定性补齐了。但有一件事 TinyVBD 那根 strand 从头到尾<b>压根没碰过</b>：碰撞。一根孤零零的头发不会撞到自己，也没有别的东西可撞。可一块布会折叠、会贴住自己、会落在桌子上——<span class="term">self-collision</span> 和不穿透，是布料从「能动」走向「能看」的最后一道坎。这一节讲 Newton 怎么把这道坎，<b>不动声色地塞进同一个 Newton 步里</b>。</p>
+
+        <h2 id="strand-has-none">先认清差距：strand 那边一片空白</h2>
+        <p>把 TinyVBD 的 <code>solve()</code> 摊开看，里头只有两类东西：惯性项，和遍历邻接边累加的弹簧力/Hessian。<b>没有一行碰撞</b>。没有「这个顶点会不会撞到那个三角形」的判断，没有任何空间数据结构，更没有「撞上之后该往哪推」的力。这不是省略，而是这个 demo 的物理设定本就如此——单根 strand，自己不会缠住自己。</p>
+        <p>所以这一节和前面几节不太一样：它讲的不是「把已有的弹簧换成布料元件」这种平移，而是<b>一整套全新机器</b>。Newton 的 particle VBD 要让布料能自碰、能落地、能堆叠，得先回答两个问题：(1) <b>谁撞上了谁</b>？(2) 撞上之后，<b>怎么把它写成 VBD 认得的力和 Hessian</b>？</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 这是真正的「无中生有」</div>
+          <p>前面 membrane、bending、SPD 投影，多少还能在 strand 的弹簧上找到影子。但碰撞不行——TinyVBD 这根 strand <b>单体、不自碰、没有 BVH</b>，它对「撞」这个字毫无概念。Newton 的 cloth 这边却要凭空长出三样东西：一个 <span class="term">BVH</span> 自碰检测器、一组接触力/Hessian、还有一道 <span class="term">penetration-free</span> 的位移截断。读这一节时别再去 strand 里找对应了——找不到的。这正是 <code>min G(x)</code> 这条主线之外，cloth 真正多出来的份量。</p>
+        </div>
+
+        <h2 id="detector">第一问：谁撞了谁——<span class="term">TriMeshCollisionDetector</span></h2>
+        <p>答案藏在 <span class="term">tri_mesh_collision.py</span> 里的 <span class="term">TriMeshCollisionDetector</span>。一块布是几千上万个三角形，要判断「自碰」，朴素做法是每个顶点对每个三角形都试一遍——这是平方级的灾难。检测器的办法是建一棵 <span class="term">BVH</span>（Bounding Volume Hierarchy）：先把每个三角形、每条边都包进一个 <span class="term-i">AABB</span>（轴对齐包围盒），用层次结构把空间分块，查询时只下探到真正可能相交的那几个盒子。</p>
+        <p>检测器会找两类几何邻近：</p>
+        <ul>
+          <li><b><span class="term">vertex-triangle</span></b>：一个顶点逼近（或穿过）某个三角形面——布料折叠贴住自己时最典型。</li>
+          <li><b><span class="term">edge-edge</span></b>：两条边互相逼近——两片布交叉、褶皱搭住时，光看顶点-面会漏掉，必须补上边-边。</li>
+        </ul>
+        <p>结果不是一个布尔值，而是一张<b>邻近清单</b>：每个顶点记下它正在逼近哪些三角形、每条边记下它逼近哪些边，连同<span class="term-i">最小距离</span>一并存进 <span class="term">TriMeshCollisionInfo</span> 这个 <code>wp.struct</code>。这张清单，就是下一步算接触力的输入。</p>
+
+        <div class="callout note">
+          <div class="c-h">为什么是「逼近」而不是「已经穿了」</div>
+          <p>注意检测器记的是「逼近」——顶点和三角形还隔着一小段距离时就被登记进来了。这是故意的：接触要用<b>排斥力</b>把它们温柔地推开，而不是等真穿透了再硬拽回来。下面的 log-barrier 接触力，正是趁这段距离还在、还没归零时就开始发力。</p>
+        </div>
+
+        <h2 id="force-hessian">第二问：写成 VBD 认得的话——接触折进 f_i / H_i</h2>
+        <p>有了邻近清单，Newton 调 <span class="term">accumulate_self_contact_force_and_hessian</span>，把每一对潜在接触换算成作用在相关顶点上的<b>力和 3×3 Hessian</b>。接触能量用的是 <span class="term">log-barrier</span>：当两个几何元件的距离 $d$ 趋近某个阈值时，能量像 $-\log d$ 一样飙到无穷，于是<b>距离永远跨不过零</b>——这是「不穿透」的能量层面保证。摩擦则用 <span class="term">Coulomb friction</span> 模型一并算进来。</p>
+        <p>关键在于：这些力和 Hessian <b>累加进的，正是那个你已经无比熟悉的 $\mathbf f_i$ 和 $\mathbf H_i$</b>。回想 VBD 的顶点级牛顿步：</p>
+        <div class="math-block">$$\mathbf f_i = -\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i) - \sum_{j\in\mathcal F_i}\frac{\partial E_j}{\partial \mathbf x_i},\qquad \mathbf H_i = \frac{m_i}{h^2}\mathbf I + \sum_{j\in\mathcal F_i}\frac{\partial^2 E_j}{\partial\mathbf x_i^2},\qquad \Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$$</div>
+        <p>接触不过是往 $\sum_j$ 里又添了几项 force element。一个顶点除了被它的弹簧、membrane、bending 拉扯，现在还被它正在逼近的那些三角形/边「顶」一下——这些「顶」的力和曲率，和弹性项一样累加进同一个 $\mathbf f_i$、同一个 $\mathbf H_i$，最后一起解那一步 $\mathbf H_i^{-1}\mathbf f_i$。</p>
+
+        <div class="callout note">
+          <div class="c-h">还是那句话：同一个 min G(x)，只是多了几项</div>
+          <p>别被「碰撞」这个词吓到以为它是另起炉灶的子系统。在 VBD 的框架里，接触就是<b>能量 $G(\mathbf x)$ 里多出来的几个 term</b>（log-barrier + 摩擦），它们的梯度进 $\mathbf f_i$、Hessian 进 $\mathbf H_i$，和惯性项、弹性项站在同一行加号上。顶点级牛顿步的形状一个字都没改——这就是 VBD 把碰撞处理得如此自然的原因：它从来不是「先解动力学，再单独处理碰撞」，而是<b>把碰撞当成能量的一部分，一起最小化</b>。</p>
+        </div>
+
+        <h2 id="body-particle">body-particle 接触：同一个口子进来</h2>
+        <p>布料不只会撞自己，还会落到地面、披到一个刚体球上。这类 <b>body-particle</b> 接触（粒子撞上场景里的 body/shape）走的是同一条路：在按 color 的 sweep 里，先把 body-particle contact 的力/Hessian 累加进对应顶点，再解 elasticity。也就是说，不管是布撞布，还是布撞球，到了顶点这一层，<b>都只是 $\mathbf f_i$、$\mathbf H_i$ 上的又一组加项</b>。VBD 不需要为「自碰」和「外碰」准备两套求解逻辑——它们汇进同一个口子。</p>
+
+        <h2 id="penetration-free">第三道保险：<span class="term">penetration-free</span> 位移截断</h2>
+        <p>log-barrier 在能量层面挡住了穿透，但 VBD 是<b>一步</b>牛顿、按 color 一遍遍扫的迭代解法。某一步算出的位移 $\Delta\mathbf x_i$ 可能步子太大，一脚跨过了本该挡住它的那个三角形——能量曲线再陡，离散的一步也可能跳过去。Newton 因此加了一道纯几何的硬保险。</p>
+        <p>这道保险叫 <b>penetration-free 截断</b>（一种 <span class="term">DAT</span>，distance-aware truncation 式的保守做法），在 <span class="term">solver_vbd.py</span> 第 1672–1732 行。机制是：每跑完<b>一个 color 的 sweep</b>，就回头检查这批顶点的位移，按一个<b>保守的距离界</b>把它们截短——只允许走到「保证还没碰穿」的那一步为止，多出来的部分砍掉。于是无论 log-barrier 那一步多冲，几何上<b>始终不会发生穿透</b>。</p>
+        <p>注意这道截断和初始化阶段是配套的：<a href="../07-newton-foundations/7-1-what-is-newton.html">前面</a>提过 Newton 在 <code>_initialize_particles</code> 里做前向积分时，就已经对惯性位置做了一次 penetration-free 截断；color sweep 之后再截一次。一前一后，把「跨步穿透」这个离散迭代的固有风险按死。</p>
+
+        <div class="callout warn">
+          <div class="c-h">能量挡 + 几何截断，是两层而非一层</div>
+          <p>容易误以为 log-barrier 一个就够了。实际是<b>两层防线</b>：log-barrier 让连续能量在穿透处发散（软的、可微的、进 Hessian 的）；penetration-free 截断在每个离散步之后做硬性的几何兜底（不可微、直接砍位移）。前者负责「让接触有正确的力学行为」，后者负责「保证这一步绝不穿帮」。两者缺一，要么没接触力，要么偶尔会穿。</p>
+        </div>
+
+        <h2 id="recap">这一节你要带走的</h2>
+        <p>三件事：(1) TinyVBD 那根 strand <b>完全没有碰撞</b>——这一整套机器是 Newton cloth 凭空多出来的，别去 strand 里找对应。(2) 碰撞分两问：<span class="term">TriMeshCollisionDetector</span> 用 <span class="term">BVH</span> 做 vertex-triangle + edge-edge 检测回答「谁撞谁」；<span class="term">accumulate_self_contact_force_and_hessian</span>（log-barrier + Coulomb friction）把接触<b>折进同一个 $\mathbf f_i$ / $\mathbf H_i$</b>，body-particle 接触也走这个口子——本质上还是<b>同一个 $\min G(\mathbf x)$，只是多了几项</b>。(3) 在能量防线之外，<b>penetration-free 截断</b>（DAT，每个 color sweep 后保守砍位移）提供几何上的硬保证。</p>
+        <p>到这里，我们已经把 Newton 的 cloth VBD 从弹性、稳定性到碰撞拼完整了。它强大、稳定、能并行，但仍有一处软肋——<b>高刚度比、硬约束</b>这种场景，纯 VBD 的局部下降会力不从心。下一篇 <b>Part 10</b>，我们就从这块软肋出发，看 <a href="../10-avbd/10-1-avbd-idea.html">10-1：VBD 的软肋 → AVBD</a> 怎么用 augmented Lagrangian 把这最后一块补上。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
