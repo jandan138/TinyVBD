@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>一个最小的 Newton 程序：从 ModelBuilder 到 step 循环 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="7-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 7 · Newton Foundations · 7-4</div>
+        <h1>一个最小的 Newton 程序：从 ModelBuilder 到 step 循环</h1>
+        <p class="lede">前几节我们把 Newton 的 <span class="term">Warp</span> 编程模型、Model/State 数据分离都拆开看了。这一节把它们拼回去：写出一个能真正跑起来的<b>最小 VBD 程序</b>。你会发现，它和你烂熟的 TinyVBD <code>simulate()</code> 是同一个骨架——只是搭场景、着色、循环的几行 API 换了个名字。我们逐行走一遍，并把每一行接回那根 strand。</p>
+
+        <h2 id="whole">先看全貌</h2>
+        <p>下面是一段忠实于 Newton 真实 example（<a href="../../index.html">basic</a> 系列里的 pendulum/cloth 程序）骨架的最小程序。pendulum example 是 rigid 的，这里我们换成 particle/cloth 的写法，但<b>建场景 → 着色 → finalize → step 循环</b>这条主干是所有 Newton 程序通用的：</p>
+
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">minimal_vbd.py</span><button class="cp">复制</button></div><pre><code>import newton
+
+# 1. 建场景：往 builder 里加内容
+builder = newton.ModelBuilder()
+# ... 加 particles / cloth 三角网格 / soft body / shapes ...
+# builder.add_cloth_grid(...) 之类的 helper 把顶点、边、三角填进去
+
+# 2. 着色：VBD 必需，且必须在 finalize 之前
+builder.color()
+
+# 3. 冻结成 Model（静态数据从此只读）
+model = builder.finalize()
+
+# 4. 造一个 VBD 求解器
+solver = newton.solvers.SolverVBD(model)
+
+# 5. 准备运行时缓冲
+state_0 = model.state()
+state_1 = model.state()
+control = model.control()
+contacts = model.contacts()
+
+dt = 1.0 / 60.0
+substeps = 1
+
+# 6. 主循环：每帧若干 substep
+for frame in range(num_frames):
+    for _ in range(substeps):
+        state_0.clear_forces()
+        model.collide(state_0, contacts)
+        solver.step(state_0, state_1, control, contacts, dt)
+        state_0, state_1 = state_1, state_0   # swap</code></pre></div>
+
+        <p>就这些。六块：建场景、着色、finalize、造 solver、备缓冲、跑循环。下面一块一块对着 TinyVBD 读。</p>
+
+        <h2 id="builder">builder：搭场景的脚手架</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">建场景</span><button class="cp">复制</button></div><pre><code>builder = newton.ModelBuilder()
+# ... builder.add_cloth_grid(...) / add particles / shapes ...</code></pre></div>
+        <p><span class="term">ModelBuilder</span> 是一个<b>可变的脚手架</b>：你往里加顶点、边、三角、刚体、关节、材料参数，它就是个在内存里慢慢长大的场景描述。Newton 提供一批 helper（如往里灌一张 cloth 三角网格、灌一堆 particle、灌一个 box shape），它们最终都落到同一组数组里——顶点位置 <code>particle_q</code>、质量 <code>particle_mass</code>、边/三角的连接关系、材料 <code>tri_materials</code> 等。这一步只是<b>描述</b>，还没有任何求解器、还没有冻结。</p>
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> builder ↔ 那几个 initializeXxx()</div><p>TinyVBD 里 <code>initializeTilted()</code> / <code>initializeStiffRatio()</code> 干的就是 <code>ModelBuilder</code> 的活：手填 <code>numVerts</code>、<code>edges</code>、每边 <code>stiffness</code>、末端重质量 <code>m1</code>。区别只是 TinyVBD 把数据直接写进 <code>VBDStrand</code> 的成员，而 Newton 让你通过 builder 的 helper 来填，最后统一冻结。一根 strand → 一张 cloth，填的内容多了，姿势没变。</p></div>
+
+        <h2 id="color">builder.color()：VBD 的入场券</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">着色（必需）</span><button class="cp">复制</button></div><pre><code>builder.color()</code></pre></div>
+        <p>这一行最容易被漏掉，却是 VBD 能并行的<b>前提</b>。<span class="term">graph coloring</span> 给每个顶点染一种颜色，规则是<b>同色顶点之间不共享任何 force element</b>（不在同一条边/同一个三角上）。这样同一种颜色的所有顶点，它们的 3×3 牛顿步互不干扰，就能在 GPU 上一口气并行算完；而不同颜色之间仍按顺序扫，于是整体保留了 <span class="term">Gauss-Seidel</span> 的「用最新值」收敛性。着色结果存进 <code>model.particle_color_groups</code>。</p>
+        <p>为什么<b>必须在 <code>finalize()</code> 之前</b>调？因为着色要写进 Model 的静态数据，而 <code>finalize()</code> 一旦把 Model 冻结成只读，就没机会再往里塞颜色分组了。换句话说：<b>颜色必须先存在，才能被冻进 Model</b>。<code>SolverVBD</code> 在构造时会去 Model 里找这组颜色——找不到就直接报错（见下）。</p>
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 这一步在 TinyVBD 里「不存在」</div><p>TinyVBD 是单线程 CPU，<code>solve()</code> 就一个 <code>for iV</code> 顺着扫，天然是串行 Gauss-Seidel，<b>不需要也没有着色</b>。<code>builder.color()</code> 正是「一根 strand 串行 → 一块 cloth 按颜色并行」这句主线里多出来的那一步：它不改变在解的那个 $\min G(\mathbf x)$，只是把「该按什么顺序、哪些顶点能同时动」这件事提前规划好。Part 8 会用专门的 widget 把顶点图着色拆给你看。</p></div>
+
+        <div class="callout warn">
+          <div class="c-h">最容易踩的坑：忘了 builder.color()</div>
+          <p><code>SolverVBD</code> 构造时会检查 <code>model.particle_color_groups</code> 是否为空；为空就直接抛 <code>ValueError</code>，提示你<b>必须在 finalize 之前调用 <code>ModelBuilder.color()</code>（或 <code>set_coloring()</code>）</b>。这是 VBD 特有的要求——别的求解器（如 XPBD）不需要着色，所以从 XPBD 例子改过来时极易漏掉。症状很直白：程序在 <code>SolverVBD(model)</code> 这一行就崩，而不是跑到一半才出错。记住顺序：<b>加内容 → color() → finalize() → SolverVBD</b>。</p>
+        </div>
+
+        <h2 id="finalize">finalize 与 solver：从可变到只读</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">冻结 + 造 solver</span><button class="cp">复制</button></div><pre><code>model = builder.finalize()
+solver = newton.solvers.SolverVBD(model)</code></pre></div>
+        <p><code>builder.finalize()</code> 把脚手架冻结成一个 <span class="term">Model</span>：所有静态数据（顶点初始位置、质量、连接关系、材料、刚度、着色分组、重力）从此<b>只读</b>，整理成按 id 索引的 GPU 数组。<code>newton.solvers.SolverVBD(model)</code> 拿到这个 Model，分配好自己的工作缓冲（每顶点的力 / Hessian / 位移等），并把那组颜色读出来准备按色 sweep。对 particle 它走 VBD，对 rigid 它走 AVBD——本节只关心 particle 这条路径。</p>
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> Model 静态 ↔ VBDStrand 的不变量</div><p>TinyVBD 里 <code>orgLengths</code>、<code>edgesStiffness</code>、<code>vertexMass</code>、<code>vertAdjacentEdges</code> 这些一旦 <code>from(...)</code> 建好就不再变——它们就是 Newton 的 Model：仿真过程中只读的「这根东西长什么样」。会变的只有位置和速度，那是 State 的事。Newton 把这条「静态/动态分离」做成了显式的两个对象。</p></div>
+
+        <h2 id="state">state / control / contacts：运行时缓冲</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">备缓冲</span><button class="cp">复制</button></div><pre><code>state_0 = model.state()
+state_1 = model.state()
+control = model.control()
+contacts = model.contacts()</code></pre></div>
+        <p><span class="term">State</span> 是某一时刻的动态快照：<code>particle_q</code>（位置）、<code>particle_qd</code>（速度）、<code>particle_f</code>（力）。我们造<b>两个</b>——<code>state_0</code> 当输入、<code>state_1</code> 当输出，因为 <code>solver.step</code> 不就地改写，而是「读 in、写 out」，算完再交换（double buffering）。<code>model.control()</code> 给一个 <span class="term">Control</span>（控制输入，纯 particle 场景基本空着）；<code>model.contacts()</code> 给一个 <span class="term">Contacts</span> 缓冲，等着碰撞检测往里填。这些都由 Model 出厂，形状和 Model 一致。</p>
+
+        <h2 id="loop">主循环：collide → step → swap</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">每 substep 三件事 + swap</span><button class="cp">复制</button></div><pre><code>for frame in range(num_frames):
+    for _ in range(substeps):
+        state_0.clear_forces()
+        model.collide(state_0, contacts)
+        solver.step(state_0, state_1, control, contacts, dt)
+        state_0, state_1 = state_1, state_0</code></pre></div>
+        <p>每个 substep 干四件事：<b>(1)</b> <code>state_0.clear_forces()</code> 把上一步残留的 <code>particle_f</code> 清零；<b>(2)</b> <code>model.collide(state_0, contacts)</code> 用当前位置跑碰撞检测，把接触对填进 <code>contacts</code>；<b>(3)</b> <code>solver.step(state_0, state_1, control, contacts, dt)</code> 解一个隐式欧拉步——内部就是 <a href="7-3-warp-model.html">7.3</a> 提过的初始化 → 按色迭代 VBD → 由位移算速度三段，从 <code>state_0</code> 读、把新位置/速度写进 <code>state_1</code>；<b>(4)</b> 交换两个 state，让这一步的输出成为下一步的输入。<code>dt</code> 是 substep 的时间步（默认 $1/60$ 再除以 substeps）。</p>
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 这就是 simulate() 的逐行翻译</div><p>把 TinyVBD <code>simulate()</code> 摆旁边一眼就对上：它每帧每 substep 做 <code>forwardStep()</code>（前向积分 + pin 0 号）→ 迭代 <code>numIterations</code> 次 <code>solve()</code> → <code>updateVelocity()</code>，整段对应 Newton 一次 <code>solver.step()</code>——惯性初始化、按色（TinyVBD 是单 sweep）的牛顿迭代、后向差分算速度都被打包进去了。TinyVBD 用 <code>saveOutputs()</code> 手写一串 JSON（字段 <code>pos</code>）做可视化；Newton 这边对应的是把 <code>state_0</code> 交给 viewer 渲染或导出，不用你手撸 IO。还有 pinning：TinyVBD 在 <code>forwardStep</code>/<code>updateVelocity</code> 里把第 0 顶点速度强制清零钉死；Newton 对应的是在 builder 阶段给该 particle 打 <code>particle_flags</code>（标记为不可动），由 solver 自动跳过。一句话——<b>循环还是那个循环，<code>min G(x)</code> 还是那个 <code>min G(x)</code>。</b></p></div>
+
+        <div class="callout note">
+          <div class="c-h">为什么是「两个 state 来回 swap」</div>
+          <p>这个 in/out 双缓冲不是 VBD 专属，而是 Newton <code>solver.step(state_in, state_out, ...)</code> 契约的统一形状（pendulum 那个 rigid 例子也是同样的 swap）。好处是 <code>step</code> 是个干净的纯函数式映射「旧状态 → 新状态」，便于把整段循环用 CUDA graph 录下来零开销重放。本节不展开 graph capture，知道循环长这样即可。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>一个能跑的 Newton VBD 程序就六步，记成一条流水线：<b><code>ModelBuilder()</code> 加内容 → <code>color()</code>（VBD 必需，且必须在 finalize 前）→ <code>finalize()</code> 冻结成只读 Model → <code>SolverVBD(model)</code> → 取 <code>state_0/state_1</code>、<code>control</code>、<code>contacts</code> → 循环里 <code>clear_forces</code> + <code>collide</code> + <code>step</code> + swap</b>。它和你吃透的 TinyVBD <code>simulate()</code> 是同一个骨架，多出来的只有 <code>color()</code> 这一步——因为我们要从「一根 strand 串行」走向「一块 cloth 按颜色并行」。唯一最该刻进肌肉记忆的坑：<b>漏 <code>color()</code> 会在造 solver 那行直接崩</b>。</p>
+        <p>下一节进入 Part 8：我们正式把 strand 升级成 cloth，从 <a href="../08-strand-to-cloth/8-1-same-min-G.html">8.1 同一个 min G(x)</a> 开始——证明这块二维三角网格解的，依旧是你早就熟悉的那个增量势能，只是顶点更多、力的来源更丰富。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

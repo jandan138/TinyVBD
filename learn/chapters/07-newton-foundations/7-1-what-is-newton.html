@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton 是什么 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="7-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 7 · 7-1</div>
+        <h1>Newton 是什么</h1>
+        <p class="lede">你已经把那根 ~400 行的 strand 吃透了：<span class="term-i">min G(x)</span>、per-vertex 的 $\Delta\mathbf x = \mathbf H^{-1}\mathbf f$、Gauss-Seidel 一个个扫过去。现在我们把镜头拉远——同样的数学，搬到一个真正给机器人和研究用的 GPU 引擎里，它叫 <span class="term">Newton</span>。这一篇先认门：Newton 是谁、它和你熟的 <span class="term">Isaac</span> / <span class="term">OpenUSD</span> 是什么关系、为什么 VBD 会住在这里。</p>
+
+        <h2 id="what-newton-is">一句话：建在 Warp 之上的 GPU 物理引擎</h2>
+        <p>翻开 Newton 的 <code>README.md</code>，第一句就把它定义清楚了：<span class="term-i">Newton is a GPU-accelerated physics simulation engine built upon NVIDIA Warp</span>（<code>README.md:8</code>），面向 roboticists 和 simulation researchers。注意这里的两个关键词：<b>GPU-accelerated</b> 和 <b>built upon Warp</b>。你那根 strand 跑在 CPU 上、靠 Eigen 做 3×3 求逆；Newton 则把同一类计算搬到 GPU 上，而承载它的语言/框架就是下一节要讲的 <span class="term">Warp</span>——NVIDIA 的一套用 Python 写、却编译成 GPU kernel 的库。</p>
+        <p>Newton 并不是凭空造的。它<b>扩展并泛化了</b> Warp 里那个已经 <span class="term">deprecated</span> 的 <code>warp.sim</code> 模块，并把 <span class="term">MuJoCo Warp</span> 集成进来当 <b>primary backend</b>；同时强调 GPU 计算、<span class="term">OpenUSD</span> 支持、differentiability（可微）和用户可扩展（<code>README.md:10-11</code>）。换句话说：<code>warp.sim</code> 是前身，Newton 是它的「正式版」继任者，而 MuJoCo Warp 提供了主力刚体后端。</p>
+
+        <h2 id="who-built-it">谁做的：从三家公司到 Linux Foundation</h2>
+        <p>Newton 由 <span class="term">Disney Research</span>、<span class="term">Google DeepMind</span> 和 <span class="term">NVIDIA</span> 共同发起（<code>README.md:15</code>），现在是一个 <span class="term">Linux Foundation</span> 项目，社区共建共维，代码以 <span class="term">Apache-2.0</span> 开源（<code>README.md:13</code>）。对你这种从 EBench 背景过来的读者，这个出身值得记一笔：它不是某一家的内部玩具，而是一个开放治理、明确面向 robotics 与研究的公共底座——这也解释了为什么它要那么认真地支持 OpenUSD 和可微性。</p>
+        <p>它在生态里的位置可以这样摆：底层是 <span class="term">Warp</span>（GPU 编程语言/运行时）；Newton 站在 Warp 之上做物理；再往上，像 <span class="term">Isaac Lab</span> 这类机器人学习框架可以把 Newton 当作物理后端来驱动场景。资产与场景的描述则交给 <span class="term">OpenUSD</span>——也就是你熟悉的那套 USD stage。</p>
+
+        <div class="callout note">
+          <div class="c-h">从 Isaac / USD 看：Model 与 State 的分离</div>
+          <p>Newton 的核心数据模型把世界拆成两半，这个划分你在 Isaac / USD 里其实见过。<span class="term">Model</span> 是<b>静态</b>的那一半——粒子、刚体、关节、形状、物理属性，按 id 索引的一堆数组（<code>particle_mass</code>、<code>gravity</code>、<code>particle_color_groups</code>…），对应你心里 USD stage 上那些<b>静态资产</b>；<span class="term">State</span> 是<b>某一时刻的动态快照</b>——<code>particle_q</code>（位置）、<code>particle_qd</code>（速度）、刚体的 <code>body_q</code>/<code>body_qd</code>，对应 Isaac 的 root-state tensor、USD 上随时间变的<b>动态属性</b>。一个先剧透的小坑：Newton/Warp 的<b>四元数顺序</b>是 <code>(x, y, z, w)</code>，而 Isaac 用 <code>(w, x, y, z)</code>——互转时要换序，附录会专门讲。</p>
+        </div>
+
+        <h2 id="many-solvers">一个引擎，多个 solver</h2>
+        <p>这里有个对理解 VBD 至关重要的事实：Newton 不是「一种解法」，而是<b>一个装着多种 solver 的引擎</b>。它同时提供 <span class="term">XPBD</span>、<span class="term">VBD</span>、<span class="term">MuJoCo</span>、<span class="term">Featherstone</span>、<span class="term">SemiImplicit</span> 等多个求解器（见 <code>docs/index.rst</code>）。你在前六部里建立的整张谱系图——PBD / XPBD / Projective Dynamics / VBD 都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同——在 Newton 里几乎是字面成真的：它们就是并排摆着、可以替换的 solver。</p>
+        <p>我们这一篇要盯住的是其中的 <code>SolverVBD</code>。它的类 docstring 写得很清楚：对 <b>particle 用 VBD</b>，对 <b>rigid 用 AVBD</b>（<span class="term">Augmented VBD</span>）（<code>solver_vbd.py:88</code>）。也就是说，你吃透的那套顶点级 block coordinate descent，正是这里 particle 路径的内核；而 rigid 那条路用的是 VBD 的增广拉格朗日升级版 AVBD——Part 10 会专门讲。<b>这就是为什么 VBD/AVBD 住在 Newton 里</b>：它们是这个多-solver 引擎里专门负责可形变体与刚体约束的那两块。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你的 simulate() 主循环，在 Newton 里叫 solver.step()</div>
+          <p>回想你那根 strand 的 <code>simulate()</code>：每帧 <code>forwardStep()</code> 做惯性初始化，然后迭代若干次 <code>solve()</code> 扫顶点，最后 <code>updateVelocity()</code>。Newton 把这套循环收进了一个统一的<b>求解器契约</b>：<code>solver.step(state_in, state_out, control, contacts, dt)</code>（<code>solver_vbd.py:1578</code>）。<code>state_in</code> 是这一刻的快照，<code>state_out</code> 接住下一刻，<code>control</code> 是控制输入、<code>contacts</code> 是碰撞检测结果、<code>dt</code> 还是你那个 dt。一次 <code>step()</code> 内部，就是「初始化 → 按颜色迭代 → 收尾算速度」——和你的 <code>simulate()</code> 一一对应，只是搬上了 GPU。这里只是预告，后面几节会把每一段拆开对照着读。</p>
+        </div>
+
+        <h2 id="throughline">主线没变，变的是并行方式</h2>
+        <p>把上面这些串起来，本篇的主线其实只有一句话，后面会反复用到：<b><span class="term-i">min G(x)</span> 没变；变的是「一根 strand 串行 → 一块 cloth 在 GPU 上按颜色并行」</b>。你已经懂的所有数学——增量势能、per-vertex 牛顿步、Gauss-Seidel 单调下降——在 Newton 里一个都没丢。新增的全是「怎么把它高效地铺到成千上万个 GPU thread 上」的工程学：Warp 的编程模型、graph coloring、CUDA graph capture。接下来几节就沿着这条线一步步走。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>就四件事：(1) <span class="term">Newton</span> 是建在 <span class="term">NVIDIA Warp</span> 之上、面向 robotics 与研究的 GPU 物理引擎，扩展自已 deprecated 的 <code>warp.sim</code>、以 <span class="term">MuJoCo Warp</span> 为主力后端（<code>README.md:8,10-11</code>）；(2) 它由 Disney Research / Google DeepMind / NVIDIA 发起，现为 Apache-2.0 的 Linux Foundation 项目；(3) 它是个<b>多-solver 引擎</b>（XPBD / VBD / MuJoCo / Featherstone…），其中 <code>SolverVBD</code> 对 particle 用 VBD、对 rigid 用 AVBD；(4) 你的 <code>simulate()</code> 在这里被统一成 <code>solver.step(state_in, state_out, control, contacts, dt)</code> 契约。</p>
+        <p>下一节，我们钻进底座本身：<a href="../07-newton-foundations/7-2-warp-model.html">7-2 Warp 编程模型</a>。看清 <code>@wp.kernel</code> 和 <code>wp.launch(dim=N)</code> 是怎么把「一个 thread 解一个顶点」铺成 SPMD 并行的——这是理解后面一切并行 sweep 的钥匙。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

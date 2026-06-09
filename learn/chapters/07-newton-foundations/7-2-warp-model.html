@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Warp 编程模型 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="7-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 7 · 7-2</div>
+        <h1>Warp 编程模型：读 kernel 前要会的那点东西</h1>
+        <p class="lede">Newton 的求解器不是用普通 Python 写的——它的每一行热点代码都是一段 <span class="term">Warp</span> kernel，会被编译成 GPU 上的并行程序。要读懂后面那些 VBD kernel，你先得换一副眼镜：从「一根 strand 串行扫过去」切到「成千上万个 thread 同时各干一份」。这一节就把这副眼镜配给你。</p>
+
+        <h2 id="why-warp">为什么 Newton 不是普通 Python</h2>
+        <p>上一节我们说 <span class="term">Newton</span> 建立在 <span class="term">Warp</span> 之上。<span class="term">Warp</span> 是 NVIDIA 的一个 Python 库，但它干的事和 NumPy / PyTorch 很不一样：你用 Python 的语法写一个函数，加上一个装饰器，<span class="term">Warp</span> 就把它 <span class="term-i">即时编译</span>（JIT）成原生的 CUDA kernel，丢到 GPU 上成百上千个线程并行去跑。换句话说，你写的是 Python，跑的是 GPU 代码。</p>
+        <p>这件事对读代码的影响是根本性的。你在 TinyVBD 里读到的 <code>solve()</code> 是一个老老实实的 <code>for</code> 循环，CPU 一个顶点接一个顶点地处理。Newton 里对应的东西长得也像普通函数，但它<b>不是被「调用」的，而是被「launch」的</b>——你说一句「给我开 N 个线程」，这个函数体就会被 N 份拷贝同时执行，每份处理一个顶点。读 Newton 代码时若还用串行循环的脑子去想，几乎每个 kernel 都会读拧。</p>
+
+        <h2 id="kernel-launch"><code>@wp.kernel</code> 与 <code>wp.launch</code>：并行的入口</h2>
+        <p>Warp 里最核心的两件事：用 <span class="term">@wp.kernel</span> 标记一个「能被并行跑」的函数，用 <span class="term">wp.launch</span> 真正把它铺开到 N 个线程上。</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">示意</span><button class="cp">复制</button></div><pre><code>@wp.kernel
+def my_kernel(a: wp.array(dtype=wp.vec3), b: wp.array(dtype=wp.vec3)):
+    i = wp.tid()          # 这个 thread 是第几号
+    b[i] = a[i] * 2.0     # 它只负责第 i 份数据
+
+wp.launch(my_kernel, dim=N, inputs=[a, b])   # 一口气开 N 个 thread</code></pre></div>
+        <p><span class="term">wp.launch(kernel, dim=N, inputs=[...])</span> 是唯一的发动机：<code>dim=N</code> 说「开 N 个线程」，<code>inputs</code> 是这些线程共享的那些数组。launch 之后，<code>my_kernel</code> 的函数体会被 N 个线程<b>同时</b>执行，彼此独立。这就是所谓的 <span class="term">SPMD</span>（Single Program, Multiple Data）：同一段程序，跑在不同的数据上。</p>
+
+        <h2 id="tid-mental-model">每个 thread 的视角：<code>tid = wp.tid()</code></h2>
+        <p>站在<b>单个 thread</b> 的视角看，kernel 体其实非常朴素。它进门第一件事通常就是问一句「我是谁」：</p>
+        <div class="math-block">$$\texttt{i = wp.tid()}\quad\Longrightarrow\quad i \in \{0,1,\dots,N-1\}$$</div>
+        <p><span class="term">wp.tid()</span> 返回这个线程的全局编号。线程 0 拿到 <code>i=0</code>，线程 1 拿到 <code>i=1</code>，依此类推。拿到自己的 <code>i</code> 之后，整个 kernel 体就只围着「第 <code>i</code> 份数据」打转——读 <code>a[i]</code>、写 <code>b[i]</code>。它<b>不知道、也不关心</b>别的线程在干什么。每个 thread 都可以独立地走自己的 <code>if</code> 分支、独立地 <code>return</code> 提前退出，互不影响。把这句话刻进脑子，后面读 kernel 会顺很多：<b>kernel 体描述的是「一个线程对一个元素做的事」，而不是「对整个数组做的事」</b>。</p>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">wp.launch：N 个 thread 各取自己那份</span></div><div class="lab-body" data-widget="warp-launch"></div><div class="lab-cap">点一个格子，看那个 thread 的 tid 与它读写的数据。</div></div>
+
+        <div class="callout note">
+          <div class="c-h">和你熟的 tensor / SIMD 框架对比一下</div>
+          <p>写 PyTorch/NumPy 时，你想的是「<b>整个数组</b>乘 2」（<code>b = a * 2</code>），并行被藏在算子背后，你看不见线程。Warp 反过来：它把线程<b>明确摆在你面前</b>，你写的是「<b>第 i 个</b>元素乘 2」，再用 <code>dim=N</code> 把它复制 N 份。这更接近 CUDA 的写法，也更接近 GPU 真实在干的事。代价是你得自己想清楚「谁碰谁的数据」——这正是后面 graph coloring 要解决的问题。</p>
+        </div>
+
+        <h2 id="func-types"><code>@wp.func</code> 与 Warp 的类型</h2>
+        <p>kernel 体里往往会调用一些小的辅助函数，比如「给定一条边，算它的弹簧力和 Hessian」。这种被 kernel 调用的<b>设备函数</b>用 <span class="term">@wp.func</span> 标记——你可以把它类比成 CUDA 里的 <code>__device__</code> 函数：它不能被 <code>wp.launch</code> 直接铺开，但能在 kernel（或别的 <code>@wp.func</code>）里被调用。Newton 的 VBD 里那些 <code>evaluate_*_force_hessian</code> 就都是 <span class="term">@wp.func</span>。</p>
+        <p>数据这边，Warp 的主力容器是 <span class="term">wp.array</span>，它是一块 GPU 上的连续内存，声明时要带 dtype。常见的 dtype 正好对得上你写弹性力学要用的东西：</p>
+        <ul>
+          <li><span class="term">wp.float32</span> / <span class="term">wp.int32</span>——标量；</li>
+          <li><span class="term">wp.vec3</span>——三维向量，顶点位置、速度、力都是它（<code>wp.array(dtype=wp.vec3)</code>）；</li>
+          <li><span class="term">wp.mat33</span>——3×3 矩阵，正好装每顶点那个 3×3 的 Hessian；</li>
+          <li><span class="term">wp.struct</span>——把一组字段打包成一个结构体，方便整团传进 kernel。Newton 里就有像 <span class="term">ParticleForceElementAdjacencyInfo</span> 这样的 struct，把「每个顶点邻接哪些 force element」的索引信息打成一包。</li>
+        </ul>
+        <p>注意这里的对应关系：TinyVBD 里你用 Eigen 的 <code>Vec3</code> / <code>Mat3</code> 存顶点的力和 Hessian；Newton 里换成 <span class="term">wp.vec3</span> / <span class="term">wp.mat33</span>，但<b>数学是同一套</b>，只是从 CPU 上的一个矩阵，变成 GPU 数组里第 <code>i</code> 个元素。</p>
+
+        <h2 id="real-kernel">读一段真的：<code>forward_step</code> kernel</h2>
+        <p>把上面的眼镜戴上，来看 Newton particle VBD 里一段真实代码——惯性初始化的 <code>forward_step</code> kernel。它干的事，就是 TinyVBD <code>forwardStep()</code> 里「前向积分、算预测位置」那一步：</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code>@wp.kernel
+def forward_step(
+    dt: float,
+    gravity: wp.array[wp.vec3],
+    pos_prev: wp.array[wp.vec3],
+    pos: wp.array[wp.vec3],
+    vel: wp.array[wp.vec3],
+    inv_mass: wp.array[float],
+    ...
+    inertia_out: wp.array[wp.vec3],
+):
+    particle = wp.tid()
+
+    pos_prev[particle] = pos[particle]
+    ...
+    vel_new = vel[particle] + (gravity[0] + external_force[particle] * inv_mass[particle]) * dt
+    inertia = pos[particle] + vel_new * dt
+    inertia_out[particle] = inertia</code></pre></div>
+        <p>逐句对照你已经会的东西：第一行 <code>particle = wp.tid()</code>——「我负责哪个顶点」。然后 <code>pos_prev[particle] = pos[particle]</code> 存一下上一帧位置（对应 TinyVBD 的 <code>mVertPrevPos</code>）。再算 <code>vel_new = vel + (gravity + ...) * dt</code>，最后 <code>inertia = pos + vel_new * dt</code>——这就是预测位置 $\mathbf y \approx \mathbf x^t + h\mathbf v^t + h^2\mathbf a_{ext}$。整个 kernel 体只描述「一个顶点」的事；<code>wp.launch(forward_step, dim=numParticles, ...)</code> 一发，所有顶点的惯性位置就在 GPU 上一次性算完了。</p>
+
+        <div class="callout warn">
+          <div class="c-h">一处要诚实点名的差异</div>
+          <p>这段 <code>forward_step</code> 用的是<b>朴素惯性初始化</b>：$\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,dt)\,dt$，直接拿完整重力外推。它<b>不是</b> TinyVBD 那套由 <code>accelerationComponent</code> 决定的<b>自适应初始化</b>（按上一帧加速度在重力方向的投影来缩放）。这是 Newton particle 路径和 TinyVBD 的真实差异之一，后面 Part 8 会专门对照。</p>
+        </div>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 串行 <code>for iV</code> ↔ 一次 <code>dim=numVerts</code> 的 launch</div>
+          <p>TinyVBD 的 <code>solve()</code> 里有一个 <code>for iV = 1 .. numVerts-1</code> 的循环，CPU 一个顶点接一个顶点地解牛顿步。Newton 把这件事翻译成：一次 <span class="term">wp.launch</span>，<code>dim=numVerts</code>，<b>每个 thread 干一个顶点</b>，全部并行。<code>iV</code> 这个循环变量，就变成了每个 thread 各自的 <code>wp.tid()</code>。</p>
+          <p>但别急着以为「串行循环 = 一次 launch」是免费的等价替换。TinyVBD 的串行循环天然是 <span class="term">Gauss-Seidel</span>：解第 <code>iV</code> 个顶点时，前面 <code>iV-1</code> 个的<b>新位置已经就位</b>。一旦把所有顶点同时并行，相邻顶点会同时读写、抢同一条边的数据，Gauss-Seidel 的次序就乱了。Newton 解决它的办法是 <span class="term">graph coloring</span>：把顶点分成几「色」，同色顶点互不相邻、可以安全地一次 launch 全并行，颜色之间再串行。这件事我们留到 <a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8-5</a> 专门讲——这里你只要记住：<b>launch 给了你并行，但「能不能并行」要由 coloring 来许可</b>。</p>
+        </div>
+
+        <h2 id="graph-capture">最后一块拼图：CUDA graph capture</h2>
+        <p>仿真主循环每帧要 launch 几十上百个 kernel，逐个从 CPU 提交也有开销。Warp 提供 <span class="term">wp.ScopedCapture</span>：把一整段 kernel 序列「录制」成一张 <span class="term">CUDA graph</span>，之后每帧用 <code>wp.capture_launch</code> 零开销地<b>整段重放</b>，省掉反复提交的成本。你读 Newton 的 example 时会看到它——现在知道是这么回事即可。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) Newton 的热点代码是 <span class="term">Warp</span> kernel，用 <span class="term">@wp.kernel</span> 写、用 <span class="term">wp.launch(dim=N)</span> 铺到 N 个线程上，是 <span class="term">SPMD</span> 模型；(2) 读 kernel 要切到「单个 thread 视角」——<code>i = wp.tid()</code> 拿到自己的编号，只碰第 <code>i</code> 份数据，分支和提前退出都各走各的；(3) 数据用 <span class="term">wp.array</span>（dtype 是 <span class="term">wp.vec3</span> / <span class="term">wp.mat33</span> 这些），辅助逻辑用 <span class="term">@wp.func</span>，整段循环可被 <span class="term">CUDA graph</span> 录下来重放。</p>
+        <p>戴上这副 SPMD 的眼镜，下一节 <a href="7-3-data-model.html">7-3 · Newton 数据模型</a>，我们去看这些 kernel 读写的到底是<b>什么数据</b>——<span class="term">Model</span> / <span class="term">State</span> / <span class="term">Control</span> 这套把「静态资产」和「动态快照」分开的设计，以及它和你熟的 Isaac / USD 怎么对得上。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

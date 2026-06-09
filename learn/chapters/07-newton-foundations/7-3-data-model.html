@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton 数据模型：Model / State / Control / Contacts · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="7-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 7 · Newton Foundations · 7-3</div>
+        <h1>Newton 数据模型：Model / State / Control / Contacts</h1>
+        <p class="lede">你已经看懂了 Warp 的 <span class="term">kernel</span> / <span class="term">array</span> / <span class="term">launch</span>——那是「怎么算」。这一节讲「算什么」：Newton 把整个仿真世界拆成四个互不相同的对象，<span class="term">Model</span>、<span class="term">State</span>、<span class="term">Control</span>、<span class="term">Contacts</span>。TinyVBD 把位置、速度、惯性全塞进一个 <code>VBDStrand</code> 对象里；Newton 偏偏要把它们分门别类。搞清这套分法，后面读 solver、读主循环就有了骨架。</p>
+
+        <h2 id="why-split">为什么要把世界拆成四块</h2>
+        <p>TinyVBD 只有一根 strand，所有东西——顶点位置 <code>mVertPos</code>、速度 <code>mVelocity</code>、惯性目标 <code>inertia</code>、质量 <code>vertexMass</code>、边和刚度——都挂在同一个对象上，随手取用。这在 400 行里没问题。但 Newton 要同时跑成千上万的粒子、刚体、关节，还要支持可微、支持 <span class="term">CUDA graph</span> 重放、支持把一份场景反复积分很多步。这时候「什么东西从不改、什么东西每步都变」就必须分清楚，否则没法谈缓存、没法谈双缓冲、没法谈微分。</p>
+        <p>所以 Newton 沿着一条朴素的轴线切开：<b>静态的归 Model，动态的归 State</b>。再把「外部控制输入」单拎出来叫 Control，把「碰撞检测的产物」单拎出来叫 Contacts。四个对象各管一摊，solver 在它们之间搬运数据。</p>
+
+        <h2 id="model">Model：静态的世界</h2>
+        <p><span class="term">Model</span> 是整个场景里<b>从头到尾不变</b>的那部分：有哪些粒子、哪些刚体（<span class="term-i">bodies</span>）、哪些关节（<span class="term-i">joints</span>）、哪些碰撞形状（<span class="term-i">shapes</span>），以及它们的物理属性（<span class="term-i">props</span>）。这些数组都按 id 索引。你会在 Model 上看到这些字段：</p>
+        <ul>
+          <li><code>particle_q</code>——粒子的<b>初始</b>位置（建模时的参考构型）；</li>
+          <li><code>particle_mass</code>——每个粒子的质量，仿真过程中不变；</li>
+          <li><code>gravity</code>——重力等全局物理常量；</li>
+          <li><code>particle_color_groups</code>——图着色的结果（<a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a> 细讲），VBD 求解必需，也是只算一次、之后不动的静态数据。</li>
+        </ul>
+        <p>记住一个判据：<b>如果某个量在整个 <code>simulate()</code> 里都不会被写回，它就属于 Model。</b>质量、刚度、拓扑、颜色分组都是这种「设定一次、查很多次」的东西。</p>
+
+        <h2 id="state">State：某一时刻的快照</h2>
+        <p><span class="term">State</span> 是仿真在<b>某一个时刻</b>的动态快照——会随时间一步步被改写的那部分自由度。对粒子（cloth / soft body 的顶点）来说：</p>
+        <ul>
+          <li><code>particle_q: wp.array[wp.vec3]</code>——当前位置；</li>
+          <li><code>particle_qd: wp.array[wp.vec3]</code>——当前速度；</li>
+          <li><code>particle_f: wp.array[wp.vec3]</code>——累加在粒子上的力。</li>
+        </ul>
+        <p>对刚体，自由度不是一个 <code>vec3</code> 能装下的，所以用更大的类型：</p>
+        <ul>
+          <li><code>body_q: wp.array[wp.transform]</code>——刚体位姿，一个 <span class="term">transform</span> 同时打包平移和旋转（四元数）；</li>
+          <li><code>body_qd: wp.array[wp.spatial_vector]</code>——刚体的<span class="term-i">空间速度</span>，一个 <span class="term">spatial_vector</span> 同时打包角速度和线速度。</li>
+        </ul>
+        <p>注意命名的对称性：<code>q</code> 是广义坐标（位置/位姿），<code>qd</code> 是它对时间的导数（速度）。粒子和刚体共用这套 <code>q</code> / <code>qd</code> 记号，只是底层类型不同。一个 State 对象就是「这一帧此刻，所有自由度长什么样」的完整描述。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你那个 VBDStrand，被 Newton 拆开了</div>
+          <p>TinyVBD 把 <code>mVertPos</code>、<code>mVelocity</code>、<code>inertia</code>、<code>vertexMass</code> 全焊在一个 <code>VBDStrand</code> 对象里。Newton 做同一件事，只是把它们按「静/动」劈成两半：<code>vertexMass</code> 这种永不改的，去 <b>Model</b>（<code>particle_mass</code>）；<code>mVertPos</code> 去 <b>State</b> 的 <code>particle_q</code>，<code>mVelocity</code> 去 <code>particle_qd</code>。那个每步重算的惯性目标 <code>inertia</code>（$\mathbf y=\mathbf x+h\mathbf v+h^2\mathbf a$）则是 solver 在 step 内部临时算出来的中间量，不进 State 的公开字段——它只是通往新 <code>particle_q</code> 的踏脚石。<b>同一份数据，TinyVBD 一个对象装下，Newton 按生命周期分了家</b>。</p>
+        </div>
+
+        <h2 id="control">Control：外界递进来的输入</h2>
+        <p><span class="term">Control</span> 装的是「外部驱动信号」——不是仿真自己演化出来的，而是控制器、策略网络或脚本喂进来的。典型字段是关节相关的 <code>joint_f</code>（施加在关节上的力/力矩）和 <code>joint_target_q</code>（关节的目标角度，配合 PD 控制器把关节驱向目标）。对纯被动的 cloth strand，Control 多半是空的；但在 robotics 场景里，它就是 agent 把动作灌进物理世界的那个入口。Control 和 State 分开，正是因为它来自仿真<b>之外</b>。</p>
+
+        <h2 id="contacts">Contacts：碰撞检测的产物</h2>
+        <p><span class="term">Contacts</span> 装的是<b>碰撞检测算出来的接触对</b>——哪两个东西碰上了、接触点在哪、法向是什么。它不是你手填的，而是由 <code>model.collide(state, contacts)</code> 这一步根据当前 State 现场算出来再写进去的：</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">collide → 填充 contacts</span><button class="cp">复制</button></div><pre><code>model.collide(state_in, contacts)   # 读 state_in 的位置，写满 contacts</code></pre></div>
+        <p>之所以每步都要重新 <code>collide</code>，是因为接触关系随位置变——这一帧贴着的两片布，下一帧可能就分开了。算好的 contacts 再交给 solver，让接触力进到每个顶点的 $\mathbf f_i$ / $\mathbf H_i$ 里。<a href="../09-elasticity-collision/9-3-collision.html">9.3</a> 会讲 Newton 的 self-collision 怎么进 VBD 的牛顿步。</p>
+
+        <h2 id="builder">ModelBuilder：搭场景，然后 finalize 冻结</h2>
+        <p>Model 既然是静态的，就需要一个「搭建阶段」把它一次性建好。这个角色是 <span class="term">ModelBuilder</span>：你在它上面一点点加粒子、加 cloth、加形状、加关节，配好材料参数，最后调一次 <code>builder.finalize()</code>——它把所有零散设置打包、上传到 GPU、冻结成一个不可变的 <code>Model</code>。在 finalize 之前还可以改；finalize 之后 Model 就定型了，后面所有 step 都查它、但不改它。这条「<b>build → finalize</b>」的分界，正是「可变搭建」和「静态运行」的交接点。</p>
+
+        <div class="callout note">
+          <div class="c-h">从 Isaac / USD 看这套分法</div>
+          <p>这个「静/动分离」你其实早就熟。在 <span class="term">OpenUSD</span> 里，stage 上的<b>静态资产</b>（mesh 拓扑、质量、材质）和每帧变化的<b>动态属性</b>（transform、velocity）本来就是两类东西——Newton 的 Model vs State 几乎是同一刀。在 <span class="term">Isaac</span> 里，那张随时间刷新的 <span class="term-i">root-state tensor</span>（位姿+速度的批量张量）对应的就是 Newton 的 State。一个差别值得留意：<b>Newton 把 State 的双缓冲做成了显式的</b>——它要你自己传 <code>state_in</code> 和 <code>state_out</code> 两个对象，而不是在一块 buffer 上原地改。下面就讲为什么。</p>
+        </div>
+
+        <h2 id="contract">求解器契约与双缓冲主循环</h2>
+        <p>四个对象齐了，solver 的接口就很清爽。VBD 求解器的核心方法是：</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">solver step 契约</span><button class="cp">复制</button></div><pre><code>solver.step(state_in, state_out, control, contacts, dt)</code></pre></div>
+        <p>读它的签名就能读出语义：<b>从 <code>state_in</code>（旧快照）出发，结合 <code>control</code> 和 <code>contacts</code>，积分一个 <code>dt</code>，把结果写进 <code>state_out</code>（新快照）</b>。输入和输出是<b>两个不同的对象</b>——这就是上面说的显式双缓冲（<span class="term">double-buffering</span>）。Newton 不在一块内存上原地覆盖，而是 ping-pong：读这块、写那块，下一步再交换。这对可微（要保留旧值算梯度）和 CUDA graph 重放都更干净。</p>
+        <p>于是规范的主循环就长这样——<b>collide → step → swap</b>：</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">canonical step loop</span><button class="cp">复制</button></div><pre><code>state_0, state_1 = model.state(), model.state()
+control, contacts = model.control(), model.contacts()
+for frame in range(N):
+    for _ in range(substeps):
+        state_0.clear_forces()
+        model.collide(state_0, contacts)               # 填充 contacts
+        solver.step(state_0, state_1, control, contacts, dt)
+        state_0, state_1 = state_1, state_0            # swap：新结果变成下一步的输入</code></pre></div>
+        <p>逐行读：先 <code>clear_forces()</code> 把上一步残留的力清零；<code>collide</code> 按 <code>state_0</code> 的当前位置算出接触、写进 <code>contacts</code>；<code>step</code> 从 <code>state_0</code> 积一步到 <code>state_1</code>；最后那行 Python 元组交换把两个引用对调——刚算出的 <code>state_1</code> 成了下一轮的 <code>state_0</code>。这样一个 buffer 永远是「当前」、另一个永远是「下一步」，循环里它俩轮流坐庄。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你的主循环其实也在做同一件事，只是省了一个 buffer</div>
+          <p>TinyVBD 的 <code>simulate()</code> 每个 substep 是 <code>forwardStep()</code> → 迭代若干次 <code>solve()</code> → <code>updateVelocity()</code>，全在 <b>同一个</b> strand 对象上原地改。它不需要 <code>state_in</code>/<code>state_out</code> 两块，是因为它不可微、不录 CUDA graph、也只有一根 strand。Newton 把同样的「读旧态、算新态」拆成两个显式对象，换来的是可微和零开销重放的能力。核心节奏没变——都是「预测/初始化 → 解 → 推进速度」，只是 Newton 把「解」这步连同接触一起塞进了 <code>solver.step</code>，并要求你显式管好那两块 buffer。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>记牢这张分工表：<b>Model</b> = 静态世界（拓扑、<code>particle_mass</code>、<code>gravity</code>、<code>particle_color_groups</code>，由 <code>ModelBuilder.finalize()</code> 冻结）；<b>State</b> = 动态快照（<code>particle_q</code>/<code>particle_qd</code>/<code>particle_f</code>，刚体的 <code>body_q</code>/<code>body_qd</code>）；<b>Control</b> = 外部输入（<code>joint_f</code>、<code>joint_target_q</code>）；<b>Contacts</b> = <code>model.collide</code> 的产物。solver 的契约是 <code>solver.step(state_in, state_out, control, contacts, dt)</code>，主循环是 <b>collide → step → swap</b> 的显式双缓冲。TinyVBD 把这一切焊进一个对象、原地改；Newton 按生命周期分了家，换来可微与 graph 重放。</p>
+        <p>下一节，我们就把这四个对象真正串起来，写出<b>一个最小的 Newton 程序</b>——从 <code>ModelBuilder</code> 到 <code>builder.color()</code> 到 step 循环，看一份能跑的骨架长什么样（<a href="7-4-minimal-program.html">7.4</a>）。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
