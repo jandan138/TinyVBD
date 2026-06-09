@@ -36,4 +36,14 @@ global.document = {
 global.getComputedStyle = () => ({ getPropertyValue: () => "#888" });
 global.requestAnimationFrame = () => 0;
 global.cancelAnimationFrame = () => {};
+
+// In a browser, window properties (VBW, VBWidgets) are also bare globals.
+// Mirror that so widget IIFEs referencing `VBW` / `VBWidgets` resolve under node.
+["VBW", "VBWidgets"].forEach((name) => {
+  Object.defineProperty(global, name, {
+    configurable: true,
+    get() { return global.window[name]; },
+    set(v) { global.window[name] = v; },
+  });
+});
 module.exports = { makeEl };
