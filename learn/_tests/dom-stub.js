@@ -28,6 +28,8 @@ function makeCtx() {
 global.window = global.window || {};
 global.window.matchMedia = () => ({ matches: false });
 global.window.devicePixelRatio = 1;
+global.window.addEventListener = () => {};
+global.window.removeEventListener = () => {};
 global.document = {
   createElement: makeEl,
   createElementNS: (_ns, tag) => makeEl(tag),
