@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>术语表 Glossary · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-1</div>
+        <h1>术语表 Glossary</h1>
+        <p class="lede">这本书刻意保留了所有英文术语，方便你无缝衔接论文和代码。这里把它们集中起来，每个配一句中文解释和「在哪一节第一次认真讲到」的链接，供你随时回查。</p>
+
+        <h2 id="core-method">核心方法与最小化框架</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Vertex Block Descent</span> (VBD)</td>
+              <td>本书主角。把隐式欧拉的最小化问题，用「一次只动一个顶点的 3 自由度」的 block coordinate descent 来解；primal、保留完整局部 Hessian、$G$ 单调下降。</td>
+              <td><a href="../00-orientation/0-1-where-we-go.html">0.1</a> · <a href="../03-vbd/3-1-block-descent.html">3.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">incremental potential</span> / <span class="term">variational implicit Euler</span></td>
+              <td>增量势能 / 隐式欧拉的变分真身。一步隐式欧拉等价于最小化 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$。全书地基。</td>
+              <td><a href="../01-foundations/1-2-variational-euler.html">1.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">block coordinate descent</span></td>
+              <td>块坐标下降。把变量分成块（这里一块 = 一个顶点的 3 个坐标），轮流固定其余、只优化当前块。VBD 的精髓。</td>
+              <td><a href="../03-vbd/3-1-block-descent.html">3.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">primal</span> vs <span class="term">dual</span></td>
+              <td>primal（原始）求解器直接在位置变量上下降（VBD）；dual（对偶）求解器解约束力 / 拉格朗日乘子（XPBD）。高质量比下二者命运迥异。</td>
+              <td><a href="../05-experiments/5-1-mass-ratio.html">5.1</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="physics-math">物理与数学量</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">inertia</span> / predicted position $\mathbf y$</td>
+              <td>惯性项 / 预测位置。$\mathbf y=\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}$，即「纯靠惯性加外力会漂到哪」。惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 是 $G$ 的一半。</td>
+              <td><a href="../01-foundations/1-3-inertia-elastic.html">1.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Hessian</span></td>
+              <td>能量对位置的二阶导矩阵。顶点 Hessian $\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\partial^2 E_j/\partial\mathbf x_i^2$，VBD 牛顿步要解的 3×3 矩阵。</td>
+              <td><a href="../01-foundations/1-4-spring-energy.html">1.4</a> · <a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">SPD</span> / positive definite</td>
+              <td>对称正定。Hessian 正定时局部能量是个有唯一谷底的碗。惯性项恒正定，是 VBD 不必强制 SPD 投影也能稳的关键。</td>
+              <td><a href="../03-vbd/3-5-stability.html">3.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Newton's method</span></td>
+              <td>牛顿法。用 Hessian 解 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$。VBD 对每个顶点做<b>一步</b>局部牛顿；全局 Newton 则解整个大稀疏系统。</td>
+              <td><a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">stiffness</span> $k$ / <span class="term">rest length</span> $l_0$</td>
+              <td>弹簧刚度 / 自然长度。弹簧能量 $E=\frac12 k(l-l_0)^2$，$l=\lVert\mathbf x_a-\mathbf x_b\rVert$。</td>
+              <td><a href="../01-foundations/1-4-spring-energy.html">1.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">high mass ratio</span></td>
+              <td>高质量比。链上轻重质点相差很多倍（TinyVBD 默认末端重 1000×）。XPBD 会崩，VBD 不崩。</td>
+              <td><a href="../05-experiments/5-1-mass-ratio.html">5.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">high stiffness ratio</span></td>
+              <td>高刚度比。相邻弹簧软硬相差极大（如 1:10000）。这是 VBD 这种局部方法的软肋，收敛慢。</td>
+              <td><a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">substep</span></td>
+              <td>子步。把一帧的 $h$ 再切成若干份分别积分，等价于另一种「加迭代」的方式，常比加迭代更省。</td>
+              <td><a href="../04-code/4-5-main-loop.html">4.5</a> · <a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">skip spring</span> (bending)</td>
+              <td>跳跃弹簧。连接顶点 $i$ 与 $i+2$ 的额外弹簧，用来近似<b>弯曲</b>刚度。TinyVBD 用 <code>stiffnessSkipSpring</code> 控制。</td>
+              <td><a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="solvers">求解顺序与家族成员</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Gauss-Seidel</span></td>
+              <td>逐个更新、立刻用上刚算出的新值的扫描顺序。收敛快，但有顺序依赖。VBD 的 sweep 用它。</td>
+              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Jacobi</span></td>
+              <td>所有点用同一份旧值并行更新。易并行但收敛慢。VBD 靠图着色逼近 Jacobi 的并行度而保持 Gauss-Seidel 的收敛。</td>
+              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">graph coloring</span></td>
+              <td>图着色。给顶点染色使相邻点不同色；同色顶点可并行更新。VBD 着色的是顶点图，颜色数远少于 XPBD 的约束图。</td>
+              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">PBD</span> (Position Based Dynamics)</td>
+              <td>预测位置后把粒子顺序投影到约束上、反复迭代。病：有效刚度依赖迭代次数与时间步，不收敛到良定义解。</td>
+              <td><a href="../02-family/2-1-pbd.html">2.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">XPBD</span></td>
+              <td>扩展 PBD。引入 compliance $\alpha$ 与拉格朗日乘子 $\lambda$，让刚度变成时间步 / 迭代无关的物理量。本质是隐式欧拉 KKT 系统的 Gauss-Seidel。</td>
+              <td><a href="../02-family/2-2-xpbd.html">2.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">compliance</span> $\alpha$ / <span class="term">Lagrange multiplier</span> $\lambda$</td>
+              <td>柔度 $\alpha=1/k$（刚度的倒数）；拉格朗日乘子 $\lambda$ 是约束力的对偶变量。XPBD 用 $\tilde\alpha=\alpha/h^2$ 累积 $\lambda$。</td>
+              <td><a href="../02-family/2-2-xpbd.html">2.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Projective Dynamics</span> (local/global)</td>
+              <td>把能量写成特殊二次型，local 步并行投影、global 步解一个矩阵恒定、可预分解（Cholesky）的线性系统。快，但只能表达这种特殊能量、线性收敛。</td>
+              <td><a href="../02-family/2-3-projective-dynamics.html">2.3</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="acceleration">加速与谱半径</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Chebyshev semi-iterative acceleration</span></td>
+              <td>切比雪夫半迭代加速（Wang 2015）。在每次完整 sweep 后做一次外推，用一组 $\omega_n$ 递推系数把收敛提速。TinyVBD 的 <code>applyAccelerator</code>。</td>
+              <td><a href="../04-code/4-4-chebyshev.html">4.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">spectral radius</span> $\rho$</td>
+              <td>谱半径。迭代矩阵最大特征值的模的<b>估计值</b>，$\rho\in(0,1)$。Chebyshev 系数靠它算；$\rho$ 太大会 overshoot / 振荡甚至发散。</td>
+              <td><a href="../04-code/4-4-chebyshev.html">4.4</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout note">
+          <div class="c-h">想要符号和公式而不是文字？</div>
+          <p>这张表偏向「术语 → 意思」。如果你要的是「符号 → 公式」的速查（$G$、$\mathbf f_i$、$\mathbf H_i$、$\omega_n$ 递推、XPBD 的 $\Delta\lambda$ 等），去隔壁的 <a href="a-2-cheatsheet.html">公式与符号速查</a>。要追到原始论文，看 <a href="a-3-references.html">参考文献</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

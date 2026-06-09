@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton / Warp 术语表 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-4</div>
+        <h1>Newton / Warp 术语表</h1>
+        <p class="lede">Newton 篇里冒出来一大批 Warp 与 Newton 的新名字——kernel、coloring、Neo-Hookean、augmented Lagrangian……这张表把 Part 7–10 引入的术语集中起来，每个配一句中文解释和「第一次认真讲到」的链接，方便你边读代码、边查论文时随时回查。隔壁 <a href="a-1-glossary.html">术语表 Glossary</a> 收的是 TinyVBD 原书的术语，两张表互补。</p>
+
+        <h2 id="warp">Warp 编程模型</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Newton</span></td>
+              <td>建在 <span class="term">NVIDIA Warp</span> 之上的 GPU 物理引擎，面向 robotics 与仿真研究；由 Disney Research / Google DeepMind / NVIDIA 发起，现为 Linux Foundation 项目，Apache-2.0。</td>
+              <td><a href="../07-newton-foundations/7-1-what-is-newton.html">7.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">NVIDIA Warp</span></td>
+              <td>Newton 底层的 Python 框架：用 Python 写、即时编译成 GPU kernel 的 SPMD 计算库；Newton 扩展并泛化了它已弃用的 <code>warp.sim</code>。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">SPMD</span></td>
+              <td>Single Program, Multiple Data——同一段 kernel 程序在成千上万个 thread 上并行跑，每个 thread 只处理自己那一份数据。Warp 的执行模型。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><code>@wp.kernel</code></td>
+              <td>并行入口装饰器；被 <code>@wp.kernel</code> 标记的函数会被编译并由 <code>wp.launch</code> 在 N 个 thread 上同时启动。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><code>@wp.func</code></td>
+              <td>device 函数装饰器（类似 CUDA <code>__device__</code>），可被 kernel 调用、不能单独 launch；力 / Hessian 装配函数都是 <code>@wp.func</code>。</td>
+              <td><a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a></td>
+            </tr>
+            <tr>
+              <td><code>wp.array</code></td>
+              <td>GPU 上的数组，带 dtype（如 <code>wp.vec3</code> / <code>wp.float32</code>），是 Model / State 里一切物理量的存储载体。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><code>wp.launch</code></td>
+              <td>启动 kernel 的调用：<code>wp.launch(kernel, dim=N, inputs=[...])</code> 拉起 N 个 thread，dim 就是并行度。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><code>wp.tid()</code></td>
+              <td>kernel 内取当前 thread 索引；常见第一行 <code>i = wp.tid()</code>，用它去 index 自己负责的那个粒子 / 元件。</td>
+              <td><a href="../07-newton-foundations/7-2-warp-model.html">7.2</a></td>
+            </tr>
+            <tr>
+              <td><code>wp.vec3</code> / <code>wp.mat33</code></td>
+              <td>Warp 内置的 3 维向量 / 3×3 矩阵类型；per-vertex 牛顿步里的 $\mathbf f_i$ 是 <code>wp.vec3</code>、$\mathbf H_i$ 是 <code>wp.mat33</code>。</td>
+              <td><a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a></td>
+            </tr>
+            <tr>
+              <td><code>wp.struct</code></td>
+              <td>把若干数组 / 标量打包成一个结构体的装饰器，方便整块传进 kernel；如邻接信息 <code>ParticleForceElementAdjacencyInfo</code>。</td>
+              <td><a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">CUDA graph capture</span></td>
+              <td>把整段仿真循环录成一张 CUDA graph 再零开销重放：<code>with wp.ScopedCapture() as capture: ...</code> 配 <code>wp.capture_launch(capture.graph)</code>，省去每帧重复的 launch 开销。</td>
+              <td><a href="../07-newton-foundations/7-4-minimal-program.html">7.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">MuJoCo Warp</span></td>
+              <td>MuJoCo 在 Warp 上的实现，被 Newton 集成为主要后端之一（用于 rigid / 关节动力学）。</td>
+              <td><a href="../07-newton-foundations/7-1-what-is-newton.html">7.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">OpenUSD</span></td>
+              <td>Pixar 的通用场景描述格式；Newton 原生支持 USD，与读者熟悉的 Isaac/USD 资产管线一脉相承。</td>
+              <td><a href="../07-newton-foundations/7-1-what-is-newton.html">7.1</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="data-model">Newton 数据模型</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Model</span></td>
+              <td>静态场景：粒子 / 刚体 / 关节 / 形状及其物理属性，数组按 id 索引（<code>particle_q</code>、<code>particle_mass</code>、<code>gravity</code> 等）。一次 finalize 后基本冻结。</td>
+              <td><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">State</span></td>
+              <td>某一时刻的动态快照：位置 / 速度 / 力。VBD 在 <code>state_in</code> 与 <code>state_out</code> 之间来回 ping-pong。</td>
+              <td><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Control</span></td>
+              <td>控制输入容器：<code>joint_f</code>、<code>joint_target_q</code> 等驱动量，按帧喂给 solver。</td>
+              <td><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Contacts</span></td>
+              <td>碰撞检测的输出容器，由 <code>model.collide(state, contacts)</code> 填充，再交给 solver 算接触力。</td>
+              <td><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">ModelBuilder</span></td>
+              <td>搭场景的构造器：往里加粒子 / cloth / 形状，最后 <code>finalize()</code> 冻成 Model。</td>
+              <td><a href="../07-newton-foundations/7-4-minimal-program.html">7.4</a></td>
+            </tr>
+            <tr>
+              <td><code>finalize()</code></td>
+              <td><code>builder.finalize()</code>：把 builder 里堆好的场景冻结成不可变的 Model，之后才能造 solver / state。</td>
+              <td><a href="../07-newton-foundations/7-4-minimal-program.html">7.4</a></td>
+            </tr>
+            <tr>
+              <td><code>builder.color()</code></td>
+              <td>给 particles 与 rigid bodies 做 graph coloring，结果存进 <code>particle_color_groups</code> / <code>body_color_groups</code>；VBD 必需这一步。</td>
+              <td><a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a></td>
+            </tr>
+            <tr>
+              <td><code>particle_color_groups</code> / <code>body_color_groups</code></td>
+              <td>着色结果：按颜色分组的顶点 / 刚体索引表；同组之间不共享 force element，可并行更新。<code>SolverVBD</code> 构造时检查 particle 版存在。</td>
+              <td><a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a></td>
+            </tr>
+            <tr>
+              <td><code>particle_q</code> / <code>particle_qd</code></td>
+              <td>State 里的粒子位置数组（<code>wp.array[wp.vec3]</code>）与速度数组；对应 TinyVBD 里的 $\mathbf x$ 与 $\mathbf v$。</td>
+              <td><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+            </tr>
+            <tr>
+              <td><code>solver.step()</code></td>
+              <td>求解器契约 <code>solver.step(state_in, state_out, control, contacts, dt)</code>：推进一个时间步，内部走 Initialize → Iterate → Finalize 三段式。</td>
+              <td><a href="../08-strand-to-cloth/8-2-solver-overview.html">8.2</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="vbd-math">VBD 弹性与碰撞</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">graph coloring</span> (primal / dual)</td>
+              <td>给图染色使相邻元素不同色。VBD 着的是<b>顶点图</b>（primal），颜色远少于 XPBD 那种<b>约束图</b>（dual）；同色可并行。</td>
+              <td><a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Gauss-Seidel by color</span></td>
+              <td>按颜色一组一组地扫：组内并行、组间串行，立刻用上前一组的新值。Newton 的 particle 路径就是纯粹这一套，<b>没有 Chebyshev 加速</b>。</td>
+              <td><a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Neo-Hookean</span> (membrane / volumetric)</td>
+              <td>超弹性能量模型。membrane 版给 cloth 三角（变形梯度 $\mathbf F$ 是 3×2）；volumetric 版给 tet soft body（$\mathbf F$ 是 3×3）。</td>
+              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">stable Neo-Hookean</span> ($\lambda_{NH}=\lambda+\mu$)</td>
+              <td>Smith 2018 的稳定版 Neo-Hookean 约定：用 $\lambda_{NH}=\lambda_{\text{Lamé}}+\mu_{\text{Lamé}}$、能量 $\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2$，$\alpha=1+\mu/\lambda$。</td>
+              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">dihedral bending</span></td>
+              <td>二面角弯曲能量：相邻两三角的夹角 $\theta$ 偏离静止角的代价 $E=\frac12 (k\,L_{\text{rest}})(\theta-\theta_{\text{rest}})^2$；边界边跳过。cloth 的弯曲刚度来源。</td>
+              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">SPD projection</span></td>
+              <td>把局部 Hessian 投影成对称正定，保证每步牛顿都是「往谷底走」。membrane 的做法是把违正定的特征值 clamp（<code>s_clamp = max(0, …)</code>）。</td>
+              <td><a href="../09-elasticity-collision/9-2-spd-damping.html">9.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Rayleigh damping</span> ($D=k_d\cdot k_e$)</td>
+              <td>瑞利阻尼：阻尼系数取刚度的常数倍，$D=k_d\cdot k_e$（$k_d$ 是无量纲 Rayleigh 系数）；membrane / volumetric 各有 Frobenius / trace 形式的耗散项。</td>
+              <td><a href="../09-elasticity-collision/9-2-spd-damping.html">9.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">self-collision</span> / <span class="term">BVH</span></td>
+              <td>自碰撞检测：用 BVH（bounding volume hierarchy）做 broad-phase，再做 vertex-triangle 与 edge-edge 的 narrow-phase；TinyVBD 完全没有碰撞。</td>
+              <td><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">penetration-free truncation</span> (DAT)</td>
+              <td>每色 sweep 后，按保守界把这一步的位移截断，保证不穿透；是 production 稳定性的关键一环。</td>
+              <td><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="avbd">AVBD 与 rigid</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">VBD</span> (Vertex Block Descent)</td>
+              <td>本书主角，搬到 GPU 上：per-vertex 3×3 牛顿步 + 按颜色的 Gauss-Seidel，无条件稳定。Newton 的 particle 路径用它。</td>
+              <td><a href="../08-strand-to-cloth/8-1-same-min-G.html">8.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">AVBD</span> (Augmented VBD)</td>
+              <td>VBD 的增广版（Giles 2025）：在 VBD 上加 augmented Lagrangian 与自适应 primal-dual，能强制硬约束、并在高刚度比下收敛更好。Newton 的 rigid 路径用它。</td>
+              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">augmented Lagrangian</span></td>
+              <td>增广拉格朗日：在惩罚项之外再带一个拉格朗日乘子 $\lambda$，使约束能被精确满足而不必把惩罚刚度推到无穷。AVBD 处理硬约束的核心。</td>
+              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">penalty ramping</span> ($k_{start}$ / $\beta$ / $\gamma$)</td>
+              <td>惩罚刚度的自适应演化：每帧从 per-constraint 的 $k_{start}$ warm-start，迭代内对仍违反的约束以 $\beta$ 增长、跨帧以 $\gamma$ 衰减；soft 约束封顶在材料刚度，hard 约束可冲向更高。论文默认 $\alpha=0.95,\beta=10,\gamma=0.99$。</td>
+              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout note">
+          <div class="c-h">想要对照关系而不是逐条定义？</div>
+          <p>这张表偏向「术语 → 意思」。如果你要的是「TinyVBD ↔ Newton ↔ Isaac 哪个概念对哪个」的并排速查，去 <a href="a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查</a>。要追到 Newton / VBD / AVBD 的原始论文与代码，看 <a href="a-6-newton-references.html">Newton / VBD / AVBD 参考文献</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

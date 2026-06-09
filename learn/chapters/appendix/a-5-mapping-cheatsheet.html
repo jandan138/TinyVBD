@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TinyVBD ↔ Newton ↔ Isaac 对照速查 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-5">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-5</div>
+        <h1>TinyVBD ↔ Newton ↔ Isaac 对照速查</h1>
+        <p class="lede">这一页把三套世界并排放在一起：你已经吃透的那根 <span class="term">TinyVBD</span> strand、生产级的 <span class="term">Newton</span> particle <span class="term">VBD</span>、以及你从 EBench 熟悉的 <span class="term">Isaac</span> / <span class="term">OpenUSD</span>。每一行都在回答同一个问题——<b>什么没变，什么变了</b>。贯穿全表的那条没变的线，就是变分目标 $\min_{\mathbf x} G(\mathbf x)$；变的只是「一根 strand 串行 → 一块 cloth 在 GPU 上按颜色并行」。把它当成翻一眼就能定位概念的对照表用。</p>
+
+        <div class="callout note">
+          <div class="c-h">怎么读这张表</div>
+          <p>第二列「TinyVBD」是你的锚点（原书 Part 1–6 的那 400 行 2D strand）；第三列「Newton particle VBD」是 GPU 上的 3D 推广；第四列是把概念接回 Isaac/USD 的旁注，<span class="term">—</span> 表示没有干净的对应物（多为 VBD / 约束求解特有的东西）。术语解释见 <a href="a-4-newton-glossary.html">Newton 术语表</a> 与 <a href="a-1-glossary.html">原书术语表</a>，公式见 <a href="a-2-cheatsheet.html">公式速查</a>。</p>
+        </div>
+
+        <h2 id="object-data">仿真对象与数据组织</h2>
+        <p>先对齐「我们在仿真什么、数据放在哪」。最大的结构差异：TinyVBD 把一切塞进一个对象，而 Newton 把<b>静态</b>（<span class="term">Model</span>）和<b>动态</b>（<span class="term">State</span>）拆开——这正好对上 Isaac 里「静态资产 vs 动态属性」的分法。</p>
+        <table>
+          <thead><tr><th>概念</th><th>TinyVBD</th><th>Newton particle VBD</th><th>Isaac / USD 旁注</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>仿真对象</b></td>
+              <td>一根 2D mass-spring strand（线段串）<br><a href="../00-orientation/0-1-where-we-go.html">0.1</a></td>
+              <td>3D cloth / soft body（triangle / tet mesh）<br><a href="../08-strand-to-cloth/8-1-same-min-G.html">8.1</a></td>
+              <td><span class="term">USD</span> geometry + <span class="term">PhysicsAPI</span>（在 stage 上声明几何与物理属性）</td>
+            </tr>
+            <tr>
+              <td><b>数据组织</b></td>
+              <td>单个 <code>VBDStrand</code> 对象，位置 <code>mVertPos</code> / 速度 <code>mVelocity</code> 都是它的成员<br><a href="../04-code/4-1-data-structures.html">4.1</a></td>
+              <td><b>静态</b> <span class="term">Model</span>（质量、邻接、颜色组）+ <b>动态</b> <span class="term">State</span>（<code>particle_q</code> 位置 / <code>particle_qd</code> 速度 / <code>particle_f</code> 力）<br><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+              <td>root-state tensor（动态状态批量张量）+ <span class="term">USD stage</span>：静态资产 vs 运行时动态属性，与 Model/State 的拆分同构</td>
+            </tr>
+            <tr>
+              <td><b>顶点变量</b></td>
+              <td><code>mVertPos[i]</code> 是 2D 点；pinned 顶点直接跳过</td>
+              <td><code>state.particle_q[i]</code> 是 <code>wp.vec3</code>（GPU array）；颜色组按 id 索引<br><a href="../07-newton-foundations/7-3-data-model.html">7.3</a></td>
+              <td>对应 USD 上 mesh 点的 <span class="term">points</span> 属性 / 仿真张量的一行</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 一个对象 vs Model+State</div><p>原书里位置和速度都是 <code>VBDStrand</code> 的字段，读写随手就来，因为只有一根 strand、只在 CPU 上跑。Newton 要在 GPU 上同时跑很多场景、还要可微，所以把「永远不变的」（拓扑、质量、颜色）冻进 Model，把「每个时刻在变的」（$\mathbf x,\mathbf v,\mathbf f$）放进可交换的 State 快照。换句话说：你的 <code>mVertPos</code> 被拆成了「Model 里的身份」+「State 里的当前值」。</p></div>
+
+        <h2 id="algorithm">算法核心：初始化 · 求解 · 加速</h2>
+        <p>这是全书主线最该并排看的地方。目标函数 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$ 在三列里<b>完全没变</b>；每个顶点的牛顿步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 也没变（只是从 2×2/3×3 解法换了具体数值实现）。诚实地说，有两处 Newton particle 路径<b>反而比 TinyVBD 简单</b>：它没有自适应初始化、也没有 Chebyshev。</p>
+        <table>
+          <thead><tr><th>概念</th><th>TinyVBD</th><th>Newton particle VBD</th><th>Isaac / USD 旁注</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>初始化<br>（惯性）</b></td>
+              <td>自适应初始化（<code>accelerationComponent</code> 那套），不止朴素惯性<br><a href="../04-code/4-2-forward-step.html">4.2</a></td>
+              <td>朴素惯性 $\mathbf y=\mathbf x+(\mathbf v+\mathbf g\,h)\,h$，<b>无</b>自适应初始化<br><a href="../08-strand-to-cloth/8-3-initialization.html">8.3</a></td>
+              <td>—（积分细节，Isaac 无直接对应）</td>
+            </tr>
+            <tr>
+              <td><b>求解核心</b></td>
+              <td><code>solve()</code> 一次 Gauss-Seidel sweep；3×3 用 <code>colPivHouseholderQr</code> 求解<br><a href="../04-code/4-3-solve.html">4.3</a></td>
+              <td><code>solve_elasticity</code> kernel；直接 3×3 $\mathbf H^{-1}$（带 $|\det\mathbf H|$ 阈值检查）；按 color 并行<br><a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a></td>
+              <td>—（求解器内部，PhysX/Isaac 用的是别的求解器栈）</td>
+            </tr>
+            <tr>
+              <td><b>牛顿步<br>（没变）</b></td>
+              <td colspan="2" style="text-align:center">$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\quad \mathbf x_i\mathrel{+}=\Delta\mathbf x_i$　——　per-vertex 局部牛顿，两边一致<br><a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><b>加速</b></td>
+              <td><b>有</b> Chebyshev 外推（Wang 2015）<br><a href="../04-code/4-4-chebyshev.html">4.4</a></td>
+              <td><b>无</b> Chebyshev——整套就是按 color 的 Gauss-Seidel<br><a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 两处「Newton 反而更朴素」</div><p>你可能以为生产引擎处处更花哨——但 particle VBD 在这两点上比原书简单：(1) 初始化只用朴素惯性 $\mathbf y=\mathbf x+(\mathbf v+\mathbf g\,h)\,h$，没搬你那套 <code>accelerationComponent</code> 自适应；(2) 它<b>不用 Chebyshev</b>。原因是 Newton 靠 GPU 上海量并行 + 多 color sweep 把收敛压下去，工程上选择不引入 Chebyshev 那点谱半径 $\rho$ 的调参负担。$\min G$ 没变，省掉的只是两个「加速/预热」技巧。</p></div>
+
+        <h2 id="physics-parallel">物理元件 · 碰撞 · 并行</h2>
+        <p>真正「长大」的地方在物理建模和并行：strand 只有弹簧、没有碰撞、串行扫一遍；cloth/soft 有一整套 <span class="term">Neo-Hookean</span> 元件 + 自碰撞，并且按 graph coloring 在 GPU 上并行。注意：弹簧的力/Hessian 形式两边<b>一模一样</b>——这是把概念接回 strand 最自然的接口。</p>
+        <table>
+          <thead><tr><th>概念</th><th>TinyVBD</th><th>Newton particle VBD</th><th>Isaac / USD 旁注</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>弹性</b></td>
+              <td>弹簧 only（线段 $E=\tfrac12k(l-l_0)^2$）<br><a href="../01-foundations/1-4-spring-energy.html">1.4</a></td>
+              <td>membrane / volumetric <span class="term">Neo-Hookean</span> + dihedral bending + spring（spring 力/Hessian 同 TinyVBD）<br><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+              <td>对应 USD 物理材质（<span class="term">PhysicsMaterial</span> / 形变体属性）声明的本构</td>
+            </tr>
+            <tr>
+              <td><b>碰撞</b></td>
+              <td><b>无</b>碰撞</td>
+              <td><span class="term">BVH</span> self-collision + penetration-free 截断（每色 sweep 后保守截断位移）<br><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+              <td><span class="term">PhysX</span> broadphase / narrowphase（Isaac 的碰撞管线）</td>
+            </tr>
+            <tr>
+              <td><b>并行</b></td>
+              <td>串行单 sweep（一个 Gauss-Seidel pass 顺序扫过所有顶点）<br><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+              <td>graph coloring（<b>顶点图</b> / primal）+ 按 color 并行：同色顶点不共享 force element，可同时更新<br><a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a></td>
+              <td>—（VBD / 约束求解特有；Isaac 无直接对应的着色概念）</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> spring 是公共子集</div><p>别被 Neo-Hookean 吓到：Newton 的 spring 元件用 <code>spring_rest_length / stiffness / damping</code>，力和 Hessian 的代数形式和你原书弹簧<b>逐项相同</b>，只是从 2D 升到 3D。membrane / volumetric / bending 是在这个公共子集之外、为面/体单元新加的本构；碰撞和着色则是你那根孤零零的 strand 从来没遇到过的新问题。</p></div>
+
+        <h2 id="api-quaternion">求解器入口与跨栈陷阱</h2>
+        <p>最后是「怎么把它跑起来」和一个容易踩的坑。三个栈的单帧入口长得很不一样；而四元数顺序是 Newton ↔ Isaac 之间最隐蔽的 bug 源。</p>
+        <table>
+          <thead><tr><th>概念</th><th>TinyVBD</th><th>Newton particle VBD</th><th>Isaac / USD 旁注</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>求解器入口</b></td>
+              <td><code>simulate()</code>（一帧：初始化 → 迭代 sweep → 更新速度）<br><a href="../04-code/4-5-main-loop.html">4.5</a></td>
+              <td><code>solver.step(state_in, state_out, control, contacts, dt)</code>，配 <code>model.collide(...)</code> + 双 state 乒乓<br><a href="../07-newton-foundations/7-4-minimal-program.html">7.4</a></td>
+              <td><code>step(actions)</code>（Isaac/Gym 风格：喂动作、推进一帧）</td>
+            </tr>
+            <tr>
+              <td><b>四元数顺序</b></td>
+              <td>—（2D strand 无旋转四元数）</td>
+              <td>Newton / Warp 用 $(x, y, z, w)$<br><a href="a-4-newton-glossary.html">a-4</a></td>
+              <td>Isaac 用 $(w, x, y, z)$ —— 与 Newton <b>互转要换序</b>，否则姿态全错</td>
+            </tr>
+            <tr>
+              <td><b>目标函数<br>（没变）</b></td>
+              <td colspan="2" style="text-align:center">$\displaystyle \mathbf x^{t+1}=\arg\min_{\mathbf x}G(\mathbf x),\quad G=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$　——　三套世界共用的那条不变量<br><a href="../01-foundations/1-2-variational-euler.html">1.2</a> · <a href="a-2-cheatsheet.html">a-2</a></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout note">
+          <div class="c-h">四元数换序：最值得贴在显示器上的一条</div>
+          <p>从 Isaac 取来的姿态 $(w,x,y,z)$ 直接喂给 Newton（期望 $(x,y,z,w)$）会得到一个「看起来差不多但全程歪着」的仿真。跨栈传 transform 时务必在边界处换序。其余约定见 Newton 的 <span class="term">conventions</span> 文档。</p>
+        </div>
+
+        <h2 id="throughline">一句话主线：什么没变 / 什么变了</h2>
+        <p>把整张表压成一句：</p>
+        <div class="math-block">$$\underbrace{\min_{\mathbf x} G(\mathbf x)}_{\text{没变}}\quad\text{；}\quad\underbrace{\text{一根 strand 串行}\ \longrightarrow\ \text{一块 cloth 在 GPU 上按颜色并行}}_{\text{变了}}$$</div>
+        <p><b>没变</b>：变分目标 $\min G$、每顶点局部牛顿 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$、惯性项 $\frac{m_i}{h^2}\mathbf I$ 的正定结构、弹簧的力/Hessian 形式、后向差分更新速度 $\mathbf v=(\mathbf x-\mathbf x_{prev})/h$。</p>
+        <p><b>变了</b>：单对象 → Model/State 拆分；2D → 3D；仅弹簧 → membrane/volumetric Neo-Hookean + bending + spring；无碰撞 → BVH 自碰 + penetration-free 截断；串行单 sweep → graph coloring 多色并行；自适应初始化 → 朴素惯性；<b>有</b> Chebyshev → <b>无</b> Chebyshev。</p>
+        <p>读到这里，你应该能拿着任意一个 Newton particle VBD 的概念，反手指回原书那根 strand 上的对应物——这正是这一页存在的意义。完整术语见 <a href="a-4-newton-glossary.html">Newton 术语表</a>，外部出处见 <a href="a-6-newton-references.html">Newton 参考</a>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

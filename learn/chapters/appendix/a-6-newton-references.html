@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton / VBD / AVBD 参考文献 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-6">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-6</div>
+        <h1>Newton / VBD / AVBD 参考文献</h1>
+        <p class="lede">「Newton 篇」把读者从一根 strand 带到 GPU 上一整块 cloth，再带到 <span class="term">AVBD</span> 的硬约束世界。这一页把这条路上真正的源头列出来：两篇论文、它们背后的引擎与框架、以及能让你「看见」算法在跑的 demo 与视频。每条都附一句中文，告诉你它值不值得点进去、该带着什么问题去读。</p>
+
+        <h2 id="papers">论文 <span class="term">Papers</span></h2>
+        <ul>
+          <li>
+            <b>Vertex Block Descent.</b> Anka He Chen, Ziheng Liu, Yin Yang, Cem Yuksel. ACM <span class="term">TOG</span> 43(4), Art. 116（July 2024）。
+            本书与 Newton particle 求解器共同的主角：把隐式欧拉的变分形式做成顶点级的 <span class="term">block coordinate descent</span>，每顶点一个 3×3 牛顿步、按顶点图着色做 Gauss-Seidel，<span class="term">unconditionally stable</span>。想弄清 Newton 的 <span class="term">particle</span> 路径「为什么这样写」，先读它。
+            arXiv：<a href="https://arxiv.org/abs/2403.06321" target="_blank" rel="noopener">arXiv:2403.06321</a> ·
+            DOI：<a href="https://doi.org/10.1145/3658179" target="_blank" rel="noopener">10.1145/3658179</a> ·
+            项目主页：<a href="https://graphics.cs.utah.edu/research/projects/vbd/" target="_blank" rel="noopener">graphics.cs.utah.edu/research/projects/vbd</a>（作者镜像页：<a href="https://ankachan.github.io/Projects/VertexBlockDescent/" target="_blank" rel="noopener">ankachan.github.io/Projects/VertexBlockDescent</a>）。
+          </li>
+          <li>
+            <b>Augmented Vertex Block Descent (AVBD).</b> Chris Giles, Elie Diaz, Cem Yuksel. ACM <span class="term">TOG</span> 44(4), Art. 90（Aug 2025）。
+            在 VBD 骨架上叠加 <span class="term">augmented Lagrangian</span> 与自适应 <span class="term">primal-dual</span>，从而能强制近无穷刚度的硬约束、并在高刚度比下收敛得更好——正是 Newton 给 rigid 部分选的解法。想理解 <span class="term">penalty ramping</span>（warm-start、衰减、封顶、增长）这套机制，读它。
+            DOI：<a href="https://doi.org/10.1145/3731195" target="_blank" rel="noopener">10.1145/3731195</a> ·
+            项目主页：<a href="https://graphics.cs.utah.edu/research/projects/avbd/" target="_blank" rel="noopener">graphics.cs.utah.edu/research/projects/avbd</a>。
+          </li>
+          <li>
+            <b>A Chebyshev Semi-Iterative Approach for Accelerating Projective and Position-Based Dynamics.</b> Huamin Wang. ACM <span class="term">TOG</span>（SIGGRAPH Asia 2015）。
+            TinyVBD 原书的 <span class="term">Chebyshev</span> 加速出自这里——但请注意一个对照点：Newton 的 particle 路径<b>并没有</b>用它，只跑按 color 的 Gauss-Seidel。放在这里是为了把「书里学过的加速」和「Newton 实际代码」之间的差异说清楚（见 <a href="../04-code/4-4-chebyshev.html">4.4</a>）。
+          </li>
+        </ul>
+
+        <h2 id="engine-framework">引擎与框架 <span class="term">Engine &amp; Framework</span></h2>
+        <ul>
+          <li>
+            <b>Newton.</b> GPU 加速物理引擎，建在 <span class="term">NVIDIA Warp</span> 之上，面向 robotics / 仿真研究；其 <span class="term">SolverVBD</span> 对 particle 用 VBD、对 rigid 用 AVBD，是「Newton 篇」逐行走读的对象。先看文档主页建立全局，再进仓库读 <code>solver_vbd.py</code> 与 kernels。
+            文档：<a href="https://newton-physics.github.io/newton/" target="_blank" rel="noopener">newton-physics.github.io/newton</a> ·
+            仓库：<a href="https://github.com/newton-physics/newton" target="_blank" rel="noopener">github.com/newton-physics/newton</a> ·
+            NVIDIA 开发者页：<a href="https://developer.nvidia.com/newton-physics" target="_blank" rel="noopener">developer.nvidia.com/newton-physics</a>。
+          </li>
+          <li>
+            <b>NVIDIA Warp.</b> Newton 的 GPU kernel 语言 / Python 框架：<code>@wp.kernel</code> + <code>wp.launch(dim=N)</code> 的 <span class="term">SPMD</span> 模型、<code>wp.array</code>/<code>wp.struct</code>、以及 <span class="term">CUDA graph capture</span>。不懂 Warp 就读不懂 Newton 的并行 sweep，建议在读 <a href="../07-newton-foundations/7-2-warp-model.html">7.2</a> 前后翻一遍它的文档。
+            开发者页：<a href="https://developer.nvidia.com/warp-python" target="_blank" rel="noopener">developer.nvidia.com/warp-python</a> ·
+            仓库：<a href="https://github.com/NVIDIA/warp" target="_blank" rel="noopener">github.com/NVIDIA/warp</a>。
+          </li>
+          <li>
+            <b>OpenUSD.</b> Newton 的场景 / 资产描述基座，也是你从 Isaac 背景过来最熟的一块。理解 Model（静态资产）与 State（动态属性）的分离，从 USD 的视角切入会很顺。
+            主页：<a href="https://openusd.org/" target="_blank" rel="noopener">openusd.org</a>。
+          </li>
+        </ul>
+
+        <h2 id="demos-video">demo 与视频 <span class="term">Demos &amp; Video</span></h2>
+        <ul>
+          <li>
+            <b>AVBD 官方视频.</b> 论文配套的可视化，硬约束、堆叠、摩擦、关节都在动里一目了然——读 AVBD 论文前先看它，能省下很多想象成本。
+            视频：<a href="https://www.youtube.com/watch?v=bwJgifqvd5M" target="_blank" rel="noopener">youtube.com/watch?v=bwJgifqvd5M</a>。
+          </li>
+          <li>
+            <b>AVBD 2D 参考实现.</b> Chris Giles。一份可读的 2D <span class="term">reference demo</span>，把 <span class="term">primal-dual</span> 与 penalty 演化压到最小、最透明的形态——想动手跟着 step through，这份比工业引擎好读得多（呼应 <a href="../10-avbd/10-1-avbd-idea.html">10.1</a> 的 widget）。
+            仓库：<a href="https://github.com/savant117/avbd-demo2d" target="_blank" rel="noopener">github.com/savant117/avbd-demo2d</a>。
+          </li>
+          <li>
+            <b>Cem Yuksel 研究主页.</b> VBD 与 AVBD 的共同作者之一；他的研究索引页是顺藤摸瓜找最新论文、视频与代码的总入口。
+            主页：<a href="https://www.cemyuksel.com/research/" target="_blank" rel="noopener">cemyuksel.com/research</a>。
+          </li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">关于性能数字的诚实声明</div>
+          <p>网上流传的一些 VBD / AVBD / MuJoCo-Warp 性能数字（每步耗时、顶点规模、加速倍数等），本教程<b>没有</b>独立核对过原始 PDF 与测试条件，因此正文里一律没有引用它们。需要可引用的数据，请回到上面各论文的官方页面与 PDF 自行核对。术语含义见 <a href="a-1-glossary.html">术语表</a>，公式见 <a href="a-2-cheatsheet.html">公式速查</a>，本书主线参考见 <a href="a-3-references.html">a-3 参考文献</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>参考文献 References · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-3</div>
+        <h1>参考文献 References</h1>
+        <p class="lede">这本书是 TinyVBD 的导读，真正的功劳属于下面这些论文与课程。按主题分组，方便你从「想深入哪一块」直接找到源头。</p>
+
+        <h2 id="vbd-family">VBD 与它的扩展</h2>
+        <ul>
+          <li>
+            <b>Vertex Block Descent.</b> Anka He Chen, Ziheng Liu, Yin Yang, Cem Yuksel. SIGGRAPH 2024（ACM TOG 43(4), Art. 116）。
+            本书的主角；TinyVBD 是它的极简 mass-spring strand 实现。
+            arXiv: <a href="https://arxiv.org/abs/2403.06321" target="_blank" rel="noopener">arXiv:2403.06321</a> ·
+            项目主页：<a href="https://graphics.cs.utah.edu/research/projects/vbd/" target="_blank" rel="noopener">graphics.cs.utah.edu/research/projects/vbd</a>。
+            相关章节贯穿全书，核心见 <a href="../03-vbd/3-1-block-descent.html">3.1</a>–<a href="../03-vbd/3-5-stability.html">3.5</a>。
+          </li>
+          <li>
+            <b>Augmented Vertex Block Descent (AVBD).</b> Giles et al. SIGGRAPH 2025。
+            在 VBD 骨架上引入增广拉格朗日处理硬约束与高刚度比，是 VBD 之后最自然的下一站（<a href="../06-closing/6-1-place-and-limits.html">6.1</a>）。
+            项目主页：<a href="https://graphics.cs.utah.edu/research/projects/avbd/" target="_blank" rel="noopener">graphics.cs.utah.edu/research/projects/avbd</a>。
+          </li>
+        </ul>
+
+        <h2 id="solver-family">谱系：解法家族</h2>
+        <ul>
+          <li>
+            <b>Position Based Dynamics.</b> Matthias Müller, Bruno Heidelberger, Marcus Hennix, John Ratcliff. 2007。
+            PBD 的原始论文——预测位置后顺序投影约束（<a href="../02-family/2-1-pbd.html">2.1</a>）。
+            PDF：<a href="https://matthias-research.github.io/pages/publications/posBasedDyn.pdf" target="_blank" rel="noopener">matthias-research.github.io/.../posBasedDyn.pdf</a>。
+          </li>
+          <li>
+            <b>XPBD: Position-Based Simulation of Compliant Constrained Dynamics.</b> Miles Macklin, Matthias Müller, Nuttapong Chentanez. MiG 2016。
+            用 compliance $\alpha$ 与拉格朗日乘子 $\lambda$ 给 PBD「治病」，使刚度时间步无关（<a href="../02-family/2-2-xpbd.html">2.2</a>）。
+            PDF：<a href="https://matthias-research.github.io/pages/publications/XPBD.pdf" target="_blank" rel="noopener">matthias-research.github.io/.../XPBD.pdf</a>。
+          </li>
+          <li>
+            <b>Projective Dynamics: Fusing Constraint Projections for Fast Simulation.</b> Sofien Bouaziz, Sebastian Martin, Tiantian Liu, Ladislav Kavan, Mark Pauly. SIGGRAPH 2014。
+            local/global 交替、global 步可预分解（<a href="../02-family/2-3-projective-dynamics.html">2.3</a>）。
+            项目主页：<a href="https://www.projectivedynamics.org/" target="_blank" rel="noopener">projectivedynamics.org</a>。
+          </li>
+        </ul>
+
+        <h2 id="acceleration-foundations">加速与变分地基</h2>
+        <ul>
+          <li>
+            <b>Fast Simulation of Mass-Spring Systems.</b> Tiantian Liu, Adam Bargteil, James O'Brien, Ladislav Kavan. SIGGRAPH Asia 2013。
+            把 mass-spring 隐式欧拉系统地写成最小化问题的关键文献之一，本书地基（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）。
+          </li>
+          <li>
+            <b>Example-Based Elastic Materials.</b> Sebastian Martin et al. 2011。
+            隐式欧拉的变分 / incremental potential 形式的早期系统使用（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）。
+          </li>
+          <li>
+            <b>A Chebyshev Semi-Iterative Approach for Accelerating Projective and Position-Based Dynamics.</b> Huamin Wang. SIGGRAPH Asia 2015。
+            TinyVBD 的 Chebyshev 加速（$\omega_n$ 递推与外推）正出自这里（<a href="../04-code/4-4-chebyshev.html">4.4</a>）。
+          </li>
+        </ul>
+
+        <h2 id="course">背景课程</h2>
+        <ul>
+          <li>
+            <b>GAMES103: Intro to Physics-Based Animation.</b> 王华民（Huamin Wang）。
+            本书假设的背景课程——质点弹簧、显式 / 隐式时间积分、PBD 的入门直觉都来自这里（<a href="../00-orientation/0-3-how-to-read.html">0.3</a>）。
+          </li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">引用信息以原文为准</div>
+          <p>这里给出的作者、年份与会议是按本教程整理的简表，链接指向公开主页 / PDF / arXiv。正式引用（完整作者列表、卷期页码、DOI）请以各论文官方页面为准。术语含义见 <a href="a-1-glossary.html">术语表</a>，公式见 <a href="a-2-cheatsheet.html">公式速查</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
