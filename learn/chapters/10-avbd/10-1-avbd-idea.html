@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VBD 软肋 → AVBD · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="10-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 10 · 10-1</div>
+        <h1>VBD 软肋 → AVBD</h1>
+        <p class="lede">VBD 很稳，但稳不等于全能。这一节先诚实复盘它三处真实的短板——高刚度比收敛、硬约束、惩罚式碰撞——再看 VBD 作者团队一年后给出的回应：<span class="term">AVBD</span>。它没有推翻 VBD，而是在原来的 block coordinate descent 骨架上，盖了一层 <span class="term">augmented Lagrangian</span>，把这几处软肋逐一补齐。</p>
+
+        <h2 id="recap-limits">先复盘：VBD 诚实的三处软肋</h2>
+        <p>在 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 我们已经把 VBD 的边界摊开过一次。这里只挑出 AVBD 真正要补的那几条，并且要先把一个容易混的概念分清楚。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 质量比 vs 刚度比，别混为一谈</div>
+          <p>TinyVBD 默认跑的 <code>initializeTilted()</code> 是 <a href="../05-experiments/5-1-mass-ratio.html">Part 5</a> 那个 1:1000 的<b>高质量比</b>实验——你已经亲手看到 VBD 在那里稳如老狗，而 PBD-style 会被「轻的拽不动重的」逼崩。<b>高质量比恰恰是 VBD 的强项，不是软肋。</b>真正的软肋是<b>高刚度比</b>（<span class="term">high stiffness ratio</span>）：系统里同时有极软和极硬的部分，比如 <code>initializeStiffRatio()</code> 里交替的 1e4 / 1e8 弹簧（<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a>）。这两件事方向相反，千万别一锅烩——AVBD 要补的是后者。</p>
+        </div>
+
+        <p>把软肋列清楚，一共三条：</p>
+        <ul>
+          <li><b>高刚度比收敛差。</b>局部下降在极硬的方向上步子迈不开，软硬并存时信息传播慢、迟迟收不干净。这是 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 专门让你撞的那堵墙。</li>
+          <li><b>无法表达硬约束。</b>VBD 把一切都写成可下降的<b>能量项</b>。要表达一道「绝对不能违反」的约束（比如刚性关节、不可拉伸），等价于把刚度推向无穷——而无穷大的能量项会让那个能量碗陡到无法下降，纯能量框架对此无能为力。</li>
+          <li><b>惩罚式碰撞不保证无穿透。</b>接触用<b>惩罚力</b>（penalty）处理：穿得越深、回推越大。但它是「软」的，把穿透当能量项去压而非当硬约束去禁，理论上不保证零穿透。TinyVBD 这根 strand 干脆没有碰撞，所以这一条你在 demo 里碰不到。</li>
+        </ul>
+        <p>注意后两条其实是同一个根：<b>VBD 缺一个「把某个约束逼到精确满足、乃至冲向无穷刚度」的机制</b>。这正是 AVBD 要装上的东西。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">回顾：高质量比下 VBD vs PBD-style</span></div>
+          <div class="lab-body" data-widget="mass-ratio"></div>
+          <div class="lab-cap">VBD 在高质量比稳；高刚度比才是它的软肋——这正是 AVBD 要补的。</div>
+        </div>
+
+        <h2 id="avbd-idea">AVBD：在 VBD 上盖一层 augmented Lagrangian</h2>
+        <p>VBD 作者团队（Giles, Diaz, Yuksel）在 <b><span class="term">AVBD</span>（Augmented Vertex Block Descent，ACM TOG 44(4) Art.90，2025，DOI 10.1145/3731195）</b>里给出的思路，是在 VBD 那套 per-vertex block coordinate descent 之上，叠加<b>增广拉格朗日（augmented Lagrangian）+ 自适应 primal-dual</b>。一句话说清它带来什么：<b>能强制硬约束（刚度可冲向无穷），且高刚度比下收敛明显更好</b>；正是靠这层机制，它撑起了 rigid body 的接触、堆叠、摩擦与关节。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 XPBD 看</span> 又见 λ：但这次是 primal 侧的乘子</div>
+          <p>「augmented Lagrangian」里的拉格朗日乘子 $\lambda$，和 <a href="../02-family/2-2-xpbd.html">2.2</a> 里 XPBD 那个累积的 $\lambda$ 是同一个家族的概念——都是约束力的化身，都跨迭代被记住。区别在于：XPBD 是纯<b>对偶</b>侧求解，AVBD 是在 VBD 的<b>primal</b>下降里同时维护一个 penalty 项<b>和</b>一个 $\lambda$。纯惩罚法（penalty）良态但只能逼近、永远差一口气；纯拉格朗日法精确但难解。augmented Lagrangian 把两者焊在一起：用 penalty 项保持系统良态、好下降，用 $\lambda$ 把约束<b>真正</b>顶到满足，而不必把 penalty 刚度开到无穷大。这正好对症 VBD 那两处短板。</p>
+        </div>
+
+        <h2 id="penalty-ramp">机制核心：penalty stiffness 怎么爬、怎么封顶</h2>
+        <p>AVBD 的灵魂是那个 <b>penalty stiffness</b> $k$ 的演化策略——它分两个时间尺度运作，我们只讲机制、不抠精确等式。</p>
+
+        <h3 id="warm-start">跨帧：warm-start 衰减</h3>
+        <p>每一帧开始时，AVBD 不把 $k$ 清零重来，而是从上一帧的值<b>warm-start</b>：让 $k$ 按一个衰减因子往下走、但不低于一个起始下限——形如 $k \leftarrow \max(\gamma\cdot k,\, k_{\text{start}})$；同时累积的对偶变量 $\lambda$ 也按比例衰减。直觉上这是在说「上一帧约束使了多大劲，这一帧先大致继承一点，别每帧从冷启动重新爬」——这正是「augmented」相对纯 penalty 的好处：跨帧的记忆让收敛不必每次从零开始。</p>
+
+        <h3 id="ramp-up">帧内：对仍违反的约束 ramp up</h3>
+        <p>进入一帧的迭代之后，对那些<b>仍然被违反</b>的约束，AVBD 把它们的 $k$ 按一个增长因子 $\beta$ 往上推（ramp up），一轮轮把惩罚加大，直到约束被压住或触顶。关键的分流在这里：</p>
+        <ul>
+          <li><b>soft 约束</b>（材料弹性，比如一根有限刚度的弹簧）：$k$ <b>封顶在材料刚度</b>。它本来就该是这么硬，不能也不该被 ramp 到比物理更硬——爬到材料刚度就停。</li>
+          <li><b>hard 约束</b>（刚性关节、不可拉伸、非穿透）：$k$ 没有这个上限，<b>可以一路冲向无穷</b>。这就是 VBD 单靠能量项做不到、而 AVBD 能做到的——把约束逼到（趋于）精确满足。</li>
+        </ul>
+        <p>于是同一套 ramp 机制，对软材料是「加到合适就停」，对硬约束是「敢加到天上去」，靠 $\lambda$ 兜住数值上的良态。这就是为什么 AVBD 既能保留软体的物理刚度，又能在它之上叠出真正的硬约束。</p>
+
+        <div class="callout note">
+          <div class="c-h">论文给的默认参数（无需调参）</div>
+          <p>AVBD 论文给出一组开箱即用的默认值：衰减相关的 $\alpha=0.95$、$\gamma=0.99$，帧内增长因子 $\beta=10$，以及每条约束各自的起始刚度 $k_{\text{start}}$。$\gamma$ 接近 1 → warm-start 缓慢遗忘上一帧；$\beta=10$ → 每次 ramp 一口气把违反约束的惩罚加一个量级，收敛快。下面的 widget 就让你亲手拨这几个旋钮，看 $k$ 怎么爬、soft 怎么封顶、hard 怎么往上冲。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">penalty stiffness 的演化：warm-start 衰减 + 迭代内增长</span></div>
+          <div class="lab-body" data-widget="avbd-penalty-ramp"></div>
+          <div class="lab-cap">调 γ / β / k_start，切 hard/soft，看 k 怎么爬、soft 怎么封顶。</div>
+        </div>
+
+        <p>玩几下你会形成一个直觉：$\gamma$ 决定「跨帧记多久」，$\beta$ 决定「帧内加多快」，$k_{\text{start}}$ 决定「从多硬起步」。soft 曲线总会撞到材料刚度那条天花板停住，hard 曲线则只要约束没满足就一直爬——两条曲线的分岔，就是 AVBD 区分「软体物理」和「硬约束」的全部秘密。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) VBD 的真软肋是<b>高刚度比</b>收敛、<b>硬约束</b>、<b>惩罚碰撞不保证无穿透</b>——其中高<b>质量</b>比反而是它的强项，别混淆；(2) <b>AVBD</b> 在 VBD 的 block coordinate descent 上加 <b>augmented Lagrangian + 自适应 primal-dual</b>，用一个跨迭代维护的 $\lambda$ 把约束顶到满足，从而能强制硬约束、改善高刚度比，撑起 rigid 接触/堆叠/摩擦/关节；(3) 核心机制是 <b>penalty ramping</b>：跨帧 warm-start 衰减（带记忆地继承上一帧），帧内对仍违反的约束按 $\beta$ ramp up，<b>soft 封顶在材料刚度、hard 冲向无穷</b>，默认 $\alpha=0.95,\ \beta=10,\ \gamma=0.99$ + 每约束 $k_{\text{start}}$。</p>
+        <p>下一节 <a href="10-2-rigid-and-further.html">10-2（Newton rigid AVBD 一瞥）</a>，我们落回工程：看 Newton 里 <code>SolverVBD</code> 怎么「particle 用 VBD、rigid 用 AVBD」，那几个 <code>rigid_avbd_gamma</code> / <code>rigid_contact_k_start</code> / <code>rigid_avbd_beta</code> 参数正是这一节机制的代码出口，再给你指几条继续往下读的路。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

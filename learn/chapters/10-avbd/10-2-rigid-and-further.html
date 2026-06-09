@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rigid AVBD 一瞥与进一步阅读 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="10-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 10 · 10-2</div>
+        <h1>rigid AVBD 一瞥与进一步阅读</h1>
+        <p class="lede">上一节（<a href="10-1-avbd-idea.html">10.1</a>）我们看清了 augmented Lagrangian 怎么把硬约束和高刚度比塞进 VBD 的下降骨架。这一节是全书最后一站：先到 Newton 的 rigid 一侧瞄一眼——同一套 AVBD 思想是怎么去管刚体的 joint 和 contact 的；然后摊开一份进一步阅读清单，最后合上这本书。我们不深挖 rigid kernel，只看它和你已经吃透的那根 strand 是怎么一脉相承的。</p>
+
+        <h2 id="rigid-side">SolverVBD 的另一半：rigid 用 AVBD</h2>
+        <p>从第一节 Newton 篇起，我们一直只看 <span class="term">SolverVBD</span> 的 particle 那一半——粒子、布料、软体，全是 per-vertex 的 VBD。但这个求解器的类 docstring 早就写明了它的双重身份：<b>对 particle 用 VBD，对 rigid body 用 AVBD</b>。换句话说，上一节那套 augmented Lagrangian 不是停在纸面上的理论，它就是 Newton 用来积分刚体的引擎。</p>
+        <p>rigid 这一侧要处理的东西，和粒子很不一样。粒子的状态是位置 $\mathbf x\in\mathbb R^3$；刚体的状态是一个 <span class="term">transform</span>（平移 + 旋转，<code>body_q: wp.array[wp.transform]</code>）和一个 <span class="term">spatial_vector</span> 速度（<code>body_qd</code>）。它们之间要满足的也不再是弹簧 rest length，而是两类典型约束：</p>
+        <ul>
+          <li><b><span class="term">joint</span>（关节）</b>：把两个刚体（或刚体与世界）按某种自由度铰接起来。Newton 的 AVBD 路径支持一组关节类型——<span class="term">BALL</span>（球铰）、<span class="term">FIXED</span>（固连）、<span class="term">FREE</span>（自由）、<span class="term">REVOLUTE</span>（转动）、<span class="term">PRISMATIC</span>（移动）、<span class="term">D6</span>（六自由度通用）、<span class="term">CABLE</span>（缆绳）。每种关节把哪几个 DOF 锁住、哪几个放开，就决定了它要往能量里加哪些约束项。</li>
+          <li><b><span class="term">contact</span>（接触）</b>：刚体之间、刚体与粒子之间的碰撞，从 collision pipeline（<a href="../09-elasticity-collision/9-3-collision.html">9.3</a>）里来，作为接触约束进入同一个最小化问题。</li>
+        </ul>
+        <p>无论 joint 还是 contact，AVBD 的处理方式都在上一节见过：每个约束挂一个 penalty 刚度 $k$ 和一个 Lagrange multiplier $\lambda$，按 <b>hard / soft 两种 slot</b> 来管理。soft slot 把约束当作软的惩罚项、封顶在某个刚度；hard slot 则通过 augmented Lagrangian 的对偶变量把约束往「精确满足」上逼。每帧 warm-start 时 penalty 按 $\gamma$ 衰减、迭代内按 $\beta$ 增长——和粒子侧的 penalty ramping 是同一套机制，只是作用在刚体的 transform 上。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 一根弹簧 → 一个 joint</div>
+          <p>别被「刚体」吓到。回想 TinyVBD 里那根 strand：一条边就是一个约束，<code>solve()</code> 里你给它装一个力 $\mathbf f$ 和一个 $3\times3$ 的 Hessian $\mathbf H$，然后 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$ 把端点往满足 rest length 的方向挪一步。Newton 的 rigid AVBD 做的是同一件事的「升维版」：一个 BALL joint 要求两个锚点重合，就像一根 rest length 为 0 的弹簧；一个 REVOLUTE joint 额外锁住两个角向自由度。区别只在变量从 $\mathbb R^3$ 的位置换成了 transform、力/Hessian 要在平移和旋转上一起装配。<b>骨架没变：还是装力、装 Hessian、解一个局部牛顿步、按下降的方向挪。</b>AVBD 在外面再套一层 $\lambda$，把「软弹簧」升级成「能精确满足的硬约束」。</p>
+        </div>
+
+        <h2 id="coloring">rigid 也要着色：body_color_groups</h2>
+        <p>还记得 particle VBD 那个硬性前提吗——<span class="term">SolverVBD</span> 构造时会检查 <code>model.particle_color_groups</code> 存在，否则按色并行的 Gauss-Seidel sweep 就无从谈起（<a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a>）。rigid 这一侧是完全对称的：<b>刚体也需要 graph coloring</b>，结果存在 <code>model.body_color_groups</code> 里。只要场景里有刚体由 VBD 积分，这个着色就是必需的。</p>
+        <p>道理和粒子一模一样：同色的刚体之间不共享 force element（不通过同一个 joint 或 contact 直接耦合），于是可以并行更新；不同色之间串行，拿到 Gauss-Seidel 的收敛。<code>builder.color()</code> 一次把粒子和刚体一起着色，分别填进 <code>particle_color_groups</code> 和 <code>body_color_groups</code>。这是「同一个求解器、同一套并行哲学」最直白的证据——粒子和刚体共用一张着色的世界观。</p>
+
+        <div class="callout warn">
+          <div class="c-h">Newton 当前的一处诚实边界</div>
+          <p>有一点要照着 Newton 自己的文档说清楚：虽然 AVBD 理论上能强制硬约束，但 Newton 文档目前注明，<span class="term">SolverVBD</span> 对刚体支持的关节是<b>通过软约束（soft constraints）</b>实现的，配合<b>自适应惩罚（adaptive penalties）</b>。也就是说，「让约束冲向真正精确满足」的那条 hard 路径，在当前 Newton 里并没有作为默认承诺被强制起来——能用的是软约束 + 自适应惩罚这条更稳妥的路。这是实现现状与论文理论之间的正常落差，记着即可，别把理论上限当成此刻就能拿到的保证。</p>
+        </div>
+
+        <h2 id="params">几个相关的 solver 参数</h2>
+        <p>不深挖 kernel，但点几个你日后翻 <span class="term">SolverVBD</span> 构造参数时会撞见的名字，好让它们不再陌生。它们都挂在 rigid AVBD 那套 penalty / Lagrangian 机制上：</p>
+        <ul>
+          <li><code>rigid_avbd_gamma</code>：每帧对 penalty 刚度 $k$（以及持久化的对偶量）做衰减的因子 $\gamma$——正是上一节 warm-start 公式里那个把上帧的 $k$ 往回收一点、避免一开始就过硬的衰减系数。</li>
+          <li><code>rigid_contact_k_start</code>：刚体接触（含 body-particle 接触）penalty 的起始种子 $k_{\text{start}}$，启用 ramping 时从这里起步往上爬。</li>
+          <li><code>rigid_joint_linear_k_start</code> / <code>rigid_joint_angular_k_start</code>：关节<b>线性</b>与<b>角向</b>约束的 penalty 起始种子，分别管平移方向和旋转方向。joint 的两类自由度刚度量级天然不同，所以拆成两个种子。</li>
+        </ul>
+        <p>这些参数你大概率<b>不需要手动调</b>——上一节说过 AVBD 论文给出的默认值就是「无需调参」的设计目标。它们存在的意义，是当你真要拿 rigid AVBD 去啃一个棘手堆叠或关节链时，知道有这么几个旋钮，且知道每个旋钮拧的是哪一段机制。点到为止，rigid kernel 的内部装配留给好奇心和源码。</p>
+
+        <div class="callout note">
+          <div class="c-h">一图记住这一瞥</div>
+          <p>particle 侧 = VBD：位置变量、弹性/接触力、<code>particle_color_groups</code>。rigid 侧 = AVBD：transform 变量、joint/contact 约束（hard/soft slot）、<code>body_color_groups</code>、penalty ramping（$\gamma$ 衰减、$k_{\text{start}}$ 起步）。两侧共用一个 <code>step()</code>、共用一套着色、共用 <b>$\min G(\mathbf x)$</b> 的下降世界观。</p>
+        </div>
+
+        <h2 id="further-reading">进一步阅读</h2>
+        <p>这本 Newton 篇是一份「读懂的地图」，不是终点。如果你想继续往深里走，下面是一份精挑的入口清单（完整、带卷期与 DOI 的参考文献列表在 <a href="../appendix/a-6-newton-references.html">附录 a-6</a>，这里只给最该先点开的几个）：</p>
+        <ul>
+          <li><b>VBD 原论文（2024）</b>——<span class="term-i">Vertex Block Descent</span>，Chen / Liu / Yang / Yuksel，ACM TOG 43(4)。这就是 TinyVBD 和 particle 路径的源头，arXiv:2403.06321。全书的 $\min G(\mathbf x)$、block coordinate descent、顶点图着色都从这里来。</li>
+          <li><b>AVBD 论文（2025）</b>——<span class="term-i">Augmented Vertex Block Descent</span>，Giles / Diaz / Yuksel，ACM TOG 44(4)，DOI <code>10.1145/3731195</code>。上一节和这一节 rigid 那套 augmented Lagrangian、penalty ramping、hard/soft 约束都出自它。想搞懂硬约束与高刚度比，读这篇。</li>
+          <li><b>Newton 文档与代码仓库</b>——求解器契约、Model/State/Control 数据模型、coloring、各 solver 的支持矩阵都在官方文档里；想看 <span class="term">SolverVBD</span> 怎么把 particle VBD 与 rigid AVBD 缝在一个 <code>step()</code> 里，直接读 <code>solver_vbd.py</code> 最实在。</li>
+          <li><b>Warp 文档</b>——Newton 站在 NVIDIA Warp 之上。看不懂 <code>@wp.kernel</code> / <code>wp.launch</code> / CUDA graph capture 时（<a href="../07-newton-foundations/7-2-warp-model.html">7.2</a>），Warp 文档是第一手参考。</li>
+          <li><b>AVBD 2D 参考实现</b>——Chris Giles 的 <span class="term">savant117/avbd-demo2d</span>，一个干净的二维参考 demo，外加 Utah 的 AVBD 项目页。想像我们读 TinyVBD 那样「逐行读懂一个最小实现」，这是 AVBD 的对应物。</li>
+        </ul>
+
+        <h2 id="closing">合上这本书</h2>
+        <p>回头看这一整段旅程，它其实只讲了一件事，从一根线讲到一座引擎：</p>
+        <p>你从 <b>TinyVBD</b> 那根 strand 出发——一根「头发」，~400 行 C++，串行扫一遍顶点，每个顶点解一个 $3\times3$ 的牛顿步。然后我们把它搬上 GPU：<b>Newton 的 particle VBD</b> 把同一套局部牛顿步铺成一块布、用 Warp 的 kernel 按颜色并行扫，加上多种弹性元件、自碰撞、penetration-free。再往前一步，<b>AVBD</b> 用 augmented Lagrangian 补上了 VBD 留下的两块短板——硬约束和高刚度比——并把同一台机器开到了刚体的 joint 与 contact 上。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 始终是同一个 min G(x)</div>
+          <p>一路加上去的，全是「机器」（machinery），不是「新物理」。strand → GPU cloth → 硬约束 → rigid，每一步多出来的是并行调度、是图着色、是更多元件类型、是 augmented Lagrangian 这层对偶外壳；但<b>被最小化的东西从头到尾没变</b>——还是那一个增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$，还是「一步隐式欧拉 = 解一个 $\arg\min G$」。TinyVBD 那根 strand 和 Newton 里翻滚堆叠的刚体，解的是同一道题，只是后者带着更多机械臂去解它。你早在原书 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 就握住了这把尺子；这一篇 Newton 之旅，不过是看着同一把尺子把房子盖得更大。</p>
+        </div>
+
+        <p>如果你把这两本（原书 + Newton 篇）连起来读完了，那你现在拥有的不是「VBD 怎么实现」这一条知识，而是一种能把任何 position/optimization-based 仿真方法<b>放回谱系</b>的眼光：它在最小化什么？primal 还是 dual？Gauss-Seidel 还是 Jacobi？保留了多少 Hessian？约束是软的惩罚还是硬的 Lagrangian？怎么并行的——着的是顶点图还是约束图？这几个问题，足够你从容地拆解下一个遇到的新方法。</p>
+        <p>谢谢你一路读到这里。需要随时回查时，附录就在那儿：<a href="../appendix/a-4-newton-glossary.html">Newton / Warp 术语表（a-4）</a>、<a href="../appendix/a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查（a-5）</a>、<a href="../appendix/a-6-newton-references.html">参考文献（a-6）</a>。现在，去把 Newton 装起来，<code>builder.color()</code>、<code>SolverVBD</code>、跑一块真正在 GPU 上抖动的布——剩下的，就交给好奇心了。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
