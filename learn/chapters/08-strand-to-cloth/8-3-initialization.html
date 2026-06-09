@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>particle 惯性初始化 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="8-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 8 · 8-3</div>
+        <h1>particle 的惯性初始化：Newton 走的是朴素那条路</h1>
+        <p class="lede">上一节我们看了 <a href="8-2-solver-overview.html">8.2</a> 里 <code>step()</code> 的三段式，其中第一段 <span class="term">Initialize</span> 负责把每个顶点往前推一步、给迭代挑个初始猜测。读 TinyVBD 时你已经吃透过这件事：<a href="../04-code/4-2-forward-step.html">4.2</a> 的 <code>forwardStep()</code> 玩了一手漂亮的<span class="term">adaptive initialization</span>。那么 Newton 的 particle 路径也这么聪明吗？答案是——<b>没有</b>。这一节就是要诚实地把这处差异摆到台面上。</p>
+
+        <h2 id="forward-step">forward_step kernel：三行就讲完</h2>
+        <p>Newton 的 particle 前向积分就在一个叫 <code>forward_step</code> 的 Warp <span class="term">kernel</span> 里，每个 thread 负责一个 particle。把和初始化直接相关的几行拎出来：</p>
+
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code>@wp.kernel
+def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
+                 external_force, particle_flags, inertia_out, displacements_out):
+    particle = wp.tid()
+
+    pos_prev[particle] = pos[particle]
+    if not particle_flags[particle] &amp; ParticleFlags.ACTIVE or inv_mass[particle] == 0:
+        inertia_out[particle] = pos_prev[particle]
+        return
+    vel_new = vel[particle] + (gravity[0] + external_force[particle] * inv_mass[particle]) * dt
+    inertia = pos[particle] + vel_new * dt
+    inertia_out[particle] = inertia</code></pre></div>
+
+        <p>逐行读，你会发现它和 TinyVBD 的<b>前半截</b>几乎一模一样：</p>
+        <ul>
+          <li><code>pos_prev[particle] = pos[particle]</code>：把这一步开始时的位置 $\mathbf x^t$ 存一份，留给末尾反算速度——和 TinyVBD 的 <code>mVertPrevPos = mVertPos</code> 完全对应。</li>
+          <li><code>particle_flags &amp; ParticleFlags.ACTIVE</code> 与 <code>inv_mass == 0</code> 这道闸：非激活或者「无穷重」（固定 pin 住）的顶点，惯性位置就锁回原地、不再往下算。这就是 Newton 版的「pin 第 0 个顶点」，只不过用 <span class="term">flag</span> + 逆质量来表达，比 TinyVBD 写死 <code>col(0)</code> 更通用。</li>
+          <li><code>vel_new = vel + (gravity + external_force * inv_mass) * dt</code>：把外力（重力 + 外部力按逆质量折成加速度）先积进速度，得到 $\mathbf v^{t+1}_{\text{pred}}$。注意外部力要乘 <code>inv_mass</code> 才变成加速度，而重力本身已经是加速度，直接加。</li>
+          <li><code>inertia = pos + vel_new * dt</code>：这就是惯性预测位置 $\mathbf y$，写进 <code>inertia_out</code>，整步不再变。</li>
+        </ul>
+
+        <p>把后两行合起来展开，得到的正是<b>朴素惯性位置</b>：</p>
+        <div class="math-block">$$\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t = \mathbf x + \mathbf v\,\Delta t + \mathbf g\,\Delta t^2$$</div>
+        <p>这和全书第一节 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 给出的惯性项 $\mathbf y = \mathbf x^t + h\mathbf v^t + h^2 M^{-1}\mathbf f_{ext}$ 严丝合缝。注意——故事到这里就<b>停了</b>。<code>inertia_out[particle] = inertia</code> 写完，初始化就结束了。Newton 的迭代直接从这个 $\mathbf y$ 出发。</p>
+
+        <div class="callout note">
+          <div class="c-h">inertia 是「碗底」，不是「起点」那么简单</div>
+          <p>和 TinyVBD 一样，<code>inertia</code>（即 $\mathbf y$）算完后整步不动，会被后面 <a href="8-4-newton-step-warp.html">8.4</a> 的 <code>solve_elasticity</code> 反复读取：惯性力 $\mathbf f \mathrel{+}= m(\mathbf y - \mathbf x)/\Delta t^2$ 拿当前 $\mathbf x$ 和这个固定 $\mathbf y$ 比。它既是惯性碗的碗底，<b>也</b>顺手当了迭代的初始位置——因为 Newton 这里没有再为初始猜测做任何额外加工。</p>
+        </div>
+
+        <h2 id="missing-adaptive">少了什么：那个 accelerationComponent 投影</h2>
+        <p>回忆 TinyVBD <a href="../04-code/4-2-forward-step.html">4.2</a> 在算完 <code>inertia</code> 之后还做了一整段：用前后两帧速度差估出近似加速度，把它<b>投影到重力方向</b>得到一个标量 <code>accelerationComponent</code>（论文 Eq.17 里的 $\tilde a$），钳在 $[0, g]$，然后逐顶点用</p>
+        <div class="math-block">$$\mathbf x^{(0)}_i = \mathbf x^{t}_i + h\,\mathbf v^{t-1}_i + h^2\,\hat{\mathbf g}\,\tilde a_i$$</div>
+        <p>当初始猜测。它的精髓是<b>区别对待</b>：真在自由下落的顶点 $\tilde a\approx 1$（吃满重力位移、初始猜测接近 $\mathbf y$），被弹簧或接触托住的顶点 $\tilde a\approx 0$（几乎停在原地，不被先扔到碗底）。这样叠放、静止、被支撑的顶点不会一开始就被初始化成互相穿插的自由下落态。</p>
+
+        <p>Newton 的 <code>forward_step</code> 里，<b>这一整段不存在</b>。没有 <code>accelerationApprox</code>、没有 <code>dot(gravDir)</code> 投影、没有逐顶点的 $\tilde a$ 钳制。每个激活顶点都吃满一个 $\mathbf g\,\Delta t^2$ 的重力位移，无差别地落到惯性位置 $\mathbf y$。换句话说：</p>
+
+        <div class="callout warn">
+          <div class="c-h">点名这处差异</div>
+          <p>Newton 的 particle 路径用的是<b>朴素惯性初始化</b> $\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t$，<b>不是</b> TinyVBD 的自适应初始化。代码里没有 <code>accelerationComponent</code> 那套逻辑——这正是 TinyVBD 的 <code>forwardStep()</code> 里那段被注释掉的 <code>// mVertPos = inertia</code>「baseline」，在 Newton 这边成了实际选用的做法。</p>
+        </div>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> forwardStep() 的自适应分支，在 Newton 里没有对应物</div>
+          <p>TinyVBD 的 <code>forwardStep()</code> 有一个 <code>if (strand.hasApproxAcceleration)</code> 分支：有历史速度时走自适应初始化（逐顶点算 $\tilde a$、按投影补重力），第一帧才回退到 <code>mVertPos = inertia</code>。Newton 的 <code>forward_step</code> 等于<b>永远走那个回退分支</b>——不管第几帧，都直接 <code>inertia_out = pos + vel_new * dt</code> 收尾。两边的惯性 $\mathbf y$ 算法一字不差（位置积分逻辑相同），分岔只在「要不要再为初始猜测做自适应加工」这一步：TinyVBD 做了，Newton 没做。</p>
+        </div>
+
+        <h2 id="why-matters">这处差异要不要紧？诚实地说</h2>
+        <p>朴素初始化最大的好处是<b>简单</b>：少一段逐顶点的投影与钳制、少存一份上一帧速度、kernel 更短，逻辑也更容易并行展开。对很多场景这完全够用——尤其是顶点本来就大多在自由运动、没有大片被支撑的静止区域时，$\mathbf y$ 已经是相当好的起点，自适应初始化省下的那几次迭代未必显眼。</p>
+
+        <p>代价也得说清楚：在<b>叠放 / 接触 / 被强支撑</b>的场景里，朴素初始化会把那些本该几乎不动的顶点先往下挪 $\mathbf g\,\Delta t^2$，于是迭代的<b>第一步</b>就引入了一截需要被弹性力和接触力拉回来的位移。这意味着求解器要多花几次迭代把它们「拉回」，热启动的质量不如自适应初始化好。<a href="../04-code/4-2-forward-step.html">4.2</a> 强调过的那个好处——「不把所有顶点都先扔到碗底」——Newton 的 particle 路径在这里<b>放弃了</b>。</p>
+
+        <p>这里不必过度渲染：它不是 bug，也不会让结果错（迭代仍会收敛到同一个 $\arg\min G$，惯性初始化和自适应初始化只差一个起点，不改变目标函数）。它是一个<b>务实的取舍</b>——用初始猜测的质量换实现的简洁。要不要补上自适应初始化，取决于你的场景里「被支撑的静止顶点」占多大比例。把它和 <a href="8-1-same-min-G.html">8.1</a> 反复说的那句主线对上：<code>min G(x)</code> 没变，变的只是工程实现上的一处选择。</p>
+
+        <div class="callout note">
+          <div class="c-h">和「没有 Chebyshev」是同一类诚实点名</div>
+          <p>这是 Newton particle 路径与 TinyVBD 的两处真实差异之一。另一处——<b>Newton 的 particle solve 没有 Chebyshev 加速</b>——留到 <a href="8-4-newton-step-warp.html">8.4</a> 看 per-vertex Newton step 时再点。两处都遵循同一条原则：把工程实现上的简化老老实实摆出来，不假装 Newton 把 TinyVBD 的每个聪明小技巧都搬了过来。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) Newton 的 <code>forward_step</code> kernel 做 <code>pos_prev = pos</code>、<code>vel_new = vel + (gravity + external_force·inv_mass)·dt</code>、<code>inertia = pos + vel_new·dt</code>，得到的是<b>朴素惯性位置</b> $\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t$；(2) 它<b>不做</b> TinyVBD 那套 <code>accelerationComponent</code> 自适应初始化——每个激活顶点都无差别落到 $\mathbf y$；(3) 这是「简洁 vs 更好的热启动」的务实取舍，在叠放/接触场景里会损失一点初始猜测质量，但不影响最终收敛。</p>
+        <p>惯性位置就位、初始猜测定了。下一节 <a href="8-4-newton-step-warp.html">8.4</a> 进入全篇的核心：把 per-vertex 的 Newton step 在 Warp 里展开，看 <code>solve_elasticity</code> 怎么逐顶点装配 $\mathbf f_i$ 与 $\mathbf H_i$、做 $\Delta\mathbf x = \mathbf H^{-1}\mathbf f$——并顺手点出「没有 Chebyshev」那处差异。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
