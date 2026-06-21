@@ -51,6 +51,55 @@
           <p>VBD = 在真正的 $G$ 上做 per-vertex block coordinate descent，用顶点图着色换来「Gauss-Seidel 收敛 + 近 Jacobi 并行」，且是 primal、保留完整局部 Hessian、单调下降。它不是「又一个调位置的 PBD 变体」，而是把隐式欧拉的最小化问题<b>正面、增量、可并行地</b>解掉。</p>
         </div>
 
+        <h2 id="family-table">一张表把整个谱系横着摆开</h2>
+        <p>本章反复用四个问题给方法定位——<b>最小化什么 · primal 还是 dual · 更新顺序 · 保留多少 Hessian</b>（结尾还会让你「下次遇到新方法本能地问这几个」）。把散在 Part 2 与本章的判据一次性摆成一张速查表，五行就是这一族的全部坐标：</p>
+        <table>
+          <thead><tr><th>方法</th><th>最小化什么</th><th>primal / dual</th><th>更新顺序</th><th>保留多少 Hessian</th><th>招牌软肋</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>PBD</b></td>
+              <td>约束违反（非真正的 $G$）</td>
+              <td>偏 dual（投影约束）</td>
+              <td>Gauss-Seidel（逐约束）</td>
+              <td>几乎不用 Hessian</td>
+              <td>刚度随迭代/步长漂移，不物理</td>
+            </tr>
+            <tr>
+              <td><b>XPBD</b></td>
+              <td>约束 + compliance（近似 $G$）</td>
+              <td><b>dual</b>（解 $\lambda$）</td>
+              <td>Gauss-Seidel（逐约束）</td>
+              <td>只惯性项，丢弹性二阶</td>
+              <td>高质量比崩（轻拽不动重）</td>
+            </tr>
+            <tr>
+              <td><b>Projective Dynamics</b></td>
+              <td>真正的 $G$（受限材料）</td>
+              <td>primal（local/global）</td>
+              <td>global solve（全局一次）</td>
+              <td>固定的常量 Hessian（预分解）</td>
+              <td>仅限可写成投影的材料、非线性弱</td>
+            </tr>
+            <tr>
+              <td><b>Newton</b></td>
+              <td>真正的 $G$</td>
+              <td>primal</td>
+              <td>global solve（整个大稀疏系统）</td>
+              <td>完整全局 Hessian</td>
+              <td>每步组装/分解全局系统，贵</td>
+            </tr>
+            <tr>
+              <td><b>VBD</b></td>
+              <td>真正的 $G$</td>
+              <td><b>primal</b></td>
+              <td>Gauss-Seidel + 顶点图着色并行</td>
+              <td>完整<b>局部</b> Hessian（per-vertex 3×3）</td>
+              <td>高刚度比 / 超硬高分辨率收敛慢</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>横着扫一遍就能读出全书主线：往右走，「最小化什么」从约束近似收敛到真正的 $G$；「保留多少 Hessian」从几乎不用爬到完整。VBD 是这张表里唯一同时拿到「真 $G$ + primal + Gauss-Seidel 收敛 + 着色并行」的一行——它的强项正是把别人各自的优点叠在一起，代价就落在最后一列那个高刚度比。</p>
+
         <h2 id="honest-limits">诚实地交代它的局限</h2>
         <p>没有银弹。VBD 的强项和弱项是同一枚硬币的两面——它是个<b>局部下降法</b>，这让它稳、可并行、扛质量比，但也带来三处真实的短板。</p>
 
@@ -59,6 +108,10 @@
 
         <h3 id="limit-stiffness-ratio">2. 高刚度比下收敛差</h3>
         <p>这是 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 专门考的软肋。注意它和高<b>质量</b>比是两回事：高质量比 VBD 不怕，高<b>刚度</b>比（<span class="term">high stiffness ratio</span>，比如相邻弹簧 1:10000）才是它的痛点。当系统里同时存在极软和极硬的部分，局部下降在硬的方向上步子迈不开、收敛极慢。TinyVBD 的 <code>initializeStiffRatio()</code>（交替刚度 1e4/1e8）就是用来亲手撞这堵墙的——你会看到它迟迟收不干净。</p>
+        <div class="callout warn">
+          <div class="c-h">高质量比 vs 高刚度比：一正一反，别一锅烩</div>
+          <p>这俩「高…比」最容易记混。高<b>质量</b>比 = VBD 的<b>强项</b>（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a> 那记 1000× 重锤稳如老狗）；高<b>刚度</b>比 = VBD 的<b>软肋</b>（<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 撞墙）。方向正好相反——一个它扛得住、一个它收不动，记的时候分开放。<a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 还会专门搭一座桥再纠一遍。</p>
+        </div>
 
         <h3 id="limit-collision">3. 惩罚式碰撞不保证无穿透</h3>
         <p>完整版 VBD 用<b>惩罚力</b>（penalty）处理接触：穿透越深、回推力越大。这在能量框架里很自然，但惩罚力是「软」的——它把穿透当作要最小化的能量项去压，而不是一道<b>硬约束</b>。于是理论上不保证零穿透，尤其在大穿透或高刚度比叠加时。TinyVBD 这根 strand 干脆没有碰撞，所以这一条你在 demo 里碰不到，但在用完整 VBD 时要心里有数。</p>

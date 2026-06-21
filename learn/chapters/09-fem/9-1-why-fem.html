@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>为什么需要 FEM：从弹簧到连续介质 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-1</div>
+        <h1>为什么需要 FEM：从弹簧到连续介质</h1>
+        <p class="lede">你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过 Neo-Hookean 元件用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力——它们从哪来？这一篇补上地基。先回答一个更朴素的问题：<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧，能量 $\tfrac12k(l-l_0)^2$ 干净利落，为什么还要请出 <span class="term">FEM</span>（finite element method）这套重家伙？答案是：弹簧只有<b>一个自由度</b>——长度。可一块真实的布、一团软体，要管的远不止「长短」。这一节讲清楚弹簧抓不住什么，以及连续介质如何把那个 $\tfrac12k(l-l_0)^2$ 升级成 $\int\psi(\mathbf F)\,dV$。</p>
+
+        <h2 id="spring-one-dof">弹簧的世界只有一根数轴：长度</h2>
+        <p>把 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧的能量再抄一遍：</p>
+        <div class="math-block">$$E=\tfrac12 k\,(l-l_0)^2,\qquad l=\lVert\mathbf x_a-\mathbf x_b\rVert.$$</div>
+        <p>注意它只依赖一个标量——当前长度 $l$。整根弹簧的「形变状态」被压缩成<b>一个数</b>：长度比 $l/l_0$。这是它的全部信息，也是它的全部局限。两个端点在三维里怎么摆、弹簧绕着自己的轴转多少、它周围的材料是被斜着剪了还是被压扁了——弹簧统统不知道，因为它只会量两端之间那段直线有多长。</p>
+        <p>对一根头发丝、一段绳子，这够用：它们本来就是一维的，「长短」几乎就是全部物理。可一旦材料有了<b>宽度、面积、体积</b>，麻烦就来了。</p>
+
+        <h2 id="three-blind-spots">弹簧的三个盲区：剪切、面积/体积、各向异性</h2>
+        <p>把一块连续材料想象成「一团点 + 点之间连一堆弹簧」，你立刻撞上三件弹簧根本看不见的事。</p>
+
+        <h3 id="blind-shear">盲区一：剪切（shear）</h3>
+        <p>取一个正方形小片，四角拉成<span class="term-i">平行四边形</span>——这是纯<span class="term">shear</span>（剪切）。关键在于：<b>四条边的长度可以一点没变</b>，只是角度斜了。三条边、四条边各挂一根弹簧，它们量的全是边长，边长没变 → 弹簧<b>零反应</b>。可真实材料被剪歪是要花能量、要回弹的（想想一块橡皮你斜着推它）。弹簧对剪切彻底失明。</p>
+
+        <h3 id="blind-volume">盲区二：面积与体积变化</h3>
+        <p>同理，一个三角形可以三条边长都不变，却被压扁成接近一条线（面积塌缩）；一个四面体可以所有边长都对，却被压成零体积甚至<b>翻面</b>。边弹簧只盯边长，对「面积比」「体积比」是瞎的——而真实材料强烈抗拒体积塌缩（你压不瘪一块水球，它会鼓到别处去）。这种「体积守恒」的脾气，弹簧网络编码不出来。</p>
+
+        <h3 id="blind-aniso">盲区三：各向异性（anisotropy）</h3>
+        <p>真实材料常常<b>方向不同、软硬不同</b>：肌肉顺纤维方向硬、横着软；织物经纬两个方向刚度不一样。这叫 <span class="term">anisotropy</span>。要在弹簧网络里凑出方向性，你得手工布不同刚度的弹簧、还得祈祷它们的合力恰好对——又脆又不准。连续介质则把方向性直接写进材料模型里，是一等公民。</p>
+
+        <div class="callout warn">
+          <div class="c-h">误区：弹簧网络密一点就能逼近连续体</div>
+          <p>很自然会想「弹簧不够，多加几根、加密网格不就逼近真材料了？」——加密能让<b>拉伸</b>逼近得更好，但<b>剪切和体积</b>这两个盲区是结构性的，不是密度问题。无论多密，一堆只认边长的弹簧对纯剪切仍然零反应、对等体积的翻面仍然无感。问题出在「只用标量长度描述形变」这个起点上，得换一个能描述<b>整块小材料怎么被线性变换</b>的量——那就是下一节的形变梯度 $\mathbf F$。</p>
+        </div>
+
+        <h2 id="continuum-F">连续介质的答案：用 F 描述「整块怎么变」</h2>
+        <p>连续介质力学换了个起点：不再问「这条边多长」，而问「rest 状态里的一小块材料，被映成 world 里的什么形状」。把 rest 坐标记作 $\mathbf X$、world 坐标记作 $\mathbf x$，这个映射的局部线性化就是<span class="term">deformation gradient</span>（形变梯度）：</p>
+        <div class="math-block">$$\mathbf F=\frac{\partial\mathbf x}{\partial\mathbf X}.$$</div>
+        <p>$\mathbf F$ 是个<b>矩阵</b>（2D 里 $2\times2$、3D 里 $3\times3$），它一口气编码了拉伸、剪切、旋转、面积/体积变化——上面那三个盲区，全在 $\mathbf F$ 里有据可查。弹簧那个标量长度比 $l/l_0$，其实就是 $\mathbf F$ 在一维退化成的「一个数」。从 1 个自由度升到一整个矩阵，就是「从弹簧到连续介质」这一步的全部含义。下一节 <a href="9-2-deformation-gradient.html">9.2</a> 专讲 $\mathbf F$ 怎么从顶点坐标算出来、怎么读它。</p>
+
+        <h2 id="energy-generalizes">弹性项的升级：从 Σ½k(l−l₀)² 到 ∫ψ(F)dV</h2>
+        <p>现在把视角拉回全书主线。无论弹簧还是连续体，我们解的<b>始终</b>是那个 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的</p>
+        <div class="math-block">$$\min_{\mathbf x}\;G(\mathbf x)=\underbrace{\tfrac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2}_{\text{惯性}}+\underbrace{\Psi(\mathbf x)}_{\text{弹性}}.$$</div>
+        <p>变的只有弹性项 $\Psi$。弹簧世界里它是一串标量能量求和：</p>
+        <div class="math-block">$$\Psi_{\text{spring}}=\sum_{\text{edges}}\tfrac12 k\,(l-l_0)^2.$$</div>
+        <p>连续介质把它升级成一个<b>积分</b>：每一小块材料 $dV$ 储存的能量是<span class="term">strain energy density</span>（应变能密度）$\psi(\mathbf F)$，对整块材料积分：</p>
+        <div class="math-block">$$\Psi_{\text{FEM}}=\int_\Omega \psi(\mathbf F)\,dV.$$</div>
+        <p>读这两行的对照：求和 $\to$ 积分；标量长度比 $\to$ 矩阵 $\mathbf F$；半刚度乘平方 $\to$ 一个更丰富的能量密度函数 $\psi$（它能同时罚拉伸、剪切、体积变化——三个盲区一次补齐）。本质一点没变：还是「储存的弹性能」。$\psi$ 该长什么样、有哪些经典选择，是 <a href="9-3-strain-energy.html">9.3</a> 的主题。</p>
+
+        <h2 id="discretize">FEM = 把积分离散成单元，每个单元一个常数 F</h2>
+        <p>$\int_\Omega\psi(\mathbf F)\,dV$ 是个连续积分，计算机不能直接算无穷多个点。<span class="term">FEM</span> 的全部技术内核就一句话：<b>把材料切成一个个小单元（element）</b>——2D 用三角形、3D 用四面体——在每个单元内部，假设形变是最简单的<b>线性</b>的，于是单元内 $\mathbf F$ 处处<b>相同、是个常数</b>（这叫 <span class="term">constant-strain</span> 单元）。积分就塌缩成对各单元求和：</p>
+        <div class="math-block">$$\Psi_{\text{FEM}}=\int_\Omega \psi(\mathbf F)\,dV\;\approx\;\sum_{e}V_0^e\,\psi(\mathbf F^e),$$</div>
+        <p>其中 $V_0^e$ 是单元 $e$ 的 rest 体积（2D 是面积）、$\mathbf F^e$ 是它那个常数形变梯度。看出来了吗——<b>这又变回了一串求和</b>，和弹簧的 $\sum\tfrac12k(l-l_0)^2$ 结构同形！每个单元就像一根「升级版弹簧」：它有自己的能量 $V_0^e\psi(\mathbf F^e)$，能对顶点求导出力与 Hessian，再装配进每个顶点的 $\mathbf f_i/\mathbf H_i$——和弹簧一模一样的口。装配怎么做，是 <a href="9-4-piola-assembly.html">9.4</a>；把它整个塞回 $\min G(x)$ 的全景，是 <a href="9-6-fem-is-minG.html">9.6</a>。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 弹簧就是一维的 FEM 单元</div>
+          <p>别把 FEM 当成另起炉灶的新东西——它就是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧的连续介质推广。弹簧是<b>一维的 FEM 单元</b>：它的「形变」就是长度比 $l/l_0$（$\mathbf F$ 退化成一个数），它的能量密度就是 $\tfrac12k(l-l_0)^2$，它把这份能量对两个端点求导、装配出力与 Hessian。FEM 做的事一字不差，只是把「长度比」升级成形变梯度 $\mathbf F$（一个矩阵，能看见剪切和体积），把标量能量升级成 $\psi(\mathbf F)$，把两端点升级成三角形/四面体的几个顶点。<b>$\min G(x)$ 没变、装配口没变、下降原理没变——变的只是单元内部那个能量长什么样。</b>你吃透了一根弹簧，就已经吃透了 FEM 的骨架。</p>
+        </div>
+
+        <h2 id="preview-1001">这套地基落在哪：10-1 的 Neo-Hookean</h2>
+        <p>这一篇讲的是 engine-agnostic 的地基——注意 TinyVBD 那根 strand 本身只有弹簧，并没有 FEM 单元。FEM 单元真正落地的地方，是 Newton 求解器里的 cloth 与 soft-body，也就是你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 已经见过的那些元件：</p>
+        <ul>
+          <li><b>Neo-Hookean membrane</b>（布的面内能量，$\mathbf F$ 是 $3\times2$）——它的 $\psi$、$I_c$、$J_s$，正是这一篇要从头讲清的应变能密度（<a href="9-3-strain-energy.html">9.3</a>）。</li>
+          <li><b>volumetric Neo-Hookean</b>（软体的体积能量，$\mathbf F$ 是 $3\times3$）——那个抗翻面的 $\ln J$ 项，下一篇你会看到它从哪来。</li>
+          <li><b>SPD projection</b>（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）——正是为 FEM 单元 Hessian 在压缩时不定而设的修复，和 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 压缩弹簧那个变负的 $\lambda_\perp$ 同源（<a href="9-4-piola-assembly.html">9.4</a> 会接回）。</li>
+        </ul>
+        <p>换句话说，10.1 是「应用 FEM」——它已经在用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力，但从没讲它们的来历。这一篇 FEM 篇就是给它补地基。读完 9.1–9.6，再回头看 10.1 的每个公式，你都能说出它从哪一步长出来。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 弹簧只有<b>一个自由度</b>（长度比 $l/l_0$），对剪切、面积/体积变化、各向异性这三件事结构性失明，加密网格也补不回来；(2) 连续介质用形变梯度 $\mathbf F=\partial\mathbf x/\partial\mathbf X$（一个矩阵）描述「整块小材料怎么被线性变换」，把弹性项从 $\sum\tfrac12k(l-l_0)^2$ 升级成 $\int_\Omega\psi(\mathbf F)\,dV$；(3) <span class="term">FEM</span> 就是把这个积分离散成一个个 constant-strain 单元（三角形/四面体），每单元一个常数 $\mathbf F$，能量求和 $\sum_e V_0^e\psi(\mathbf F^e)$——又变回弹簧那种「逐元件求和再装配」的口。</p>
+        <p>$\min G(x)$ 没动，只是弹性项从弹簧长成了连续体。下一节 <a href="9-2-deformation-gradient.html">9.2</a> 把这一篇反复点名的主角 $\mathbf F$ 立起来：它怎么从顶点坐标算（$\mathbf F=\mathbf D_s\mathbf D_m^{-1}$）、$J=\det\mathbf F$ 读什么、为什么刚体旋转不该花能量（极分解 $\mathbf F=\mathbf R\mathbf S$）。形变梯度立住了，应变能密度和 Piola 应力才有地方挂。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -50,6 +50,18 @@
           <p>VBD 的「无条件稳定」说的是<b>不会发散</b>——哪怕 1 次迭代，能量也只降不升。但「收敛到隐式欧拉的真解」是另一回事，需要足够多次迭代。高刚度比下，这条短链在 100 次迭代里看起来还在「软段过拉、硬段锁死」的半收敛态——它稳，但还没到位。</p>
         </div>
 
+        <h2 id="condition-number">把「条件数 ∝ 刚度比」算给你看：一个 2×2 toy-Hessian</h2>
+        <p>上面说「刚度比越悬殊、条件数越糟」，这是个能<b>手算</b>的论断，不必只当口号。我们摆一个最小的自洽例子：一个被两条共线弹簧夹住的中间顶点，一条软、一条硬。只看这个顶点的局部 Hessian——为了能写在一行里，把它约化成沿弹簧方向的 <b>1 自由度</b>，再叠回惯性，就得到一个 2×2（或退化成标量比）的曲率对照。</p>
+        <p>回忆 <a href="../04-code/4-3-solve.html">4.3</a>/<a href="../01-foundations/1-4-spring-energy.html">1.4</a>：弹簧 Hessian 沿弹簧方向的特征值是 $k$（拉伸方向永远是「硬」的那一支）。设软弹簧 $k_\text{soft}=10^4$、硬弹簧 $k_\text{hard}=10^8$，再叠上惯性 $m/h^2$（用共享参数集 $m=0.1,\ h=1/60$ → $m/h^2 = 0.1\times3600 = 360$）。那么这个中间顶点在「软方向」与「硬方向」上的有效曲率分别是：</p>
+        <div class="math-block">$$\mu_\text{soft} = \frac{m}{h^2} + k_\text{soft} = 360 + 10^4 \approx 1.04\times10^4,\qquad \mu_\text{hard} = \frac{m}{h^2} + k_\text{hard} = 360 + 10^8 \approx 1.0\times10^8$$</div>
+        <p>把这两支当成一个对角 2×2 Hessian $\mathbf H=\mathrm{diag}(\mu_\text{soft},\mu_\text{hard})$，它的<span class="term">条件数</span>就是大小特征值之比：</p>
+        <div class="math-block">$$\kappa(\mathbf H) = \frac{\lambda_\max}{\lambda_\min} = \frac{\mu_\text{hard}}{\mu_\text{soft}} = \frac{1.0\times10^8}{1.04\times10^4} \approx 9.6\times10^3 \;\approx\; \frac{k_\text{hard}}{k_\text{soft}} = 10^4$$</div>
+        <p>看清楚这个数：条件数 $\approx 9.6\times10^3$，<b>几乎就是刚度比 $k_\text{hard}/k_\text{soft}=10^4$</b>（差的那点正是惯性项 $m/h^2$ 把软支抬高了一丢丢）。这就把「条件数 $\propto$ 刚度比」从断言变成了算术：硬支的曲率被刚度撑到 $10^8$，软支只有 $\sim10^4$，两者一比就是 $\sim10^4$。而对局部下降 / Gauss-Seidel 这类一阶迭代法，<b>收敛所需的迭代数随条件数 $\kappa$ 增长</b>——$\kappa\approx10^4$ 时要把误差压下去就得成千上万次 sweep。这正是下面那些 <code>_converged</code> 变体要把迭代数拉到 20000 的算术根源。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>这里的 2×2 是把「中间顶点夹在一软一硬两弹簧之间」<b>刻意约化到两个方向的标量曲率</b>得到的示意结构，真实 $\mathbf H$ 是 3×3、还含外积项与邻接耦合。<b>能写准也值得记的是趋势</b>：条件数随刚度比同量级增长（$\kappa\approx k_\text{hard}/k_\text{soft}$），惯性项 $m/h^2$ 只对软支有可见抬升、对 $10^8$ 的硬支几乎可忽略。具体小数会随 $m,h$ 缩放，但「条件数 ∝ 刚度比 → 迭代数随之暴涨」这条因果链是真的。</p>
+        </div>
+
         <h2 id="commented-variants">代码里那些注释掉的「converged」变体</h2>
         <p>这正是 <code>initializeStiffRatio()</code> 里一堆被注释掉的配置存在的理由。它们刻意把迭代数从 100 拉到 <b>20000</b>，就是为了让你看清：要让这条软硬链真正收敛到位，到底要花多少次迭代。</p>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · initializeStiffRatio()</span><button class="cp">复制</button></div><pre><code>//int numVerts = 3;
@@ -65,6 +77,12 @@ int numVerts = 5;            // 当前生效的配置
 params.numIterations = 100;
 params.accelerationRho = 0.0;</code></pre></div>
         <p>把这些 <code>_converged</code> 变体（20000 迭代）跑出来的结果，和默认的 100 迭代结果对比，你就能直观看到：100 次迭代下软段还在过拉，而到了 20000 次它才真正绷紧到正确位形。换言之，<b>这些注释不是废代码，而是论文弱点的可复现证据</b>。另外还有把 <code>accelerationRho</code> 调到 0.08 的「accelerated」变体——Chebyshev 加速（<a href="../04-code/4-4-chebyshev.html">4.4</a>）能缓解、但不能根治高刚度比带来的慢收敛。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">亲手把迭代滑块从 100 推到很大，看半收敛态绷紧</span></div>
+          <div class="lab-body" data-widget="strand-lab"></div>
+          <div class="lab-cap">把链调硬（高刚度）、把迭代数压到 <b>100 上下</b>，你会看到本节说的「半收敛态」：链还没绷到正确位形、软段被过度拉伸；再把迭代滑块往大里推（对应源码那些 <b>20000</b> 迭代的 <code>_converged</code> 变体），同一根链才慢慢收紧到位。这就是「稳 ≠ 收敛快」与「条件数 ∝ 刚度比 → 迭代数暴涨」的现场版——求解器一直没爆，只是离真解还差很多次 sweep。</div>
+        </div>
 
         <h2 id="contrast">对照：质量比轻松、刚度比吃力</h2>
         <p>把 <a href="5-1-mass-ratio.html">5.1</a> 和本节并排，VBD 的性格就清楚了：</p>

@@ -55,6 +55,21 @@
 }</code></pre></div>
         <p>对照递推：<code>order</code> 是迭代序号 $n$，<code>pho</code> 是 $\rho$（变量名拼成了 pho），<code>prevOmega</code> 是 $\omega_{n-1}$。<code>SQR(pho)</code> 就是 <a href="4-1-data-structures.html">4.1</a> 那个平方宏算出的 $\rho^2$。三个分支正好是 $\omega_1=1$、$\omega_2=\frac{2}{2-\rho^2}$、$\omega_n=\frac{4}{4-\rho^2\omega_{n-1}}$。注意它<b>需要上一次的 $\omega$</b> 喂回来——主循环里就是把上一轮的 <code>omega</code> 再传进来（<a href="#wire">见下</a>）。</p>
 
+        <h3 id="omega-table">代数字：ρ=0.95 时 ω 头几项</h3>
+        <p>递推式写出来了，但 $\omega$ 实际爬到多高、怎么稳定？取 $\rho=0.95$（$\rho^2=0.9025$）跑头几项，把它代成可复算的数（示例 $\rho=0.95$）：</p>
+        <table>
+          <thead>
+            <tr><th>$n$</th><th>公式</th><th>代入</th><th>$\omega_n$</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>$\omega_1=1$</td><td>—</td><td>$1$</td></tr>
+            <tr><td>2</td><td>$\dfrac{2}{2-\rho^2}$</td><td>$\dfrac{2}{2-0.9025}=\dfrac{2}{1.0975}$</td><td>$\approx 1.822$</td></tr>
+            <tr><td>3</td><td>$\dfrac{4}{4-\rho^2\omega_2}$</td><td>$\dfrac{4}{4-0.9025\times1.822}=\dfrac{4}{4-1.645}$</td><td>$\approx 1.698$</td></tr>
+            <tr><td>4</td><td>$\dfrac{4}{4-\rho^2\omega_3}$</td><td>$\dfrac{4}{4-0.9025\times1.698}=\dfrac{4}{4-1.533}$</td><td>$\approx 1.621$</td></tr>
+          </tbody>
+        </table>
+        <p>读这串数：$\omega$ 第二项一下冲到 $1.822$（外推最猛），随后回落、<b>稳定收敛到一个 $>1$ 的定值</b>（这里约 $1.6$ 上下）。$\omega>1$ 才外推、$\rho$ 越大冲得越高——这正好和上面 warn callout 的「推到 0.99 翻车」形成定量对照：$\rho=0.95$ 时 $\omega$ 收敛得很温和，再往 1 推就会把 $\omega$ 抬到外推过猛、开始振荡。</p>
+
         <h2 id="apply">applyAccelerator：外推那一步</h2>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · applyAccelerator()</span><button class="cp">复制</button></div><pre><code>void applyAccelerator(FloatingType omega) {
     if (omega &gt; 1.f)

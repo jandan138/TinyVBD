@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="9-2">
+<body data-root="../../" data-section="10-2">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,7 +23,7 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 9 · 9-2</div>
+        <div class="eyebrow">Part 10 · 10-2</div>
         <h1>SPD 投影与 Rayleigh damping</h1>
         <p class="lede">在 TinyVBD 那根 strand 上，我们做了一个大胆的决定：解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>对局部 Hessian 做 <span class="term">SPD projection</span>，全靠惯性项 + 行列式阈值 + 单调下降三层兜底（<a href="../03-vbd/3-5-stability.html">3.5</a>）。那是因为 strand 只有弹簧、只有一种会变负的特征值，惯性项几乎总能压住。可一旦上了 Newton 的 production 规模——cloth 的 Neo-Hookean membrane、tet 的 volumetric、bending、还有接触——元件的 Hessian 不定起来更凶、更频繁。这一节看 Newton 怎么在每个元件层面把这件事按死：把 per-element Hessian 直接<b>投成 SPD</b>，再配上一个干净的 Rayleigh damping。</p>
 
@@ -40,6 +40,26 @@
 s_clamp = wp.max(0.0, s)   # s = lmbd_nh * (J_s - alpha)
 r = s_clamp * inv_J_s
 c1 = lmbd_nh - r</code></pre></div>
+
+        <h2 id="clamp-by-hand">手算一遍钳取：压缩元件的两个特征值</h2>
+        <p>$\max(0,\cdot)$ 听着抽象，代两个特征值进去就一目了然。复用 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个弹簧 Hessian $\mathbf H_{aa}=k\big[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})\big]$——它有两类特征向量，特征值闭式可写：沿弹簧方向 $\hat{\mathbf d}$ 的是 $k$，垂直方向的是 $k(1-l_0/l)$。取一个<b>被压缩</b>的元件（当前长 $l&lt;l_0$，比如 $l_0/l=1.25$），并把 $k$ 归一到 $1$ 让数字干净：</p>
+        <div class="math-block">$$\lambda_\parallel=k=+1\ (\text{沿 }\hat{\mathbf d}),\qquad \lambda_\perp=k\Big(1-\frac{l_0}{l}\Big)=1\times(1-1.25)=-0.25\ (\text{垂直 }\hat{\mathbf d})$$</div>
+        <p>沿弹簧方向永远硬（$+1$，拉/压都抗）；垂直方向因为被压缩而<b>翻负</b>（$-0.25$）——这就是 <span class="term">buckling</span> 方向，矩阵在这里不定。没有 SPD 投影，牛顿步就可能沿这个负特征值方向跑出上坡。Newton 的做法是把惹事的那一项系数钳到非负，等价于把这个负特征值<b>拍到 0</b>：</p>
+        <div class="math-block">$$\lambda_\perp^{\text{clamp}}=\max(0,\,-0.25)=0\quad\Rightarrow\quad \text{特征值变成}\ \{+1,\ 0,\ 0\}\ (\text{半正定})$$</div>
+        <p>钳完这块 Hessian 只剩半正定（最小特征值 $0$，还差一口气到正定）。这时 VBD 自带的<b>惯性项接力</b>：$\frac{m}{h^2}\mathbf I$ 给每个方向都加一个严格为正的底。沿用全书参数 $m=1,\ h=\tfrac{1}{60}$，惯性底是 $\frac{m}{h^2}=3600$，于是合成后的特征值是</p>
+        <div class="math-block">$$\{+1,0,0\}+3600\cdot\{1,1,1\}=\{3601,\ 3600,\ 3600\}\;>\;0$$</div>
+        <p>三个特征值全严格为正——$\mathbf H_i$ 正定，$3\times3$ 求逆稳稳可解、$\Delta\mathbf x$ 是可靠下降方向。两道一起看：<b>SPD 投影先把 $-0.25$ 拍到 $0$（半正定），惯性项再把 $0$ 顶成 $3600$（正定）</b>。对照 strand：TinyVBD 跳过第一道、只靠惯性项硬扛——单根弹簧时 $3600$ 远大于 $|{-0.25}|$（甚至 $1.4$ 那种 $k=100$ 的 $\lambda_\perp=-100$ 也压得住，因为 $3600\gg100$），所以赌得过；但 production 多元件把许多负特征值叠到一个顶点上时，惯性底未必次次够，才必须先投影。</p>
+
+        <div class="callout note">
+          <div class="c-h">这组特征值是自洽示例，量级随材料/单位变</div>
+          <p>$+1/-0.25$、惯性底 $3600$ 是<b>为手算挑的干净自洽数</b>（$k$ 归一到 $1$、用全书的 $m=1,h=\tfrac1{60}$）。真实 membrane 的负特征值来自 $s=\lambda_\text{NH}(J_s-\alpha)$、量级随 Lamé 参数与网格尺度缩放，可能远大于这里的 $0.25$。能写准也值得记的是<b>机理</b>：压缩 → 垂直特征值翻负 → $\max(0,\cdot)$ 拍到 0（半正定）→ 惯性项 $\frac{m}{h^2}\mathbf I$ 抬成正定。具体数字会变，这条链不变。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">拖动弹簧，看垂直特征值怎么翻负</span></div>
+          <div class="lab-body" data-widget="spring-hessian"></div>
+          <div class="lab-cap">把弹簧拖到<b>压缩</b>（当前长 &lt; rest 长），看垂直方向的特征值由正转负——正是上面手算的 $-0.25$ 那个分量的现场版。这块不定的 Hessian，就是 Newton 要 $\max(0,\cdot)$ 投影、再靠惯性项 $\frac{m}{h^2}\mathbf I$ 顶回正定的对象。</div>
+        </div>
 
         <h2 id="stable-nh">stable Neo-Hookean：让 rest state 无应力</h2>
         <p>上面那个 $\lambda_\text{NH}$ 不是随手写的 Lamé 参数。Newton 按 <span class="term">Smith 2018 §3.4</span> 的 stable Neo-Hookean 约定，把用户给的 Lamé 参数换算成 NH 能量里真正用的参数：</p>
@@ -67,7 +87,7 @@ c1 = lmbd_nh - r</code></pre></div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) production VBD 在<b>每个元件</b>把 Hessian 投成 SPD（membrane 用 $s_\text{clamp}=\max(0,\lambda_\text{NH}(J_s-\alpha))$ 这种 tight PSD clamp），从源头掐掉压缩带来的负特征值，再让 VBD 自带的惯性项 $\frac{m_i}{h^2}\mathbf I$ 把半正定顶成正定；(2) stable Neo-Hookean 用 $\lambda_\text{NH}=\lambda_\text{Lamé}+\mu_\text{Lamé}$（Smith 2018 §3.4）保证 rest state 无应力；(3) 阻尼用无量纲 Rayleigh 约定 $D=k_d\cdot k_e$，比 TinyVBD 把阻尼直接塞进弹簧力更规整、可移植，但要记得它是相对刚度的系数。</p>
-        <p>到这里，元件的力、Hessian、SPD 投影、阻尼都齐了——一个 cloth/soft body 顶点该装配的能量项全部就位。但 production 仿真还差最后、也最难的一块：物体不能互相穿插。下一节 <a href="../09-elasticity-collision/9-3-collision.html">9.3</a> 进入 <span class="term">self-collision</span> 与 <span class="term">penetration-free</span>——Newton 怎么用 BVH 检测 vertex-triangle / edge-edge 接触、怎么在每色 sweep 后做保守截断保证不穿透，而这正是 TinyVBD 那根 strand <b>完全没有</b>的一整块世界。</p>
+        <p>到这里，元件的力、Hessian、SPD 投影、阻尼都齐了——一个 cloth/soft body 顶点该装配的能量项全部就位。但 production 仿真还差最后、也最难的一块：物体不能互相穿插。下一节 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 进入 <span class="term">self-collision</span> 与 <span class="term">penetration-free</span>——Newton 怎么用 BVH 检测 vertex-triangle / edge-edge 接触、怎么在每色 sweep 后做保守截断保证不穿透，而这正是 TinyVBD 那根 strand <b>完全没有</b>的一整块世界。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

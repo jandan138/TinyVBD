@@ -165,9 +165,102 @@
           </tbody>
         </table>
 
+        <h2 id="contact-ipc">接触与 IPC（Part 12）</h2>
+        <p>原书那根 strand 没有碰撞，所以上面几张表里没有任何接触术语。Part 12「IPC 篇」一口气引入了一整套接触词汇——下面这些就是你读到 log-barrier / CCD / PSD 投影时会想回查的条目。IPC 一侧的论文出处见 <a href="a-7-ipc-references.html">a-7 参考文献</a>。</p>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">Incremental Potential Contact</span> (IPC)</td>
+              <td>增量势能接触：把接触写成 primal interior-point 的 log-barrier、注入 $\min G(\mathbf x)$，用 CCD-filtered line search 保证每步 intersection-free。</td>
+              <td><a href="../12-ipc/12-1-why-ipc.html">12.1</a> · <a href="../12-ipc/12-2-barrier-energy.html">12.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">interior-point method</span></td>
+              <td>内点法：在可行域内部迭代、靠 barrier 阻止越界，永远不碰约束边界。IPC 处理接触的范式。</td>
+              <td><a href="../12-ipc/12-1-why-ipc.html">12.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">log-barrier</span> $b(d,\hat d)$</td>
+              <td>对数障碍能量：作用于无符号距离 $d$，$d\to0$ 时发散到 $\infty$、$d\ge\hat d$ 时为 0，设计成 $C^2$ 以进 Newton。</td>
+              <td><a href="../12-ipc/12-2-barrier-energy.html">12.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">activation distance</span> $\hat d$</td>
+              <td>激活阈值：距离 $<\hat d$ 才开始发力（barrier 非零）的用户参数。</td>
+              <td><a href="../12-ipc/12-2-barrier-energy.html">12.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">intersection-free</span></td>
+              <td>无穿透保证：IPC 的核心卖点——不是事后兜底，而是整个非线性迭代中始终保持可行。</td>
+              <td><a href="../12-ipc/12-1-why-ipc.html">12.1</a> · <a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">unsigned distance</span> $d$</td>
+              <td>无符号距离：一对 surface primitive（点-三角 / 边-边）间的最近距离，barrier 的自变量。</td>
+              <td><a href="../12-ipc/12-3-distance-geometry.html">12.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">distance type</span> / point-triangle / edge-edge</td>
+              <td>距离类型：接触按几何分点-三角与边-边两大类；最近点可退化到 point-edge / point-point。</td>
+              <td><a href="../12-ipc/12-3-distance-geometry.html">12.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">barycentric coordinates</span> $\lambda_a,\lambda_b,\lambda_c$</td>
+              <td>重心坐标：最近点在三角上的权重；距离梯度按它落到各顶点（「谁近分得多」）。</td>
+              <td><a href="../12-ipc/12-3-distance-geometry.html">12.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">PSD projection</span></td>
+              <td>半正定投影：把局部 Hessian 的负特征值钳到 0（$\max(0,\lambda_i)$）保证下降方向；接回原书 10-2 的 SPD 投影。</td>
+              <td><a href="../12-ipc/12-4-barrier-grad-psd.html">12.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">CCD</span> (continuous collision detection)</td>
+              <td>连续碰撞检测：沿运动轨迹求最大不穿透步长 $t^\star$，是 intersection-free 的几何来源。</td>
+              <td><a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">filtered line search</span></td>
+              <td>CCD 过滤线搜索：用 $t^\star$ 把 Newton 步长截进可行域，$\alpha=\min(\alpha_N, c\,t^\star, \alpha_{CFL})$。</td>
+              <td><a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">CFL bound</span> $\alpha_{CFL}$</td>
+              <td>CFL 式保守接触界：进一步限制单步位移的保守上限。</td>
+              <td><a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">Coulomb friction</span> (lagged / mollified)</td>
+              <td>库仑摩擦：IPC 在同一优化框架内处理，用 lagged potential 固定法向力/接触集、并把静-动过渡光滑化（mollified）成可微。</td>
+              <td><a href="../12-ipc/12-6-friction.html">12.6</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">mollifier</span></td>
+              <td>软化子：随退化程度（如 edge-edge 平行）衰减的权重，压住病态梯度贡献。</td>
+              <td><a href="../12-ipc/12-3-distance-geometry.html">12.3</a> · <a href="../12-ipc/12-6-friction.html">12.6</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">global sparse Newton</span></td>
+              <td>全局稀疏牛顿：IPC 每次迭代解整个稀疏系统 $\mathbf H\mathbf p=\mathbf f$，对照 VBD 的 per-vertex 3×3 局部牛顿。</td>
+              <td><a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> · <a href="../12-ipc/12-9-solver-cost.html">12.9</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">CHOLMOD</span></td>
+              <td>稀疏 Cholesky 库（挂 MKL LAPACK/BLAS），IPC 做符号分解 + 并行数值分解用它。</td>
+              <td><a href="../12-ipc/12-9-solver-cost.html">12.9</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">CSR</span></td>
+              <td>压缩稀疏行格式：装配全局 Hessian 的存储格式。</td>
+              <td><a href="../12-ipc/12-9-solver-cost.html">12.9</a></td>
+            </tr>
+          </tbody>
+        </table>
+
         <div class="callout note">
           <div class="c-h">想要符号和公式而不是文字？</div>
-          <p>这张表偏向「术语 → 意思」。如果你要的是「符号 → 公式」的速查（$G$、$\mathbf f_i$、$\mathbf H_i$、$\omega_n$ 递推、XPBD 的 $\Delta\lambda$ 等），去隔壁的 <a href="a-2-cheatsheet.html">公式与符号速查</a>。要追到原始论文，看 <a href="a-3-references.html">参考文献</a>。</p>
+          <p>这张表偏向「术语 → 意思」。如果你要的是「符号 → 公式」的速查（$G$、$\mathbf f_i$、$\mathbf H_i$、$\omega_n$ 递推、XPBD 的 $\Delta\lambda$、barrier $b(d,\hat d)$ 等），去隔壁的 <a href="a-2-cheatsheet.html">公式与符号速查</a>。要追到原始论文，看 <a href="a-3-references.html">参考文献</a>；IPC 一侧的论文出处见 <a href="a-7-ipc-references.html">a-7 参考文献</a>。</p>
         </div>
       </article>
     </main>

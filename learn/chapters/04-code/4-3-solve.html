@@ -134,6 +134,11 @@ strand.vertex(iV) += dx;</code></pre></div>
         <div class="math-block">$$\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i \mathrel{+}= \Delta\mathbf x_i$$</div>
         <p><code>colPivHouseholderQr().solve(f)</code> 是 Eigen 解这个 3×3 系统 $\mathbf H_i\,\Delta\mathbf x = \mathbf f_i$ 的方式（列主元 QR，对 3×3 又稳又快，不必显式求逆）。<code>strand.vertex(iV) += dx</code> 借助 <a href="4-1-data-structures.html">4.1</a> 的「返回列引用」<b>就地</b>把顶点挪过去。就地是关键：循环里下一个顶点 <code>iV+1</code> 计算它的 <code>diff</code> 时，立刻读到 <code>iV</code> 的<b>新</b>位置——这就是 <span class="term">Gauss-Seidel</span>（用最新值），而非 Jacobi（统一用旧值）。<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a> 讲的就是怎么靠图着色在 GPU 上既保 Gauss-Seidel 的收敛、又拿到并行。</p>
 
+        <div class="callout note">
+          <div class="c-h">把这一步 3×3 放到全程尺度（呼应 0-2）</div>
+          <p>一次 sweep = <code>numVerts-1</code> 次这样的 3×3 QR 解（跳过 pinned 0 号）。默认 20 顶点 strand ⇒ 每 sweep <b>19</b> 次；每帧 100 次迭代、共 299 帧解算，整次运行约 <b>$19\times100\times299\approx 5.7\times10^5$</b> 次 3×3 求解。每次都廉价到近乎免费——这正是 block descent 用「小而多」换掉 Newton「大而少」的算术（数字为默认参数下的自洽示例）。</p>
+        </div>
+
         <div class="callout">
           <div class="c-h">一次 sweep 还不够：solve() 要被调很多次</div>
           <p><code>solve()</code> 只走<b>一遍</b>所有顶点（一次 sweep）。<a href="4-5-main-loop.html">4.5</a> 的主循环每个 substep 会调它 <code>numIterations</code> 次（默认 100），让 $G$ 一遍遍下降、逼近 $\arg\min G$。单次 sweep 不解出精确解，但 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 保证了每个局部牛顿步都让全局 $G$ 单调下降——所以反复扫就稳稳收敛。想看慢动作的逐顶点能量下降，回 <a href="../03-vbd/3-1-block-descent.html">3.1</a> 的 <code>vbd-sweep</code> 部件。</p>

@@ -186,6 +186,15 @@ mark { background: color-mix(in srgb, var(--interactive) 22%, transparent); colo
 .bridge.tinyvbd { border-color: var(--tv); background: var(--tv-soft); }
 .bridge.tinyvbd .c-h { color: var(--tv); }
 .bridge.tinyvbd .tag { background: var(--tv); color: #fff; }
+.bridge.fem { border-color: var(--interactive); background: var(--interactive-soft); }
+.bridge.fem .c-h { color: var(--interactive); }
+.bridge.fem .tag { background: var(--interactive); color: #fff; }
+.bridge.vbd { border-color: var(--accent); background: var(--accent-soft); }
+.bridge.vbd .c-h { color: var(--accent); }
+.bridge.vbd .tag { background: var(--accent); color: #fff; }
+.bridge.ipc { border-color: var(--warn); background: var(--warn-soft); }
+.bridge.ipc .c-h { color: var(--warn); }
+.bridge.ipc .tag { background: var(--warn); color: #fff; }
 .bridge p:last-child { margin-bottom: 0; }
 
 /* ---------- 数学块 ---------- */

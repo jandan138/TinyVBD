@@ -71,10 +71,17 @@
             <tr><td>5 verts / 20000 / ρ=0.0<br><code>_converged</code></td><td>当前 5 顶点链的收敛版</td><td>和默认 5 verts / 100 对比，量出收敛差距</td></tr>
           </tbody>
         </table>
+
+        <div class="callout note">
+          <div class="c-h">跑出来该长什么样：100 迭代 vs 20000 迭代</div>
+          <p>表里 <code>_converged</code> 行只说「真收敛要多少迭代」，但没告诉你屏幕上该看到什么差别、怎么判断「还没收敛」。给一句可观测判据：在那条高刚度比链上跑 <b>100 迭代</b>，你会看到 <b>软段（<code>1e4</code>）被重力过度拉长、硬段（<code>1e8</code>）几乎纹丝不动</b>——残余的约束违反肉眼可见，软段明显比 rest length 长一截。把迭代拉到 <b>20000</b>，软段才被一点点绷回接近 rest length，整条链稳定下来。</p>
+          <p>关键是：这个「过拉 + 迟钝」<b>不是不稳定</b>。能量 $G$ 在两种迭代下都<b>始终在下降</b>，链既不爆也不抖——差的只是<b>精度没到</b>，迭代被高刚度比拖住、信息在软硬交界处传得太慢（<a href="5-2-stiffness-ratio.html">5.2</a>）。这正对应 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 要点破的那句「无条件稳定 ≠ 无条件正确」：稳定保证它不炸，但不保证 100 迭代就解对。看到软段过拉别急着以为求解器坏了——多半只是迭代不够。</p>
+        </div>
+
         <p>另外还有几个旋钮散落在各处，都可以单独拨动：</p>
         <ul>
           <li><b><code>params.numIterations</code></b>（默认 100）：每帧解多少次。压低看数值阻尼变大、链变软，但永不爆（<a href="5-3-skip-spring-iterations.html">5.3</a>）。</li>
-          <li><b><code>params.substeps</code></b>（默认 1）：把一帧切成几段，主循环里 <code>dt/=substeps</code>。源码 outPath 注释里那个 <code>10substeps</code> 变体就是把它设到 10——更小的 $h$ 让 $G$ 更好解。</li>
+          <li><b><code>params.substeps</code></b>（默认 1）：把一帧切成几段，主循环里 <code>dt/=substeps</code>。源码 outPath 注释里那个 <code>10substeps</code> 变体就是把它设到 10——更小的 $h$ 让 $G$ 更好解。算一笔：惯性项权重是 $1/h^2$，$h\to h/10$ 让 $1/h^2$ 涨 $100\times$（$3600\to3.6\times10^5$），惯性碗陡 100 倍 → 局部牛顿步条件数改善、$G$ 更凸更好解。「更小 $h$ 更好解」落到的就是 $1/h^2$ 的这个具体倍数。</li>
           <li><b><code>params.useAcceleration</code> + <code>params.accelerationRho</code></b>：开关 Chebyshev 加速并调谱半径估计 ρ。ρ 太大会 overshoot/振荡（<a href="../04-code/4-4-chebyshev.html">4.4</a>）。</li>
           <li><b><code>addSkipSpring</code> / <code>skipSpringStrength</code></b>：开关 / 调弯曲刚度。关掉看链如何自折叠卷曲（<a href="5-3-skip-spring-iterations.html">5.3</a>）。</li>
           <li><b>刚度比 <code>stiffness1 / stiffness2</code></b>（<code>stiffnessRatio48</code> 那一族）：把 1e4 / 1e8 改近一点，看收敛变快；改远一点，看 VBD 更吃力。</li>

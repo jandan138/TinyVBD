@@ -57,6 +57,23 @@ strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;</code></pre></d
         </ul>
         <p>所以「谁赢」从来不是绝对的，而是 $\frac{m}{h^2}$ 与 $k$ 的较量。同一根弹簧，挂个轻球它几乎拉不动惯性（球径直漂向 $\mathbf y$），挂个重球它却能把球硬生生拽回 rest 长度——因为重球那项 $\frac{m}{h^2}$ 把惯性碗压得太深。这就是为什么一根头发上「轻的中段」和「重的末端」在同一步里表现得判若两物。</p>
 
+        <h3 id="tug-numbers">把「数量级」算成具体数字</h3>
+        <p>「$\frac{m}{h^2}$ 和 $k$ 较量」别停在比喻——代进书里反复用的那组数，一眼看清谁碾谁。时间步 $h=1/60$，于是 $\frac{1}{h^2}=3600$。两类顶点：</p>
+        <div class="math-block">$$\text{轻顶点 }m=1:\ \frac{m}{h^2}=3600,\qquad\text{重末端 }m=1000:\ \frac{m}{h^2}=3.6\times10^6.$$</div>
+        <p>再摆两根弹簧：软 $k=10^3$、硬 $k=10^8$（对应 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 的高刚度比）。两两一比，胜负就是纯算术：</p>
+        <table>
+          <thead><tr><th>顶点</th><th>惯性系数 $\frac{m}{h^2}$</th><th>对软弹簧 $k=10^3$</th><th>对硬弹簧 $k=10^8$</th></tr></thead>
+          <tbody>
+            <tr><td>轻 $m=1$</td><td>$3600$</td><td>$3600:10^3\approx3.6{:}1$ → 惯性略占上风</td><td>$3600:10^8$ → 弹簧碾压，被拽回 rest</td></tr>
+            <tr><td>重 $m=1000$</td><td>$3.6\times10^6$</td><td>$3.6\times10^6:10^3=3600{:}1$ → <b>惯性完胜</b>，重端径直漂向 $\mathbf y$</td><td>$3.6\times10^6:10^8\approx1{:}28$ → 硬弹簧反超，勉强拽得动</td></tr>
+          </tbody>
+        </table>
+        <p>读出来：重端碰软弹簧，惯性碗 $3.6\times10^6$ 把 $k=10^3$ 压成 $3600{:}1$ 的悬殊——重端几乎不理弹簧、径直漂向惯性预测 $\mathbf y$；只有把弹簧换成 $k=10^8$，弹性才反超那口深井，把重端拽回 rest。同一根弹簧、同一个 $h$，仅仅把质量从 1 换成 1000，「谁赢」就彻底反转。三个数量级的差距，从此是你能在计算器上复算的具体倍数，而不是一句口号。</p>
+        <div class="callout note">
+          <div class="c-h">这些数是为讲解构造的自洽示例</div>
+          <p>上表的 $3600$、$3.6\times10^6$ 等都由 $h=1/60$、$m\in\{1,1000\}$、$k\in\{10^3,10^8\}$ 直接算出、可复算；但它们的<b>绝对量级会随单位与条件数 $\kappa$ 缩放</b>，重点是<b>比值与谁压过谁</b>的趋势，不是把某个具体数当物理常数。刚度/质量取值沿用全书共享参数集，方便和 <a href="../05-experiments/5-1-mass-ratio.html">5.1</a>、<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 的实验互相印证。</p>
+        </div>
+
         <div class="callout note">
           <div class="c-h">这也解释了隐式欧拉的「数值阻尼」从哪来</div>
           <p><a href="../01-foundations/1-1-time-integration.html">1.1</a> 说隐式欧拉会偷偷吃能量。从拔河看就很自然：每一步，最优解都是惯性预测 $\mathbf y$ 和弹性 rest 之间的<b>折中</b>，谁也没完全得逞。物体既没沿惯性走满、也没完全弹回——这份「各退一步」累积起来，宏观上就表现为振幅被一点点磨小，即数值阻尼。$h$ 越大，惯性碗越浅（$\frac{m}{h^2}$ 越小），折中越偏向弹性，阻尼越明显。</p>
@@ -65,6 +82,12 @@ strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;</code></pre></d
         <h2 id="mass-ratio-preview">当质量悬殊：拔河变成一边倒</h2>
         <p>现在把两个质量差异极大的顶点放进同一根 strand——比如 TinyVBD 默认的 <code>initializeTilted()</code>，前 19 个顶点 $m_0=1$、末端 $m_1=1000$（<span class="term">high mass ratio</span> $1000{:}1$）。轻顶点的惯性碗浅（$\frac{m}{h^2}$ 小），弹簧轻松摆布它；重末端的惯性碗深得离谱，连 $10^8$ 刚度的弹簧都未必一步拽得动它。在同一次求解里，这两类顶点的「拔河力量对比」差了三个数量级。</p>
         <p>能不能在这种悬殊下还稳稳收敛，是区分各路解法的试金石。剧透一点 <a href="../05-experiments/5-1-mass-ratio.html">5.1</a>：XPBD 那类<span class="term-i">按逆质量 $1/m$ 分配修正</span>的对偶解法，会被重物压垮（轻物分到的修正过大而乱跳）；而 VBD 是直接解每个顶点位置的<span class="term-i">primal</span> 方法，每个顶点用自己真实的 $\frac{m}{h^2}$ 当锚，质量越悬殊反而各算各的、互不拖累。这场「惯性 vs 弹性」的拔河，正是高质量比实验的微观舞台。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">拖动质量比，看惯性碗谁深谁浅</span></div>
+          <div class="lab-body" data-widget="mass-ratio"></div>
+          <div class="lab-cap">把两端质量比从 1:1 拉到 1000:1：重端惯性系数 $\frac{m}{h^2}$ 暴涨、碗深得弹簧拽不动，轻端碗浅、被弹簧任意摆布——正是上表 $3600$ vs $3.6\times10^6$ 的现场版。</div>
+        </div>
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> PBD 把惯性碗拆了，所以它没有「真正的锚」</div>

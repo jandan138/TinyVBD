@@ -30,12 +30,12 @@
         <h2 id="same-shape">同一个形状，只是搬上了 GPU</h2>
         <p>全篇主线再说一次：<b>$\min G(\mathbf x)$ 没变</b>。变的只是「一根 strand 串行扫 → 一块 cloth 在 GPU 上按 color 并行扫」。落到单个顶点的那一步牛顿，公式和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 完全一致——力是局部能量的负梯度，Hessian 是它的二阶项，两者都拆成「惯性块 + 邻接元件块」：</p>
         <div class="math-block">$$\mathbf f_i = \underbrace{\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)}_{\text{惯性}} + \sum_{j\in\mathcal F_i}\mathbf f_i^{(j)},\qquad \mathbf H_i = \underbrace{\frac{m_i}{h^2}\mathbf I_3}_{\text{恒正定}} + \sum_{j\in\mathcal F_i}\mathbf H_i^{(j)}$$</div>
-        <p>区别只在 $\mathcal F_i$ 这个「邻接 force elements 集合」里装的是什么。TinyVBD 里它只有弹簧（<span class="term-i">vertAdjacentEdges</span>）；Newton 里它可能同时挂着三角膜、二面角弯曲、四面体、弹簧——种类多了，但<b>装配的节奏一模一样</b>：先放惯性块，再遍历邻接元件逐项累加。这一节我们盯住惯性块和最后那个 $3\times3$ 解；各种弹性元件本身怎么算，留到 <a href="../09-elasticity-collision/9-1-elastic-elements.html">Part 9</a> 展开。</p>
+        <p>区别只在 $\mathcal F_i$ 这个「邻接 force elements 集合」里装的是什么。TinyVBD 里它只有弹簧（<span class="term-i">vertAdjacentEdges</span>）；Newton 里它可能同时挂着三角膜、二面角弯曲、四面体、弹簧——种类多了，但<b>装配的节奏一模一样</b>：先放惯性块，再遍历邻接元件逐项累加。这一节我们盯住惯性块和最后那个 $3\times3$ 解；各种弹性元件本身怎么算，留到 <a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 9</a> 展开。</p>
 
         <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 一个 kernel = 一遍 solve() 的循环体</div><p>TinyVBD 的 <code>solve()</code> 用一个 C++ <code>for (iV …)</code> 串行扫顶点；Newton 把<b>循环体</b>提出来变成一个 <span class="term">kernel</span> 函数，由 <code>wp.launch</code> 一次性铺到一整批顶点上并行跑。<code>iV</code> 这个循环变量，在 kernel 里就是开头那行 <code>t_id = wp.tid()</code> 取到的 thread 索引。你读 <code>solve_elasticity</code> 时，把它当成「<code>solve()</code> 的 for 循环里那一坨，被一个个 GPU thread 同时执行」就对了。</p></div>
 
         <h2 id="inertia">惯性项：和 solve() 逐字符对上</h2>
-        <p>kernel 一开头，过滤掉非 active、零质量的顶点后，立刻装配惯性块。这是从真实代码摘出来的短切片（弹性元件的累加省略掉，那是 Part 9 的事）：</p>
+        <p>kernel 一开头，过滤掉非 active、零质量的顶点后，立刻装配惯性块。这是从真实代码摘出来的短切片（弹性元件的累加省略掉，那是 Part 10 的事）：</p>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code>@wp.kernel
 def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
                      pos_prev, pos, mass, inertia, particle_flags,
@@ -75,7 +75,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
           <li><b>tet</b>（四面体软体的 volumetric Neo-Hookean）——对应 <code>tet_indices</code> 那段邻接四面体循环；</li>
           <li><b>spring</b>（弹簧，力/Hessian 形式与 TinyVBD 弹簧<b>完全一致</b>）——以及 self-contact / body-particle contact，这些力/Hessian 在 sweep 里先攒进 <code>particle_forces</code> / <code>particle_hessians</code>，kernel 末尾两行 <code>h = h + particle_hessians[…]</code>、<code>f = f + particle_forces[…]</code> 把它们合并进来。</li>
         </ul>
-        <p>每种元件具体怎么算（变形梯度 $\mathbf F$、能量密度、SPD 投影……）是 <a href="../09-elasticity-collision/9-1-elastic-elements.html">Part 9</a> 的主题，这里只要记住：<b>它们都只是往同一个 $\mathbf f$、$\mathbf H$ 上 <code>+=</code> 一块</b>。这正是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 求和式 $\sum_{j\in\mathcal F_i}$ 在 3D、多元件下的逐项实现。代码无脑累加、不在元件层面对总 $\mathbf H$ 做投影——和 TinyVBD 一个脾气，靠惯性块兜底。</p>
+        <p>每种元件具体怎么算（变形梯度 $\mathbf F$、能量密度、SPD 投影……）是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 9</a> 的主题，这里只要记住：<b>它们都只是往同一个 $\mathbf f$、$\mathbf H$ 上 <code>+=</code> 一块</b>。这正是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 求和式 $\sum_{j\in\mathcal F_i}$ 在 3D、多元件下的逐项实现。代码无脑累加、不在元件层面对总 $\mathbf H$ 做投影——和 TinyVBD 一个脾气，靠惯性块兜底。</p>
 
         <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 f_i / H_i 与 G 单调下降</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">这是串行版的直觉；下一节看 Newton 怎么按 color 并行做同样的事。</div></div>
 
@@ -93,6 +93,32 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         <div class="callout note">
           <div class="c-h">直接求逆 vs colPivHouseholderQr</div>
           <p>为什么 Newton 敢对 $\mathbf H_i$ 直接 <code>wp.inverse</code>，而 TinyVBD 用更稳的 <code>colPivHouseholderQr</code>？因为这是个 $3\times3$——闭式逆便宜又够用，GPU 上一个 thread 算它毫无压力；那道 <code>abs(det) &gt; 1e-8</code> 的守门正是用来挡掉求逆会炸的退化情形。TinyVBD 在 CPU 上图省心用了 Eigen 现成的 QR，两者解的是同一个方程，数值上对良态的 $3\times3$ 结果一致。</p>
+        </div>
+
+        <h2 id="worked-example">代一组真数字：一个顶点的 3×3 装配全程</h2>
+        <p>公式对完了，但 <a href="../04-code/4-3-solve.html">4.3</a> 解剖 <code>solve()</code> 时缺了一步——<b>真把数字代进去算一遍</b>。这里补上：仿照 <a href="../12-ipc/12-7-worked-example.html">12-7</a> 的节奏，给一个顶点摆出惯性块 + 一条具体弹簧，把 $\mathbf f_i$、$\mathbf H_i$ 拼出来，最后解出 $\Delta\mathbf x=\mathbf H_i^{-1}\mathbf f_i$，每个中间值都写出来让你能拿计算器复算。</p>
+
+        <p>设顶点 $i$ 当前在 $\mathbf x_i=(0,0,0)$，质量 $m=1$，时间步 $dt=\tfrac{1}{60}$，于是 $1/h^2=3600$。这一步的惯性目标 $\mathbf y_i$ 落在 $i$ 的<b>正下方</b> $0.02$ 处（受重力下坠后的预测位置），即 $\mathbf y_i-\mathbf x_i=(0,-0.02,0)$。先填惯性块：</p>
+        <div class="math-block">$$\mathbf f_{\text{inertia}}=\frac{m}{h^2}(\mathbf y_i-\mathbf x_i)=3600\times(0,-0.02,0)=(0,\,-72,\,0)$$</div>
+        <div class="math-block">$$\mathbf H_{\text{inertia}}=\frac{m}{h^2}\mathbf I_3=3600\,\mathbf I_3=\begin{pmatrix}3600&amp;0&amp;0\\0&amp;3600&amp;0\\0&amp;0&amp;3600\end{pmatrix}$$</div>
+        <p>这就是 kernel 开头那两行 <code>f = mass*(inertia-pos)/dt²</code>、<code>h = mass/dt²·I₃</code> 的数值版：力 $(0,-72,0)$ 竖直向下、把顶点往惯性碗底 $\mathbf y_i$ 拽；Hessian 是干干净净的 $3600\,\mathbf I_3$，三个方向各向同性、恒正定。</p>
+
+        <p>现在加<b>一条具体弹簧</b>。它把 $i$ 连到一个被钉住的邻居 $\mathbf x_{nb}=(1.2,0,0)$，刚度 $k=100$、rest 长度 $l_0=1.0$。算几何量（记号同 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>，$\mathbf d=\mathbf x_i-\mathbf x_{nb}$）：</p>
+        <div class="math-block">$$\mathbf d=\mathbf x_i-\mathbf x_{nb}=(-1.2,\,0,\,0),\qquad l=\lVert\mathbf d\rVert=1.2,\qquad \frac{l_0}{l}=\frac{1.0}{1.2}\approx0.833$$</div>
+        <p>弹簧被<b>拉长</b>了（$l=1.2&gt;l_0=1.0$）。先算它对 $i$ 的力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$：</p>
+        <div class="math-block">$$k\frac{l_0-l}{l}=100\times\frac{1.0-1.2}{1.2}=100\times(-0.1667)=-16.67,\qquad \mathbf f_{\text{spring}}=-16.67\times(-1.2,0,0)=(20,\,0,\,0)$$</div>
+        <p>力沿 $+x$、大小 $20$——被拉长的弹簧把 $i$ 往邻居方向拽回去，方向和符号都对。再算弹簧 Hessian $\mathbf H_{aa}=k\big[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})\big]$。因为 $\mathbf d$ 只有 $x$ 分量，外积 $\mathbf d\mathbf d^\top/l^2$ 只有 $xx$ 项为 $1$，于是 $\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2}=\operatorname{diag}(0,1,1)$，整块是对角的：</p>
+        <div class="math-block">$$\mathbf H_{\text{spring}}=100\Big[\mathbf I-0.833\,\operatorname{diag}(0,1,1)\Big]=100\,\operatorname{diag}(1,\,0.1667,\,0.1667)=\operatorname{diag}(100,\,16.67,\,16.67)$$</div>
+        <p>读它的物理：沿弹簧方向（$x$）特征值是 $k=100$（拉伸方向永远硬）；垂直方向是 $k(1-l_0/l)=100\times0.1667=16.67$，<b>因为被拉长所以为正</b>。（若改成压缩 $l&lt;l_0$，这个垂直特征值就翻负——正是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个不定来源，下一章 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 要处理的。）</p>
+
+        <p>惯性块 + 弹簧块累加，拼出完整的 $\mathbf f_i$、$\mathbf H_i$。两块 Hessian 都是对角的，加起来还是对角，$3\times3$ 解一眼就出：</p>
+        <div class="math-block">$$\mathbf f_i=(0,-72,0)+(20,0,0)=(20,\,-72,\,0),\qquad \mathbf H_i=\operatorname{diag}(3700,\,3616.67,\,3616.67)$$</div>
+        <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i=\Big(\frac{20}{3700},\;\frac{-72}{3616.67},\;0\Big)\approx(0.0054,\,-0.0199,\,0)$$</div>
+        <p>这一步把顶点往下挪约 $0.02$（追惯性目标）、往邻居方向挪约 $0.005$（弹簧拉回）。注意 $\det(\mathbf H_i)=3700\times3616.67^2\approx4.8\times10^{10}\gg10^{-8}$，远远过得了 kernel 里 <code>abs(wp.determinant(h)) &gt; 1e-8</code> 那道守门——惯性块抬的 $3600$ 底，让 $\mathbf H_i$ 稳稳可逆。把这一遍和 4.3 的弹簧装配并排看：<b>同一套力、同一套 Hessian、同一个 $\mathbf H^{-1}\mathbf f$，只是从 2D strand 升到 3D、从一行 C++ 变成一个 GPU thread</b>。</p>
+
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>声明在前：这里的 $\mathbf y_i-\mathbf x_i=(0,-0.02,0)$、$k=100$、$l_0=1.0$ 等是<b>为手算专门挑的干净自洽数</b>，不是某次真实仿真的快照。能写准也值得记的是<b>每一步怎么由上一步推出来</b>、方向与符号怎么对——惯性力向下、拉长弹簧的力指回邻居、对角 Hessian 三个特征值各是什么。具体小数会随质量、刚度、单位整体缩放；重点是装配链路，不是某个数字。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>

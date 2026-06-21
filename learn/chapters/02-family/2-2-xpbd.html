@@ -34,6 +34,22 @@
         <div class="math-block">$$\Delta\lambda = \frac{-C - \tilde\alpha\,\lambda}{\sum_j w_j\lVert\nabla_j C\rVert^2 + \tilde\alpha},\qquad \Delta\mathbf x_i = w_i\,\nabla_i C\,\Delta\lambda,\qquad \lambda \mathrel{+}= \Delta\lambda$$</div>
         <p>每碰到一条约束：先算 $\Delta\lambda$（这条约束的力该增加多少），再据此推动粒子 $\Delta\mathbf x_i$，最后把 $\Delta\lambda$ 累加进 $\lambda$。一帧开始时所有 $\lambda$ 清零。形状和 PBD 几乎一样，但分子分母各多了一项——魔法全在这两项里。</p>
 
+        <h3 id="xpbd-worked">代真数字：同一根弹簧，XPBD 推得软得多</h3>
+        <p>用 <a href="2-1-pbd.html">2.1</a> 那根<b>一模一样</b>的弹簧，对照看 XPBD 推多少。还是 $\mathbf x_a=(0,0)$、$\mathbf x_b=(1.5,0)$、$l_0=1$、$w_a=w_b=1$，所以几何量全沿用：$C=0.5$，$\sum_j w_j\lVert\nabla_j C\rVert^2=2$。新增的只有柔度。取一根中等刚度弹簧 $k=100$：</p>
+        <div class="math-block">$$\alpha=\frac1k=\frac1{100}=0.01,\qquad \tilde\alpha=\frac{\alpha}{h^2}=0.01\times3600=36\quad(h=\tfrac1{60},\ \tfrac1{h^2}=3600).$$</div>
+        <p>一帧开始 $\lambda=0$，首次迭代算 $\Delta\lambda$：</p>
+        <div class="math-block">$$\Delta\lambda=\frac{-C-\tilde\alpha\lambda}{\sum_j w_j\lVert\nabla_j C\rVert^2+\tilde\alpha}=\frac{-0.5-36\cdot0}{2+36}=\frac{-0.5}{38}\approx-0.0132.$$</div>
+        <p>推动量 $\Delta\mathbf x_a=w_a\nabla_a C\,\Delta\lambda=(-1,0)\times(-0.0132)=(+0.0132,0)$——两端各挪约 $0.0132$。对比 PBD 那次的 $0.25$：</p>
+        <div class="math-block">$$\frac{0.25}{0.0132}\approx19.$$</div>
+        <p>XPBD 这一步只推了 PBD 的约 <b>$1/19$</b>。物理上完全对：$k=100$ 是根<b>软</b>弹簧，本就不该一步把约束拉满——分母里那项 $\tilde\alpha=36$ 正是踩下的刹车（$2+36$ 比 $2$ 大了 19 倍）。PBD 不管软硬，永远一步打满到零；XPBD 让柔度 $\alpha$ 决定该推多慢。</p>
+        <p>那硬弹簧呢？把 $k$ 推到 TinyVBD 默认的 $10^8$：$\alpha=10^{-8}$，$\tilde\alpha=10^{-8}\times3600=3.6\times10^{-5}\to0$。刹车几乎松开：</p>
+        <div class="math-block">$$\Delta\lambda=\frac{-0.5}{2+3.6\times10^{-5}}\approx\frac{-0.5}{2}=-0.25,\qquad \Delta\mathbf x_a\approx(+0.25,0).$$</div>
+        <p>$\tilde\alpha\to0$，XPBD <b>精确退回</b> PBD 的 $0.25$——这正是下面 callout「$\alpha\to0$ 退回 PBD」的数值现场。一句话收束：$\tilde\alpha$ 是<b>物理刹车</b>，软弹簧多刹（推得少）、硬弹簧少刹（退回 PBD 的一步到位）。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>参数与 <a href="2-1-pbd.html">2.1</a> 共享（$\mathbf x_b=(1.5,0)$、$l_0=1$、$w=1$、$h=\tfrac1{60}$），新增刚度 $k\in\{100,10^8\}$。$\tilde\alpha=36$、$\Delta\lambda\approx-0.0132$、比 PBD 小约 19×、硬弹簧退回 0.25 全部可拿计算器复算；绝对量级随单位/$\kappa$ 缩放，要紧的是<b>比值与「软多刹、硬退回 PBD」的趋势</b>。</p>
+        </div>
+
         <h2 id="why-it-cures">为什么这就治好了刚度漂移</h2>
         <p>把 XPBD 的更新和 <a href="2-1-pbd.html">2.1</a> 的 PBD 更新并排看，差别只在 $\tilde\alpha$ 出现的两个位置——而这两处恰好就是被丢掉的物理项。</p>
         <p><b>分母里的 $\tilde\alpha$</b>：它给「把约束推到零」的步长踩了一脚刹车。柔度越大（$k$ 越软），$\tilde\alpha$ 越大，分母越大，每次投影推得越少——软材料就该推得少。这把「该有多硬」从"迭代了几次"手里夺了回来，交给了 $\alpha$ 这个物理参数。</p>

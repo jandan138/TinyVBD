@@ -58,6 +58,22 @@ if (addSkipSpring &amp;&amp; i &lt; lengthes.size() - 1)
           <p>默认实验 <a href="5-1-mass-ratio.html">5.1</a> 打开了 skip spring，正是为了让那根吊重锤的链看起来像根有筋骨的绳，而不是一摊会自折叠的距离弹簧。<code>initializeStiffRatio()</code> 同样开了它。</p>
         </div>
 
+        <h2 id="fold-calc">手算一遍：直的时候力为 0，折 90° 时回复力多大</h2>
+        <p>上面说「链直时 skip spring 不出力、链弯时它产生撑直的回复力」，这两句都能<b>代数字算出来</b>。仿照 <a href="../04-code/4-3-solve.html">4.3</a>/<a href="../12-ipc/12-7-worked-example.html">12-7</a> 的节奏，用本实验的真实间距 <code>dis = 0.05</code>，取顶点 $i,\ i{+}1,\ i{+}2$ 三点，看跨节点那根 skip spring 的当前长度 $l$ 与它的 rest length $l_0$。</p>
+        <p><b>情形一：链是直的。</b>三点共线，$i$ 到 $i{+}2$ 的直线距离正好是两段相加：</p>
+        <div class="math-block">$$l = \mathtt{dis} + \mathtt{dis} = 0.05 + 0.05 = 0.10 = l_0\quad\Longrightarrow\quad l - l_0 = 0$$</div>
+        <p>skip spring 的力是 $\mathbf f = k\frac{l_0-l}{l}\mathbf d$（<a href="../01-foundations/1-4-spring-energy.html">1.4</a>）。$l=l_0$ 时 $l_0-l=0$，<b>力恒为 0</b>——直链时这根弹簧完全不出力，正合源码把 rest 取成 <code>lengthes[i]+lengthes[i+1]</code> 的用意：直就是它的自然态。</p>
+        <p><b>情形二：在 $i{+}1$ 处折成直角（90°）。</b>两段仍各长 <code>dis</code>，但夹角从 180° 变成 90°，$i$ 到 $i{+}2$ 的直线距离由勾股定理给出：</p>
+        <div class="math-block">$$l = \sqrt{\mathtt{dis}^2 + \mathtt{dis}^2} = \mathtt{dis}\sqrt{2} = 0.05 \times 1.41421 \approx 0.07071$$</div>
+        <div class="math-block">$$l_0 - l = 0.10 - 0.07071 \approx 0.02929$$</div>
+        <p>跨节点距离从 $0.10$ <b>缩短</b>到约 $0.0707$——skip spring 被压缩了约 $0.029$。把压缩量乘上刚度 $k=\mathtt{stiffnessSkipSpring}=100$，看回复力的标量大小 $F = k\frac{|l_0-l|}{l}$：</p>
+        <div class="math-block">$$F = k\,\frac{l_0-l}{l} = 100 \times \frac{0.02929}{0.07071} \approx 100 \times 0.4142 \approx 41.4$$</div>
+        <p>读出物理：折弯让 $l&lt;l_0$，弹簧被压短，$l_0-l&gt;0$，于是 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$ 沿 $\mathbf d=\mathbf x_i-\mathbf x_{i+2}$ 把两端<b>往外推</b>——也就是把折角<b>撑开、把链扳直</b>。这股力越折越大（折得越狠 $l$ 越小、$l_0-l$ 越大），正是「抗弯刚度」的来源。而它只用了一根普通距离弹簧、$k$ 才 100，比主弹簧软得多——<b>这就是 skip spring 作为「最便宜弯曲能量」的全部算术</b>。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>$0.029$、$41.4$ 这些数都用本实验真实的 <code>dis=0.05</code>、<code>stiffnessSkipSpring=100</code> 直接代出来、可拿计算器复算；但「折 90°」是为讲解挑的一个干净角度，真实仿真里链各处折角连续变化。<b>要记的趋势是</b>：直链 $\to$ 力为 0；越折 $\to$ $l$ 越小 $\to$ 回复力越大、方向永远是把链扳直。具体某个力的小数会随折角和 $k$ 变，因果方向不变。</p>
+        </div>
+
         <h2 id="iterations">迭代数：离真解多近，与「数值阻尼」</h2>
         <p>第二个旋钮是 <code>numIterations</code>（默认 100）。回忆主循环（<a href="../04-code/4-5-main-loop.html">4.5</a>）：每个 substep 里，VBD 把 <code>solve()</code> 这个 Gauss-Seidel sweep 重复 <code>numIterations</code> 次。每多迭代一次，当前位形就更接近增量势能 $G$ 的真正最小值，也就是<b>更接近隐式欧拉的真解</b>。</p>
         <ul>
@@ -74,7 +90,11 @@ if (addSkipSpring &amp;&amp; i &lt; lengthes.size() - 1)
         <h2 id="substeps">迭代 vs substeps：另一种花预算的方式</h2>
         <p>除了在一个时间步内多迭代，你还能把时间步切细：主循环开头 <code>params.dt /= params.substeps</code>，把一帧拆成多个 substep，每个 substep 用更小的 $h$ 跑一遍完整的 forwardStep + 迭代 + updateVelocity。更小的 $h$ 让惯性项 $m/h^2$ 的系数更大、$G$ 更「凸」更好解，也让每个子步的运动更短、更线性。所以你手里其实有两种花算力的方式：<b>同一个 $h$ 多迭代</b>，或<b>把 $h$ 切细成多 substep</b>。两者都让结果更接近真解，权衡在于哪种对你的场景更划算——这也是 <a href="5-4-experiment-menu.html">5.4</a> 实验菜单里值得亲手试的旋钮（比如源码注释里那个 <code>10substeps</code> 变体）。</p>
 
-        <p>本节不放新部件——想实时把玩 skip spring 与迭代数，直接去 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 或 <a href="5-4-experiment-menu.html">5.4</a> 的 <code>strand-lab</code>：拖动链、调迭代滑块，亲眼看迭代变少时链如何变软、关掉弯曲时链如何卷起来。</p>
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">把玩 skip spring 与迭代数：弯曲怎么来、迭代怎么影响软硬</span></div>
+          <div class="lab-body" data-widget="strand-lab"></div>
+          <div class="lab-cap">拖动链、调迭代滑块：关掉弯曲（skip spring）时链如何卷起来自折叠，开启后又如何被那根跨节点弹簧（上面算过的回复力）撑直；把迭代数压低时链如何变软、像被加了数值阻尼——但无论怎么调，它<b>稳不发散</b>。这就是本节两个旋钮的现场版。</div>
+        </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) skip spring 连 i 与 i+2、rest length 取两段之和、用很软的 <code>stiffnessSkipSpring</code>（默认 100），是一种最便宜的弯曲能量——没有它，纯距离弹簧的链会自折叠卷曲；(2) numIterations 越多越接近隐式欧拉真解、越硬挺，越少越软、数值阻尼越大，但 VBD 哪怕 1 次迭代也<b>稳不发散</b>；(3) 切 substep（<code>dt/=substeps</code>）是另一种逼近真解的方式。下一节 <a href="5-4-experiment-menu.html">5.4</a> 给你一张完整的实验菜单，把所有旋钮和 <code>main.cpp</code> 的 config 对上号。</p>

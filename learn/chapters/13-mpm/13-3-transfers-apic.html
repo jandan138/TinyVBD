@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>传输与 APIC：PIC 耗散、FLIP 噪声、APIC 修复 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-3</div>
+        <h1>传输与 APIC：PIC 耗散、FLIP 噪声、APIC 修复</h1>
+        <p class="lede"><a href="13-2-mpm-cycle.html">13.2</a> 把 P2G/G2P 这对「传输」一笔带过，说它是 MPM 最微妙的环节。这一节兑现承诺：传输既是 MPM 的<b>灵魂</b>（粒子与网格的全部信息交换都经它），又是它的<b>软肋</b>（每经一次插值就丢一点信息）。我们按历史顺序看三代方案怎么互相补救——<b>PIC</b>（太糊）、<b>FLIP</b>（太吵）、<b>APIC</b>（两头都修好，现代默认），再点出把传输与力统一起来的 <b>MLS-MPM</b>。</p>
+
+        <h2 id="the-leak">问题的根源：每次插值都在丢信息</h2>
+        <p>先看清病灶。一步 MPM 里，粒子速度要先 P2G 上网格、再 G2P 回粒子——<b>来回各插值一次</b>。插值（加权平均）本质上是一种平滑：它把一群速度抹成一个加权均值，高频的、精细的差异会被磨掉。物理上的代价具体有两个：</p>
+        <ul>
+          <li><b>角动量丢失</b>：一团绕中心旋转的粒子，旋转信息藏在「粒子速度随位置线性变化」这个梯度里。可朴素插值只搬<i>速度本身</i>、不搬<i>速度的空间变化</i>，转着转着旋转就被抹平、团块停转。</li>
+          <li><b>数值耗散（糊）</b>：来回平滑等效于给系统加了人为黏性，锐利的运动被磨钝，整个场看起来「糊」。</li>
+        </ul>
+        <p>三代传输方案，就是三种「在来回插值中尽量少丢信息」的策略。</p>
+
+        <h2 id="pic">PIC：只传速度，最稳但最糊</h2>
+        <p><span class="term">PIC</span>（particle-in-cell，最古老）的 G2P 就是 <a href="13-2-mpm-cycle.html">13.2</a> 那条最朴素的式子——粒子<b>直接拿网格的新速度加权平均</b>，把自己原来的速度整个丢掉：</p>
+        <div class="math-block">$$\mathbf v_p^{\text{new}}=\sum_i w_{ip}\,\mathbf v_i^{\text{new}}.$$</div>
+        <p>每一步粒子速度都被网格「重置」一遍。好处是<b>极稳</b>（每步都被网格平滑过，几乎不可能积累爆掉的高频）；坏处是上面两条病灶<b>全中</b>——来回各平滑一次，角动量大量流失、耗散极重，一团旋转的沙几步就转不动、整体糊成一片。PIC 太耗散，几乎没人单独用它做固体/沙雪，但它是理解后两代的起点。</p>
+
+        <h2 id="flip">FLIP：只传增量，保能量但吵</h2>
+        <p><span class="term">FLIP</span>（fluid-implicit-particle）的洞察很漂亮：既然「把粒子速度整个换成网格速度」太耗散，那就<b>只把网格这一步的速度变化量加给粒子</b>，保留粒子自己的速度：</p>
+        <div class="math-block">$$\mathbf v_p^{\text{new}}=\mathbf v_p^{\text{old}}+\sum_i w_{ip}\,\big(\mathbf v_i^{\text{new}}-\mathbf v_i^{\text{old}}\big).$$</div>
+        <p>注意搬运的是<b>增量</b> $\Delta\mathbf v_i=\mathbf v_i^{\text{new}}-\mathbf v_i^{\text{old}}$，不是绝对速度。这样粒子速度不再被每步重置，<b>几乎不耗散、能量保得很好</b>，旋转、细节都活了过来。但硬币的另一面：粒子速度脱离了网格的平滑约束，高频误差会<b>积累</b>——表现为噪声、抖动、不稳定，长时间或大步长下尤其明显。实践中常把 PIC 和 FLIP 按比例混合（一点 PIC 当阻尼、大部分 FLIP 保细节），但这只是折中，没从根上解决「插值丢梯度」。</p>
+
+        <div class="callout">
+          <div class="c-h">PIC vs FLIP：稳定与保真的对立</div>
+          <p>把两者并排：PIC <b>整个</b>取网格速度——最稳、最糊（过度耗散）；FLIP 只取网格速度<b>增量</b>——最保真、最吵（噪声不稳）。它们站在同一根轴的两端，调混合比就是在「糊」和「吵」之间滑动。真正的突破不是在这根轴上找点，而是换一个表示——让传输<b>多搬一样东西</b>，把丢掉的梯度补回来。那就是 APIC。</p>
+        </div>
+
+        <h2 id="apic">APIC：多传一个仿射速度场，两头都修好</h2>
+        <p><span class="term">APIC</span>（affine particle-in-cell，Jiang et al. 2015）一针见血地指出：PIC 之所以丢角动量，是因为它只把粒子当成「一个速度」，丢掉了粒子邻域内<b>速度随位置线性变化</b>的那部分信息。修法是给每个粒子额外携带一个 $3\times3$ 的<b>仿射矩阵</b> $\mathbf C_p$——它记录「在这个粒子附近，速度场的局部线性梯度」，把粒子从「一个速度点」升级成「一小片仿射速度场」：</p>
+        <div class="math-block">$$\mathbf v(\mathbf x)\approx \mathbf v_p+\mathbf C_p\,(\mathbf x-\mathbf x_p).$$</div>
+        <p>P2G 时不只散布速度，还把这个仿射场一起散上去（散布动量时带上 $\mathbf C_p$ 的贡献）；G2P 时不只收回速度，还从网格速度<b>重建</b>出新的 $\mathbf C_p$。关键收益：</p>
+        <ul>
+          <li><b>角动量被严格守恒</b>——旋转信息存在 $\mathbf C_p$ 的反对称部分里，传输时不再被插值抹掉，旋转的沙/雪团能一直转下去。</li>
+          <li><b>耗散极低</b>——多搬的那层梯度信息把 PIC 丢掉的细节补了回来，却不像 FLIP 那样让高频误差脱缰积累。它<b>同时</b>拿到了 PIC 的稳定和 FLIP 的保真。</li>
+        </ul>
+        <p>APIC 既保角动量又不糊、还稳，是当今 MPM 的<b>事实标准</b>。下面的 widget 让你并排比三代传输在一团旋转粒子上的表现——看 PIC 怎么很快转停（耗散）、FLIP 怎么抖（噪声）、APIC 怎么稳稳转下去（守角动量）。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">PIC / FLIP / APIC：旋转团块上的三代传输</span></div>
+          <div class="lab-body" data-widget="transfer-apic"></div>
+          <div class="lab-cap">同一团绕心旋转的粒子，三种传输并排跑。PIC：旋转很快被耗散磨停、团块糊开。FLIP：旋转保住了但出现噪声/抖动。APIC：携带仿射矩阵 $\mathbf C_p$，旋转稳稳守住、又不糊也不吵。这就是「多传一层速度梯度」的威力。</div>
+        </div>
+
+        <div class="callout note">
+          <div class="c-h">$\mathbf C_p$ 和形变梯度 $\mathbf F_p$ 是两回事</div>
+          <p>别把仿射矩阵 $\mathbf C_p$ 和形变梯度 $\mathbf F_p$（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>）搞混。$\mathbf F_p$ 记录「这块材料相对 rest 被累计形变了多少」，跨步累乘、喂给本构算应力；$\mathbf C_p$ 记录「<b>当前这一步</b>，粒子邻域的速度场局部线性梯度长什么样」，是为传输服务的、每步重建的辅助量。一个管材料历史，一个管这步的速度场表示——分工不同。不过它们确有亲缘：$\mathbf C_p$ 本质就是从网格插出来的速度梯度 $\nabla\mathbf v_p$ 的一种形式，而 $\nabla\mathbf v_p$ 也正是 <a href="13-2-mpm-cycle.html">13.2</a> 里更新 $\mathbf F_p$ 用的那个量。</p>
+        </div>
+
+        <h2 id="mls-mpm">MLS-MPM：把传输与力统一在一套最小二乘里</h2>
+        <p>APIC 把传输修好了，但它和「算力」（grid solve 里散布应力）在代码里仍是两套独立的插值机制。<span class="term">MLS-MPM</span>（moving least squares MPM，Hu et al. 2018）更进一步，用一套<b>移动最小二乘</b>（moving least squares）的视角把<b>APIC 的传输和应力的散布统一</b>起来：两者共享同一套局部线性重建，于是 P2G/G2P 与力计算复用同一份权重与梯度。</p>
+        <p>结果是实现更简洁、运算更省——它把 APIC 的仿射场和力散布看成同一件事的两面，少算一遍、少存一份。MLS-MPM 因此成为现代 MPM 实现里非常流行的一档，许多 GPU/Taichi 版 MPM 直接以它为骨架。它没有改变 APIC「多传一层梯度」的核心思想，而是把这套思想和力计算<b>共用机制</b>，让整条管线更紧凑。这也为 <a href="13-8-ck-mpm.html">13.8</a> 要讲的紧支撑核埋了伏笔——核与传输/力的耦合越紧，省下的开销越多。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从全书看</span> 传输是 MPM 独有的税，但本构还是老朋友</div>
+          <p>这一节讲的 PIC/FLIP/APIC，是 MPM 因为「绕了网格一圈」才必须交的税——mass-spring/FEM 直接在顶点上算，没有这道来回插值，也就没有这套耗散/噪声的烦恼。但请注意：传输只动<b>速度的表示</b>，没动<b>材料的本构</b>。等会儿 <a href="13-4-F-update-constitutive.html">13.4</a> 把粒子的 $\mathbf F_p$ 喂进 $\psi(\mathbf F_p)$ 算应力时，用的还是 FEM 篇那一套 Neo-Hookean / 弹塑性（<a href="../09-fem/9-3-strain-energy.html">9.3</a>）。MPM 换了离散、加了传输税，但「能量决定力」的灵魂一点没变。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 传输（P2G/G2P）是 MPM 的灵魂与软肋——每步粒子↔网格来回各插值一次，朴素做法会丢角动量、引数值耗散（糊）。(2) 三代修法：PIC 整个取网格速度，最稳但最糊（过度耗散）；FLIP 只取网格速度增量，保能量但吵（噪声不稳）；APIC（Jiang 2015）让粒子多携带一个仿射矩阵 $\mathbf C_p$、多搬一层局部速度梯度，<b>既严格守角动量又低耗散</b>，是现代默认。(3) MLS-MPM（Hu 2018）用移动最小二乘把 APIC 的传输和应力散布统一进一套机制，更简洁更省，是流行的现代实现骨架；$\mathbf C_p$（这步的速度梯度）和 $\mathbf F_p$（材料形变历史）是两回事但同源。</p>
+        <p>传输修好了，速度能干净地在粒子和网格间往返。下一节 <a href="13-4-F-update-constitutive.html">13.4</a>，我们正式接回 FEM 篇——看粒子上的 $\mathbf F_p$ 怎么从网格速度梯度更新、又怎么经 $\psi(\mathbf F_p)$ 变成 grid solve 里散布的那个力。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

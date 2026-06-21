@@ -82,6 +82,12 @@ for frame in range(num_frames):
           <p><code>SolverVBD</code> 构造时会检查 <code>model.particle_color_groups</code> 是否为空；为空就直接抛 <code>ValueError</code>，提示你<b>必须在 finalize 之前调用 <code>ModelBuilder.color()</code>（或 <code>set_coloring()</code>）</b>。这是 VBD 特有的要求——别的求解器（如 XPBD）不需要着色，所以从 XPBD 例子改过来时极易漏掉。症状很直白：程序在 <code>SolverVBD(model)</code> 这一行就崩，而不是跑到一半才出错。记住顺序：<b>加内容 → color() → finalize() → SolverVBD</b>。</p>
         </div>
 
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t"><code>builder.color()</code> 在网格上到底干了什么</span></div>
+          <div class="lab-body" data-widget="graph-coloring"></div>
+          <div class="lab-cap">这就是 <code>builder.color()</code> 这一行背后的事：给每个顶点染色，使<b>同色顶点之间不共享任何 force element</b>（不在同一条边/三角上）。同色的一组可以一口气并行算 3×3 牛顿步，颜色之间再串行扫——既拿到并行、又保住 <span class="term">Gauss-Seidel</span> 的「用最新值」。点一点看染色规则与每种颜色能并行的顶点集合；Part 8 还会用它把按色 sweep 拆得更细。</div>
+        </div>
+
         <h2 id="finalize">finalize 与 solver：从可变到只读</h2>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">冻结 + 造 solver</span><button class="cp">复制</button></div><pre><code>model = builder.finalize()
 solver = newton.solvers.SolverVBD(model)</code></pre></div>

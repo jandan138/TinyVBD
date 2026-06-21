@@ -60,6 +60,27 @@
 
         <p>三行公式，把这一节要讲的全说尽了，逐个拆开看。</p>
 
+        <h3 id="amp-table">代一组真数字：放大倍数差出五个数量级</h3>
+        <p>抽象公式不如一行算术有说服力。就用 TinyVBD 默认那种<b>硬</b>场景：弹簧刚度 $k=10^8$、质量 $m=1$，于是固有频率 $\omega=\sqrt{k/m}=\sqrt{10^8}=10^4$；时间步还是 $h=1/60$。算出那个决定命运的无量纲量：</p>
+        <div class="math-block">$$\xi=h\omega=\frac{1}{60}\times10^4\approx167.$$</div>
+        <p>把 $\xi\approx167$ 分别代进三个放大倍数公式，每个都能拿计算器复算：</p>
+        <table>
+          <thead><tr><th>方法</th><th>放大倍数 $G$（每步）</th><th>代入 $\xi\approx167$</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td>Forward</td><td>$\sqrt{1+\xi^2}$</td><td>$\sqrt{1+167^2}\approx\sqrt{27890}$</td><td>$G\approx167$ —— 每步振幅 ×167，<b>瞬间爆</b></td></tr>
+            <tr><td>Symplectic</td><td>$1$（仅当 $\xi&lt;2$）</td><td>$\xi=167\gg2$，越出单位圆</td><td>名义 $G=1$ 但<b>条件失守 → 失稳</b></td></tr>
+            <tr><td>Backward</td><td>$1/\sqrt{1+\xi^2}$</td><td>$1/167$</td><td>$G\approx0.006$ —— 每步压到 0.6%，<b>稳如磐石</b></td></tr>
+          </tbody>
+        </table>
+        <p>把这三个数念出来就懂了：同一根弹簧、同一个时间步，forward 每步把振幅放大 167 倍（几步就溢出浮点数），backward 每步把振幅压到原来的 0.6%（几步就镇住一切高频），二者差出<b>约 $167^2\approx2.8\times10^4$ 倍</b>。symplectic 名义上守恒，可它守恒的前提 $\xi&lt;2$ 在这里被 $\xi\approx167$ 碾得粉碎——硬弹簧把它和 forward 一起拖下水。这就是「TinyVBD 默认敢用 $h=1/60$ 配 $10^8$ 刚度」这句话背后的硬数字。</p>
+
+        <div class="callout note">
+          <div class="c-h">symplectic 的 2×2 更新矩阵：模为 1 当且仅当 ξ&lt;2</div>
+          <p>为什么 symplectic 的稳定界恰好卡在 $\xi=2$？把它的一步更新写成矩阵 $\binom{x}{v}^{t+1}=A\binom{x}{v}^{t}$，对 $\ddot x=-\omega^2x$ 有</p>
+          <div class="math-block">$$A=\begin{pmatrix}1-\xi^2 & h\\[2pt] -\,h\omega^2 & 1\end{pmatrix},\qquad \det A=1.$$</div>
+          <p>$\det A=1$ 说明两个特征值之积恒为 1（这正是「辛」=保面积的来历）。特征值是单位圆上一对共轭、还是一对实数（一个 $&gt;1$ 一个 $&lt;1$），由迹决定：$\operatorname{tr}A=2-\xi^2$。当 $|\operatorname{tr}A|&lt;2$（即 $\xi&lt;2$）特征值复且模为 1——振幅守恒；一旦 $\xi\ge2$，迹越界、特征值变成两个实数，其中一个模 $&gt;1$——发散。我们的 $\xi\approx167$ 远在界外，所以 symplectic 在这场硬弹簧里没有任何优势。</p>
+        </div>
+
         <h3 id="forward-explodes">Forward Euler：放大倍数恒 &gt; 1，必炸</h3>
         <p>$G_{\text{forward}}=\sqrt{1+\xi^2}$，无论 $\xi$ 多小都<b>严格大于 1</b>。也就是说，纯显式欧拉对谐振子<span class="term-i">永远</span>在往振幅里注入能量，只是 $\xi$ 小时注得慢、看着像稳定，$\xi$ 一大就肉眼可见地指数发散。它每步都凭空造能量，是个「永动机」，物理上根本说不通。这就是你在 GAMES103 里把弹簧调硬一点、时间步调大一点，画面立刻飞出屏幕的数学原因。</p>
 

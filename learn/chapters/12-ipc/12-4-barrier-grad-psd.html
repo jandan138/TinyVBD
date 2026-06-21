@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>barrier 求导与 PSD 投影：怎么进 Newton · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-4</div>
+        <h1>barrier 求导与 PSD 投影：怎么进 Newton</h1>
+        <p class="lede">上一节 <a href="12-3-distance-geometry.html">11-3</a> 已经把 barrier 咬住的那个量备齐了：point-triangle / edge-edge 的无符号距离 $d(\mathbf x)$，以及它对各顶点的几何梯度 $\partial d/\partial\mathbf x$。再上一节 <a href="12-2-barrier-energy.html">11-2</a> 给了 barrier $b(d,\hat d)$ 本身。这一节把这两块拼起来：Newton 不吃曲线、吃<b>梯度和 Hessian</b>，我们就用<b>两步链式法则</b>，把 barrier 沿 $d$ 求导、接上 $\partial d/\partial\mathbf x$，得到喂给全局 Newton 步的<b>接触力</b>与<b>曲率</b>；再讲一道你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 已经见过的老操作——<span class="term">PSD projection</span>——为什么在这里同样不可或缺。</p>
+
+        <h2 id="chain-force">第一步链式法则：barrier 的接触力</h2>
+        <p>barrier 是距离的函数，距离又是位置的函数：$b\big(d(\mathbf x)\big)$。要算它对位置的梯度，就是经典的<b>两层复合求导</b>。<b>接触力</b>是 barrier 对位置的负梯度：</p>
+        <div class="math-block">$$\mathbf f_\text{contact} = -\frac{\partial b}{\partial \mathbf x} = -\,b'(d)\,\frac{\partial d}{\partial \mathbf x}$$</div>
+        <p>这一步拆得很干净：$b'(d)$ 是 12-2 那条曲线的<b>斜率</b>——$d$ 越小越陡（且符号为负），于是越靠近、力越大；$\partial d/\partial\mathbf x$ 是 12-3 给的<b>几何梯度</b>，指明「往哪个方向挪能拉开距离」，并按 barycentric 权重落到接触对的各个顶点上。两者相乘，就是一股沿着「分开」方向、随逼近迅速增大的排斥力。<b>标量斜率乘几何方向</b>——一句话就讲完了第一步。</p>
+
+        <h2 id="chain-hessian">第二步链式法则：barrier 的 Hessian（两项）</h2>
+        <p>Hessian 是再求一次导，是曲率信息，喂给 Newton 决定步长大小。但这次复合函数求二阶导，会按乘积法则裂成<b>两项</b>：</p>
+        <div class="math-block">$$\frac{\partial^2 b}{\partial \mathbf x^2} = \underbrace{b''(d)\,\frac{\partial d}{\partial \mathbf x}\Big(\frac{\partial d}{\partial \mathbf x}\Big)^{\!\top}}_{\text{(I) 外积项}} + \underbrace{b'(d)\,\frac{\partial^2 d}{\partial \mathbf x^2}}_{\text{(II) 距离二阶项}}$$</div>
+        <p>盯住这两项各是什么：</p>
+        <ul>
+          <li><b>(I) 外积项 $b''(d)\,\frac{\partial d}{\partial\mathbf x}\big(\frac{\partial d}{\partial\mathbf x}\big)^{\!\top}$。</b>这里 $b''(d)$ 是 barrier 曲线自身的曲率（一个标量），乘上几何梯度的<b>外积</b> $\frac{\partial d}{\partial\mathbf x}(\cdots)^\top$。外积本身是一个秩-1 的<b>半正定</b>矩阵；只要 $b''(d)\ge0$（barrier 在激活区是凸的，这条成立），整项就是半正定——这一项<b>天生乖</b>。</li>
+          <li><b>(II) 距离二阶项 $b'(d)\,\frac{\partial^2 d}{\partial\mathbf x^2}$。</b>麻烦出在这里。$\partial^2 d/\partial\mathbf x^2$ 是<b>距离函数自身的二阶导</b>——它来自几何（最近点怎么随顶点移动而弯曲），<b>不保证半正定</b>。再乘上 $b'(d)$（在激活区为负），符号更不可控。这一项可能给整个 Hessian 拖进负特征值。</li>
+        </ul>
+        <p>落点还是那句老话：<b>梯度进合力、Hessian 进合 Hessian</b>，和惯性、弹性一起组装成一个 Newton 步。这和 10.3 里「把接触折进 $\mathbf H_i$」是同一回事，只不过 IPC 把它们装进的是一个<b>全局</b>稀疏 Hessian，而非每个顶点各自的 3×3 块。</p>
+
+        <h2 id="psd-projection">PSD 投影：把不保险的第二项按住</h2>
+        <p>上面 Hessian 的第二项 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 是个隐患——它不保证半正定。一旦合成的局部 Hessian 出现负特征值，Newton 解出来的方向可能<b>不是下降方向</b>，那一步会把能量越解越高，迭代发散。这正是 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 在弹性元件上遇到过的同一个毛病（压缩 membrane 的体积项让 Hessian 变负），换了个出处而已。</p>
+        <p>解法你也早在 10.2 学过：<b>把每个接触对（以及弹性项）的局部 Hessian 做 PSD projection</b>——对它做<b>特征分解</b>，把负特征值<b>钳到零</b>（或一个小正数），强行投影成半正定，再装配进全局 Hessian：</p>
+        <div class="math-block">$$\mathbf H_\text{local}=\sum_i \lambda_i\,\mathbf v_i\mathbf v_i^{\!\top}\ \longrightarrow\ \widetilde{\mathbf H}_\text{local}=\sum_i \max(0,\lambda_i)\,\mathbf v_i\mathbf v_i^{\!\top}.$$</div>
+        <p>这样保证每一块都半正定，累加出来的全局 Hessian 也半正定，Newton 步永远<b>朝下走</b>。注意它只动<b>负</b>特征值——半正定的外积项 (I) 原封不动，被按住的只是第二项 (II) 偶尔甩出来的负方向。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个 PSD 投影，换了个容器</div>
+          <p>10.2 里你对弹性元件的 3×3 / 小块 Hessian 做 SPD 投影，是为了让 VBD 的<b>per-vertex</b> 牛顿步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 稳定下降。IPC 做的是<b>一模一样的事</b>，只是对象换成了 barrier + elasticity 的局部 Hessian，投影后装配进一个<b>全局</b>稀疏矩阵，再交给全局线性求解器。<b>同一个数学操作（钳负特征值），同一个目的（保证下降方向），只是从 per-vertex 容器换成了全局容器。</b>读到这里你会发现，IPC 的每一块零件你几乎都见过——它的新意不在零件，而在「全局 + CCD line search」这套装配方式。</p>
+        </div>
+
+        <h2 id="dhat-tradeoff">$\hat d$ 的两难：更紧，但更难解</h2>
+        <p>现在可以把 12-2 埋的伏笔讲透了。两步链式法则里，$b''(d)$（外积项的系数）在 $d\to0$ 时爆涨——而激活阈值 $\hat d$ 直接决定 barrier 在多近处开始陡：</p>
+        <ul>
+          <li><b>$\hat d$ 调小</b>：接触更「硬」、几何上更贴近真实的刚性接触，物体之间几乎不留可见缝隙。代价是 barrier 在临近 $0$ 处 $b''$ 极大，全局 Hessian <b>条件数变差</b>，Newton 迭代次数上升、线性求解更吃力。</li>
+          <li><b>$\hat d$ 调大</b>：激活窗口宽、曲线平缓，优化<b>更好解</b>、迭代少；但物体会隔着一层更厚的「软壳」相互悬停，几何精度下降。</li>
+        </ul>
+        <p>所以 $\hat d$ 是<b>几何精度</b>与<b>可解性</b>之间的旋钮，没有免费的更紧。这也呼应了 12-1 的主旨：IPC 的严格保证不是白来的，调紧它就要付更多算力。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">能量 / 力 / Hessian 三视图随距离变化</span></div>
+          <div class="lab-body" data-widget="barrier-curve"></div>
+          <div class="lab-cap">切换「能量 / 力（$b'$）/ Hessian（$b''$）」三个视图，拖动距离 $d$，看力怎么在逼近时迅速增大、$b''$ 怎么在临近 $0$ 处爆涨（这就是条件数变差的根）；再调 $\hat d$ 看激活窗口与陡峭程度怎么联动。</div>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) barrier 进 Newton 靠<b>两步链式法则</b>：接触力 $=-b'(d)\,\partial d/\partial\mathbf x$（标量斜率乘 12-3 的几何方向），Hessian $=b''(d)\,\partial d/\partial\mathbf x(\partial d/\partial\mathbf x)^\top + b'(d)\,\partial^2 d/\partial\mathbf x^2$。(2) Hessian 第一项是半正定的外积项、天生乖，<b>第二项含距离二阶项 $\partial^2 d/\partial\mathbf x^2$，不保证半正定</b>，会拖出负特征值；必须像 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 那样做 <span class="term">PSD projection</span>——特征分解、把负特征值钳到零——才能保证 Newton 步是下降方向。(3) 阈值 $\hat d$ 是<b>几何精度与可解性的取舍</b>：越小越贴真，但 $b''$ 越大、条件数越差、Newton 越难收。</p>
+        <p>到此，barrier 已经完整地咬进了 Newton 步。但还差最关键的一把锁：链式法则给的力/Hessian 挡得住<b>连续</b>的逼近，挡不住<b>离散一步跨过去</b>的越界。下一节 <a href="12-5-ccd-linesearch.html">11-5（CCD line search）</a>，我们就讲 IPC 那道 <span class="term">CCD</span>-filtered line search——它才是把「不穿透」从软挡升级成<b>严格保证</b>的真正功臣。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

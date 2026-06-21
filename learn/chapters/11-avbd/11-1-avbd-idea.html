@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="10-1">
+<body data-root="../../" data-section="11-1">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,7 +23,7 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 10 · 10-1</div>
+        <div class="eyebrow">Part 11 · 11-1</div>
         <h1>VBD 软肋 → AVBD</h1>
         <p class="lede">VBD 很稳，但稳不等于全能。这一节先诚实复盘它三处真实的短板——高刚度比收敛、硬约束、惩罚式碰撞——再看 VBD 作者团队一年后给出的回应：<span class="term">AVBD</span>。它没有推翻 VBD，而是在原来的 block coordinate descent 骨架上，盖了一层 <span class="term">augmented Lagrangian</span>，把这几处软肋逐一补齐。</p>
 
@@ -72,6 +72,12 @@
         <p>于是同一套 ramp 机制，对软材料是「加到合适就停」，对硬约束是「敢加到天上去」，靠 $\lambda$ 兜住数值上的良态。这就是为什么 AVBD 既能保留软体的物理刚度，又能在它之上叠出真正的硬约束。</p>
 
         <div class="callout note">
+          <div class="c-h">把 k 推向无穷，AVBD 凭什么还能下降，纯 penalty 却不能？答案在那个 λ</div>
+          <p>这里有个尖锐的内部张力值得停下来想：本节 <a href="#recap-limits">开头</a>刚说过「无穷大的能量项会让能量碗陡到无法下降，纯能量框架做不到硬约束」；可上面又说 hard 约束的 $k$ 「可一路冲向无穷」。AVBD 不也在把 $k$ 推向无穷吗，凭什么它能下降、纯 penalty 不能？</p>
+          <p><b>区别全在那个 $\lambda$。</b>纯 penalty 只有 $k$ 一个旋钮：要把约束顶到满足，唯一办法是<b>单靠 $k\to\infty$</b> 把违反量硬压下去——可 $k$ 一大，能量碗就陡到病态、牛顿步条件数爆炸、再也下不动。AVBD 多了一个跨迭代维护的对偶变量 $\lambda$，让 <b>$\lambda$ 承担「把约束顶到满足」的主力</b>：$\lambda$ 一步步逼近正确的约束力，约束就趋于满足，而 $k$ 只需要保持系统<b>良态、好下降</b>——不必真把数值开到无穷就能逼近精确约束。换句话说，纯 penalty 要靠陡到病态的碗硬啃，AVBD 把这件苦差交给 $\lambda$、让碗保持温和。这正是 <b>augmented</b>（增广）相对 pure-penalty 的全部意义，也是为什么前面那条「纯能量做不到硬约束」和这条「AVBD 能把 hard 约束的 $k$ 推向无穷」并不矛盾。上面的 <code>avbd-penalty-ramp</code> widget 正是这个机制的可拖动版本。</p>
+        </div>
+
+        <div class="callout note">
           <div class="c-h">论文给的默认参数（无需调参）</div>
           <p>AVBD 论文给出一组开箱即用的默认值：衰减相关的 $\alpha=0.95$、$\gamma=0.99$，帧内增长因子 $\beta=10$，以及每条约束各自的起始刚度 $k_{\text{start}}$。$\gamma$ 接近 1 → warm-start 缓慢遗忘上一帧；$\beta=10$ → 每次 ramp 一口气把违反约束的惩罚加一个量级，收敛快。下面的 widget 就让你亲手拨这几个旋钮，看 $k$ 怎么爬、soft 怎么封顶、hard 怎么往上冲。</p>
         </div>
@@ -86,7 +92,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) VBD 的真软肋是<b>高刚度比</b>收敛、<b>硬约束</b>、<b>惩罚碰撞不保证无穿透</b>——其中高<b>质量</b>比反而是它的强项，别混淆；(2) <b>AVBD</b> 在 VBD 的 block coordinate descent 上加 <b>augmented Lagrangian + 自适应 primal-dual</b>，用一个跨迭代维护的 $\lambda$ 把约束顶到满足，从而能强制硬约束、改善高刚度比，撑起 rigid 接触/堆叠/摩擦/关节；(3) 核心机制是 <b>penalty ramping</b>：跨帧 warm-start 衰减（带记忆地继承上一帧），帧内对仍违反的约束按 $\beta$ ramp up，<b>soft 封顶在材料刚度、hard 冲向无穷</b>，默认 $\alpha=0.95,\ \beta=10,\ \gamma=0.99$ + 每约束 $k_{\text{start}}$。</p>
-        <p>下一节 <a href="10-2-rigid-and-further.html">10-2（Newton rigid AVBD 一瞥）</a>，我们落回工程：看 Newton 里 <code>SolverVBD</code> 怎么「particle 用 VBD、rigid 用 AVBD」，那几个 <code>rigid_avbd_gamma</code> / <code>rigid_contact_k_start</code> / <code>rigid_avbd_beta</code> 参数正是这一节机制的代码出口，再给你指几条继续往下读的路。</p>
+        <p>下一节 <a href="11-2-rigid-and-further.html">10-2（Newton rigid AVBD 一瞥）</a>，我们落回工程：看 Newton 里 <code>SolverVBD</code> 怎么「particle 用 VBD、rigid 用 AVBD」，那几个 <code>rigid_avbd_gamma</code> / <code>rigid_contact_k_start</code> / <code>rigid_avbd_beta</code> 参数正是这一节机制的代码出口，再给你指几条继续往下读的路。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

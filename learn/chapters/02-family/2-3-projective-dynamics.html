@@ -41,6 +41,23 @@
         <div class="math-block">$$\mathbf p_i = l_0\,\frac{\mathbf d}{\lVert\mathbf d\rVert}$$</div>
         <p>就是「保持方向、长度设成 $l_0$」。没有求解线性系统，没有迭代，每条约束一个除法。这就是 "projective"（投影）这个名字的来历：把当前位形<i>投影</i>到「约束满足的流形」上，得到一个理想目标 $\mathbf p_i$。</p>
 
+        <h3 id="one-projection">代数字：单弹簧一次 local 投影</h3>
+        <p>把 $\mathbf p_i=l_0\,\mathbf d/\lVert\mathbf d\rVert$ 落成一个数。取一根弹簧，两端 $\mathbf x_a=(0,0)$、$\mathbf x_b=(1.5,0)$，rest length $l_0=1$。当前边向量与长度：</p>
+        <div class="math-block">$$\mathbf d = \mathbf x_a-\mathbf x_b = (-1.5,\,0),\qquad \lVert\mathbf d\rVert = 1.5$$</div>
+        <p>local 步把这条「现在长 1.5」的边，沿同方向投影到长度 $l_0=1$（这里以 $\mathbf x_b\!\to\!\mathbf x_a$ 方向取理想端点更直观，方向单位向量 $(1,0)$）：</p>
+        <div class="math-block">$$\mathbf p = l_0\,\frac{\mathbf d}{\lVert\mathbf d\rVert} \;\Longrightarrow\; \text{理想边长度} = 1.0,\quad \mathbf p = (1.0,\,0)$$</div>
+        <p>就这一个除法：长 1.5 的边投到长度 1.0 的理想边 $\mathbf p=(1.0,0)$。然后 global 步这一项的目标，变成「让真实边贴近这个 $\mathbf p$」。</p>
+        <div class="callout note">
+          <div class="c-h">对照 PBD 投影（同一根边）</div>
+          <p>这数字是为讲解构造的自洽示例。拿它和 <a href="2-1-pbd.html">2.1</a> 的 PBD 投影对照：同一根边，PBD 看的是约束量 $C=\lVert\mathbf d\rVert-l_0=1.5-1=0.5$，直接按 $\nabla C$ 把两端各推回去把 $C$ 抹零；PD 则先算出理想边 $\mathbf p=(1.0,0)$，再交给 global 步统一拼回。<b>PBD 投影 = 掰约束量到 0；PD 投影 = 算一个理想目标 $\mathbf p$</b>——这就是 §2.1 与本节的同根对照。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">PD 的 local / global 交替：投影 → 拼回 → 再逼近</span></div>
+          <div class="lab-body" data-widget="pd-local-global"></div>
+          <div class="lab-cap">上半：当前弹簧链 + 每条边 local 步投影出的虚线「理想边」$\mathbf p_i=l_0\mathbf d/\lVert\mathbf d\rVert$（一束各自掰直但顶点对不齐的片段）；下半：$G$ 随 local/global 交替轮次<b>单调下降</b>的折线，并标注 global 矩阵「恒定 / 已预分解」。调顶点数 <b>N</b> 与刚度权重 <b>w</b>，按「单步 local / global / 自动连跑」三态按钮，亲眼看「local 把边各自掰直 → global 把顶点拼回但边又略偏 → 反复逼近」。</div>
+        </div>
+
         <div class="bridge g103">
           <div class="c-h"><span class="tag">从 GAMES103 看</span> 你大概率已经写过 PD 而不自知</div>
           <p>GAMES103 讲 mass-spring 隐式积分时，那套「先把每根弹簧投影到 rest length，再解一个全局线性系统把所有顶点拼回去，反复几轮」的做法，正是 Liu et al. 2013 的 local/global 求解——也就是 mass-spring 版的 Projective Dynamics。你当时可能只觉得它「比 Newton 好写、跑得还快」，没意识到背后是把 $E$ 写成那个特殊二次型换来的。这一节就是给那段经验补上名字和原理。</p>
@@ -89,6 +106,7 @@
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

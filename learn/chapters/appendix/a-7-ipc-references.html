@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPC 参考文献 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-7">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-7</div>
+        <h1>IPC 参考文献</h1>
+        <p class="lede">「IPC 篇」把接触从 <a href="../10-elasticity-collision/10-3-collision.html">10-3</a> 的局部 log-barrier、<a href="../11-avbd/11-1-avbd-idea.html">11-1</a> 的 penalty / AVBD，推到了 <span class="term">interior-point</span> + <span class="term">CCD</span> 的严格 intersection-free 世界。这一页把这条路的源头列清楚：奠基的那篇 2020 论文、几篇把它推得更远的后续工作、以及让你能「看见」它在跑的项目页与 demo。每条都附一句中文，告诉你它值不值得点进去、该带着什么问题去读。</p>
+
+        <h2 id="papers">论文 <span class="term">Papers</span></h2>
+        <ul>
+          <li>
+            <b>Incremental Potential Contact: Intersection- and Inversion-free, Large-Deformation Dynamics.</b> Minchen Li, Zachary Ferguson, Teseo Schneider, Timothy Langlois, Denis Zorin, Daniele Panozzo, Chenfanfu Jiang, Danny M. Kaufman. ACM <span class="term">TOG</span>（SIGGRAPH）39(4), Art. 49（2020）。
+            本篇的奠基之作：把接触写成 primal <span class="term">interior-point</span> 的 <span class="term">log-barrier</span>，注入变分优化 $\min G(\mathbf x)$，再用 <span class="term">CCD</span>-filtered line search 在整个非线性求解迭代中始终保持可行性——于是 intersection-free 是「保证」而非「兜底」。想真正吃透 barrier 的精确解析式、收敛行为与求解器细节，<b>从这一篇的 PDF 进</b>。
+            项目主页：<a href="https://ipc-sim.github.io/" target="_blank" rel="noopener">ipc-sim.github.io</a> ·
+            PDF：<a href="http://web.uvic.ca/~teseo/publications/ipc/downloads/2020-IPC.pdf" target="_blank" rel="noopener">2020-IPC.pdf</a>。
+          </li>
+        </ul>
+
+        <h2 id="follow-up">后续工作 <span class="term">Follow-up</span></h2>
+        <p>下面三篇是 IPC 之后的延伸，<b>不要把它们的细节当成 2020 原文的事实</b>——它们各自换了设定、解决不同问题，列在这里是给你「读完原文之后往哪走」的路标。</p>
+        <ul>
+          <li>
+            <b>Codimensional IPC（C-IPC）.</b>（2021）在原 IPC 框架上扩到<b>任意 codimension</b>——点、线、面、体统一做无穿透耦合，让壳、杆、布、实体能在同一套 barrier 下相互接触。想把 IPC 从「实体网格」推广到薄壳与杆线，读它。
+            项目主页：<a href="https://ipc-sim.github.io/C-IPC/" target="_blank" rel="noopener">ipc-sim.github.io/C-IPC</a> ·
+            DOI：<a href="https://doi.org/10.1145/3450626.3459767" target="_blank" rel="noopener">10.1145/3450626.3459767</a>。
+          </li>
+          <li>
+            <b>Convergent IPC.</b>（2023）原 IPC 是一个离散约束模型，网格细化下不一定收敛到一个良定义的连续解；这篇在<b>连续设定</b>下重构 barrier，并给出一个可收敛的离散化。关心 IPC 的<b>数值收敛性与一致性</b>，读它。
+            arXiv：<a href="https://arxiv.org/abs/2307.15908" target="_blank" rel="noopener">arXiv:2307.15908</a>。
+          </li>
+          <li>
+            <b>Affine Body Dynamics（ABD）.</b>（2022）在 IPC 框架上做<b>刚硬材料</b>的快速无穿透仿真：把近刚体用仿射自由度表达，既保留 IPC 的 intersection-free，又大幅压低硬材料的求解负担。想在 IPC 的保证下高效跑大量近刚体，读它。
+            arXiv：<a href="https://arxiv.org/abs/2201.10022" target="_blank" rel="noopener">arXiv:2201.10022</a>。
+          </li>
+        </ul>
+
+        <h2 id="demos-project">demo 与项目页 <span class="term">Demos &amp; Project</span></h2>
+        <ul>
+          <li>
+            <b>IPC 官方项目页.</b> 论文、视频、代码的总入口；配套可视化把「intersection-free 在极端压缩 / 大形变下也不穿帮」演示得很直观——读论文前先看动图，能省下不少想象成本。
+            主页：<a href="https://ipc-sim.github.io/" target="_blank" rel="noopener">ipc-sim.github.io</a>。
+          </li>
+          <li>
+            <b>C-IPC 项目页.</b> Codimensional IPC 的配套页，壳 / 杆 / 布 / 体在同一 barrier 下相互接触的例子集中在这里；想看「任意 codimension 统一耦合」长什么样，从这页的视频切入最快。
+            主页：<a href="https://ipc-sim.github.io/C-IPC/" target="_blank" rel="noopener">ipc-sim.github.io/C-IPC</a>。
+          </li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">关于性能数字的诚实声明</div>
+          <p>网上流传的一些 IPC / C-IPC / ABD 性能数字（每步耗时、网格与顶点规模、加速倍数、与某方法的倍数对比等），本教程<b>没有</b>独立核对过原始 PDF 与测试条件，因此「IPC 篇」正文里一律没有引用它们；后续工作（C-IPC、Convergent IPC、ABD）的细节也<b>不</b>当作 2020 原文的事实混写。需要可引用的数据，请回到上面各论文的官方项目页与 PDF 自行核对。术语含义见 <a href="a-1-glossary.html#contact-ipc">术语表的「接触与 IPC」段</a>，公式与符号见 <a href="a-2-cheatsheet.html#contact-ipc">公式速查的「接触 barrier 与 IPC」段</a>，原书主线一侧的参考见 <a href="a-3-references.html">a-3 参考文献</a>，Newton / VBD / AVBD 一侧的参考见 <a href="a-6-newton-references.html">a-6 参考文献</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

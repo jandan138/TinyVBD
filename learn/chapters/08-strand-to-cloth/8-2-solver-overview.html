@@ -32,7 +32,7 @@
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">solver_vbd.py · step()</span><button class="cp">复制</button></div><pre><code>def step(self, state_in, state_out, control, contacts, dt):
     ...</code></pre></div>
         <p><code>state_in</code> 是输入快照、<code>state_out</code> 写输出、<code>contacts</code> 是 <code>model.collide()</code> 填好的碰撞结果、<code>dt</code> 是这一步的时间步。这正对应 TinyVBD 里 <code>simulate()</code> 每个 substep 调一次的那套流程——只不过 TinyVBD 把「输入」和「输出」都放在同一个 <code>strand</code> 对象里原地改，Newton 则显式用两个 State 做 ping-pong（<a href="../07-newton-foundations/7-3-data-model.html">7.3</a> 的 <code>state_in, state_out = state_out, state_in</code>）。</p>
-        <p>关键事实先摆明：<span class="term">SolverVBD</span> 对 <b>particle 用 VBD</b>、对 <b>rigid body 用 AVBD</b>（<code>solver_vbd.py:88</code> 的类 docstring）。本书的主线是 particle，所以下面凡是 rigid 的部分我们只点名它存在、不展开（rigid 的 AVBD penalty 机制留到 <a href="../10-avbd/10-1-avbd-idea.html">10.1</a>）。<code>step()</code> 的 docstring 自己就把结构写得清清楚楚（<code>solver_vbd.py:1588</code>）：「The solver follows a 3-phase structure」。</p>
+        <p>关键事实先摆明：<span class="term">SolverVBD</span> 对 <b>particle 用 VBD</b>、对 <b>rigid body 用 AVBD</b>（<code>solver_vbd.py:88</code> 的类 docstring）。本书的主线是 particle，所以下面凡是 rigid 的部分我们只点名它存在、不展开（rigid 的 AVBD penalty 机制留到 <a href="../11-avbd/11-1-avbd-idea.html">11.1</a>）。<code>step()</code> 的 docstring 自己就把结构写得清清楚楚（<code>solver_vbd.py:1588</code>）：「The solver follows a 3-phase structure」。</p>
 
         <h2 id="skeleton">三段式骨架</h2>
         <p>把 rigid / particle 两条线并排，<code>step()</code> 的主体就是下面这个骨架（<code>solver_vbd.py:1613</code> 起）：</p>
@@ -77,6 +77,16 @@ self._finalize_particles(state_out, dt)</code></pre></div>
         </table>
         <p>用一句话记牢层级：<b>一帧 → 若干 substep → 每个 substep 一次 step() → step() 里 iterations 轮迭代 → 每轮按颜色扫</b>。<code>substeps</code> 是把时间切细（改善大变形 / 高刚度的稳定与精度），<code>iterations</code> 是把<b>同一个</b> $\arg\min G$ 解得更准。这和 TinyVBD 完全同构：那边 <code>simulate()</code> 先 <code>dt /= substeps</code>，每帧每 substep 跑一次「forwardStep → numIterations 次 solve → updateVelocity」（<a href="../04-code/4-5-main-loop.html">4.5</a>）。Newton 的 <code>self.iterations</code> 就是 TinyVBD 的 <code>numIterations</code>。</p>
 
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">step() 三段式 + substep×iteration 嵌套时间线</span></div><div class="lab-body" data-widget="solver-step-phases"></div><div class="lab-cap">横向时间线：<b>init → [每个 substep：iterate 里逐 color sweep] → finalize</b>。拖 substeps / iterations / colors 看嵌套怎么展开；点一个阶段，看它映射回哪个 TinyVBD 方法（forwardStep / solve / updateVelocity）。把「外层 substep、内层 iteration、最内 per-color」一眼锁死。</div></div>
+
+        <div class="callout note">
+          <div class="c-h">worked example：一帧到底跑几次「按 color 的 launch」</div>
+          <p>四层嵌套最有说服力的是一笔账。取一组示意参数：<code>substeps=10</code>、<code>iterations=100</code>、<code>colors=4</code>。顺着层级数下来——一帧切成 <b>10</b> 个 substep，每个 substep 调一次 <code>step()</code>；每次 <code>step()</code> 的 Phase 2 跑 <b>100</b> 轮 iteration；每轮 iteration 要把 <b>4</b> 个 color group 各 launch 一次（同色顶点一口气并行解）。乘起来：</p>
+          <div class="math-block">$$10\ \text{(substeps)}\times100\ \text{(iterations)}\times4\ \text{(colors)} = 4000\ \text{次「按 color 的 kernel launch」／帧}$$</div>
+          <p>这 4000 不是「解了 4000 次某个顶点」，而是 <code>solve_elasticity</code> 这类 per-color kernel 被 <code>wp.launch</code> 启动了 4000 次，每次并行处理一整个 color 的所有顶点。用这个乘积把「一帧 → substep → step → iteration → 按 color 扫」四层钉死：换掉任一层的数字，总 launch 数就按比例变。</p>
+          <p><b>注</b>：<code>colors=4</code> 是<b>示意</b>——真实颜色数取决于网格拓扑（顶点的最大度数），由 <code>builder.color()</code> 算出，<a href="8-5-coloring-parallel.html">8.5</a> 会带你在一小片网格上亲手数。这里只为把乘法关系讲清。</p>
+        </div>
+
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> step() 的三段，就是 simulate() 每 substep 的三步</div>
           <p>把 Newton 的 <code>step()</code> 和 TinyVBD <code>simulate()</code> 的每个 substep 一一对上，你会发现是同一套骨架穿了不同的衣服：</p>
@@ -120,6 +130,7 @@ self._finalize_particles(state_out, dt)</code></pre></div>
   <script src="../../assets/js/widgets/cloth-core.js"></script>
   <script src="../../assets/js/widgets/cloth-lab.js"></script>
   <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

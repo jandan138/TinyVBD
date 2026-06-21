@@ -48,6 +48,48 @@
           <p>固定除 $i$ 外的所有顶点，把 $G$ 视为 $\mathbf x_i$ 的函数，记为 $G|_{\mathbf x_i}$。则 $G|_{\mathbf x_i}$ 与 $G_i$ <b>至多相差一个与 $\mathbf x_i$ 无关的常数</b>（那个常数正是所有不含 $i$ 的项之和）。因此二者有<b>相同的梯度、相同的 Hessian、相同的下降方向</b>：$\nabla_{\mathbf x_i}G=\nabla_{\mathbf x_i}G_i=-\mathbf f_i$，$\nabla^2_{\mathbf x_i}G=\nabla^2_{\mathbf x_i}G_i=\mathbf H_i$。所以对 $G_i$ 做的那一步牛顿，就是对 $G$（限制在 $\mathbf x_i$ 方向上）做的那一步牛顿。</p>
         </div>
 
+        <h2 id="worked">手算验证：3 顶点 strand 上 ΔG = ΔG₁</h2>
+        <p>把上面的等式代具体数字验一遍——「trust me」变「verified」。取一根 3 顶点 strand，只动中间顶点 $\mathbf x_1$，分别算<b>全局</b> $\Delta G$ 和<b>局部</b> $\Delta G_1$，看它们是否一字不差。</p>
+
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>下面的坐标、$\mathbf y_1$ 是为把等式算给你看而挑的<b>示意</b>数字。要看的是「两个 $\Delta$ 数值对上、且不碰 $\mathbf x_1$ 的项贡献 0」这个<b>结构</b>，不是具体小数对应某真实帧。</p>
+        </div>
+
+        <h3 id="worked-setup">布置</h3>
+        <p>三个顶点排在 $x$ 轴上，两条弹簧 $k=100,\ l_0=1$；顶点 1 的惯性 $m/h^2=3600$、目标 $\mathbf y_1=(1.2,0,0)$。<b>只移动顶点 1</b>：从 $x_1=1.0$ 挪到 $x_1'=1.1$（$\Delta\mathbf x_1=(0.1,0,0)$），顶点 0、2 钉死不动。</p>
+        <div class="math-block">$$\mathbf x_0=(0,0,0)\ \text{(pin)},\quad \mathbf x_1=(1,0,0)\to(1.1,0,0),\quad \mathbf x_2=(2,0,0)\ \text{(不动)}$$</div>
+
+        <h3 id="worked-which-change">哪些项会变？</h3>
+        <p>$G$ 里每一项逐个看：</p>
+        <ul>
+          <li><b>顶点 1 惯性</b> $\frac{m}{2h^2}\lVert\mathbf x_1-\mathbf y_1\rVert^2$ —— 变（$x_1$ 动了）。</li>
+          <li><b>弹簧 0–1</b> $E_{01}$ —— 变（端点 1 动了）。</li>
+          <li><b>弹簧 1–2</b> $E_{12}$（<b>共享</b>弹簧，1 和 2 都连它）—— 变（端点 1 动了）。</li>
+          <li><b>顶点 2 惯性</b> —— <b>不变</b>，因为 $\mathbf x_2$ 没动 → 贡献 <b>0</b>。</li>
+          <li>顶点 0 是 pin（无惯性项）、没有别的弹簧 —— 无贡献。</li>
+        </ul>
+        <p>会变的三项，<b>恰好就是 $G_1$ 的全部成员</b>（顶点 1 的惯性 + 它的两条邻接弹簧 $E_{01},E_{12}$）。所有不碰 $\mathbf x_1$ 的项——尤其那个常被误以为该算进来的「顶点 2 惯性」——因为<b>邻居 $\mathbf x_2$ 没动</b>，是常数，进不了 $\Delta G$。这就是等式成立的全部机理。</p>
+
+        <h3 id="worked-compute">逐项算</h3>
+        <p><b>动前</b> $x_1=1.0$：弹簧 0–1 长 $=1=l_0$ → $E_{01}=0$；弹簧 1–2 长 $=1=l_0$ → $E_{12}=0$；惯性 $=\frac{3600}{2}(1.0-1.2)^2=1800\times0.04=72$。</p>
+        <p><b>动后</b> $x_1=1.1$：</p>
+        <div class="math-block">$$E_{01}=\tfrac12\cdot100\cdot(1.1-1)^2=50\times0.01=0.5$$</div>
+        <div class="math-block">$$E_{12}=\tfrac12\cdot100\cdot(0.9-1)^2=50\times0.01=0.5\qquad(\text{长}=|2-1.1|=0.9)$$</div>
+        <div class="math-block">$$\text{惯性}=\tfrac{3600}{2}(1.1-1.2)^2=1800\times0.01=18$$</div>
+
+        <h3 id="worked-match">两个 ΔG 对上</h3>
+        <p><b>全局</b>：只有上述三项变，逐项差相加</p>
+        <div class="math-block">$$\Delta G=\underbrace{(18-72)}_{\text{惯性}}+\underbrace{(0.5-0)}_{E_{01}}+\underbrace{(0.5-0)}_{E_{12}}=-54+0.5+0.5=-53$$</div>
+        <p><b>局部</b>：$G_1$ = 顶点 1 惯性 + $E_{01}+E_{12}$，同样三项</p>
+        <div class="math-block">$$\Delta G_1=(18-72)+(0.5-0)+(0.5-0)=-53$$</div>
+        <p>$\Delta G=\Delta G_1=-53$，<b>一字不差</b>。$G$ 降了，正是因为 $G_1$ 降了同样多——局部下降<b>就是</b>全局下降。</p>
+
+        <div class="callout warn">
+          <div class="c-h">对照：偷懒用 ΣΔGᵢ 会错</div>
+          <p>若按「$G=\sum G_i$」去加，共享弹簧 $E_{12}$ 会被<b>数两遍</b>：它在 $G_1$ 里算了一次（贡献 $+0.5$），在 $G_2$ 里又算一次（$G_2$ = 顶点 2 惯性 + $E_{12}$，而顶点 2 惯性不变贡献 0，故 $\Delta G_2=+0.5$）。于是 $\sum_i\Delta G_i=\Delta G_1+\Delta G_2=-53+0.5=-52.5\neq\Delta G=-53$。多出来的 $0.5$ 正是被重复计数的那条共享弹簧。<b>所以我们绝不用 $\sum\Delta G_i$，只用「单顶点移动时 $\Delta G=\Delta G_i$」这条精确等式。</b></p>
+        </div>
+
         <h2 id="descent">从「相等」到「单调下降」</h2>
         <p>有了上面的等式，逻辑链就闭合了。VBD 给顶点 $i$ 走的那一步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，是沿着 $G_i$（因而也是 $G$）的下降方向走的——只要这一步确实降低了 $G_i$（步长得当时成立，<a href="../03-vbd/3-5-stability.html">3.5</a> 讨论为何这里几乎总成立、且不需要 line search），它就<b>同样幅度地</b>降低了 $G$。把一次 sweep 里的每一步串起来：</p>
         <div class="math-block">$$G^{(0)}\;\ge\;G^{(1)}\;\ge\;G^{(2)}\;\ge\;\cdots$$</div>

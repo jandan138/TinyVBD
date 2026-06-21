@@ -173,37 +173,42 @@
             <tr>
               <td><span class="term">Neo-Hookean</span> (membrane / volumetric)</td>
               <td>超弹性能量模型。membrane 版给 cloth 三角（变形梯度 $\mathbf F$ 是 3×2）；volumetric 版给 tet soft body（$\mathbf F$ 是 3×3）。</td>
-              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+              <td><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
             </tr>
             <tr>
               <td><span class="term">stable Neo-Hookean</span> ($\lambda_{NH}=\lambda+\mu$)</td>
               <td>Smith 2018 的稳定版 Neo-Hookean 约定：用 $\lambda_{NH}=\lambda_{\text{Lamé}}+\mu_{\text{Lamé}}$、能量 $\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2$，$\alpha=1+\mu/\lambda$。</td>
-              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+              <td><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
             </tr>
             <tr>
               <td><span class="term">dihedral bending</span></td>
               <td>二面角弯曲能量：相邻两三角的夹角 $\theta$ 偏离静止角的代价 $E=\frac12 (k\,L_{\text{rest}})(\theta-\theta_{\text{rest}})^2$；边界边跳过。cloth 的弯曲刚度来源。</td>
-              <td><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+              <td><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
             </tr>
             <tr>
               <td><span class="term">SPD projection</span></td>
               <td>把局部 Hessian 投影成对称正定，保证每步牛顿都是「往谷底走」。membrane 的做法是把违正定的特征值 clamp（<code>s_clamp = max(0, …)</code>）。</td>
-              <td><a href="../09-elasticity-collision/9-2-spd-damping.html">9.2</a></td>
+              <td><a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a></td>
             </tr>
             <tr>
               <td><span class="term">Rayleigh damping</span> ($D=k_d\cdot k_e$)</td>
               <td>瑞利阻尼：阻尼系数取刚度的常数倍，$D=k_d\cdot k_e$（$k_d$ 是无量纲 Rayleigh 系数）；membrane / volumetric 各有 Frobenius / trace 形式的耗散项。</td>
-              <td><a href="../09-elasticity-collision/9-2-spd-damping.html">9.2</a></td>
+              <td><a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a></td>
             </tr>
             <tr>
               <td><span class="term">self-collision</span> / <span class="term">BVH</span></td>
               <td>自碰撞检测：用 BVH（bounding volume hierarchy）做 broad-phase，再做 vertex-triangle 与 edge-edge 的 narrow-phase；TinyVBD 完全没有碰撞。</td>
-              <td><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+              <td><a href="../10-elasticity-collision/10-3-collision.html">10.3</a></td>
             </tr>
             <tr>
               <td><span class="term">penetration-free truncation</span> (DAT)</td>
               <td>每色 sweep 后，按保守界把这一步的位移截断，保证不穿透；是 production 稳定性的关键一环。</td>
-              <td><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+              <td><a href="../10-elasticity-collision/10-3-collision.html">10.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">IPC</span> (log-barrier + CCD)</td>
+              <td>对照项：把 10-3 的 local barrier + DAT 几何兜底升级成「全局 interior-point barrier + CCD-filtered line search 严格保证」intersection-free。<b>不在 Newton 代码里</b>，是概念篇——读完 DAT 想知道它和 IPC 差在哪，就看 Part 12。</td>
+              <td><a href="../12-ipc/12-1-why-ipc.html">12.1</a></td>
             </tr>
           </tbody>
         </table>
@@ -220,24 +225,24 @@
             <tr>
               <td><span class="term">AVBD</span> (Augmented VBD)</td>
               <td>VBD 的增广版（Giles 2025）：在 VBD 上加 augmented Lagrangian 与自适应 primal-dual，能强制硬约束、并在高刚度比下收敛更好。Newton 的 rigid 路径用它。</td>
-              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+              <td><a href="../11-avbd/11-1-avbd-idea.html">11.1</a></td>
             </tr>
             <tr>
               <td><span class="term">augmented Lagrangian</span></td>
               <td>增广拉格朗日：在惩罚项之外再带一个拉格朗日乘子 $\lambda$，使约束能被精确满足而不必把惩罚刚度推到无穷。AVBD 处理硬约束的核心。</td>
-              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+              <td><a href="../11-avbd/11-1-avbd-idea.html">11.1</a></td>
             </tr>
             <tr>
               <td><span class="term">penalty ramping</span> ($k_{start}$ / $\beta$ / $\gamma$)</td>
               <td>惩罚刚度的自适应演化：每帧从 per-constraint 的 $k_{start}$ warm-start，迭代内对仍违反的约束以 $\beta$ 增长、跨帧以 $\gamma$ 衰减；soft 约束封顶在材料刚度，hard 约束可冲向更高。论文默认 $\alpha=0.95,\beta=10,\gamma=0.99$。</td>
-              <td><a href="../10-avbd/10-1-avbd-idea.html">10.1</a></td>
+              <td><a href="../11-avbd/11-1-avbd-idea.html">11.1</a></td>
             </tr>
           </tbody>
         </table>
 
         <div class="callout note">
           <div class="c-h">想要对照关系而不是逐条定义？</div>
-          <p>这张表偏向「术语 → 意思」。如果你要的是「TinyVBD ↔ Newton ↔ Isaac 哪个概念对哪个」的并排速查，去 <a href="a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查</a>。要追到 Newton / VBD / AVBD 的原始论文与代码，看 <a href="a-6-newton-references.html">Newton / VBD / AVBD 参考文献</a>。</p>
+          <p>这张表偏向「术语 → 意思」。如果你要的是「TinyVBD ↔ Newton ↔ Isaac 哪个概念对哪个」的并排速查，去 <a href="a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查</a>。要追到 Newton / VBD / AVBD 的原始论文与代码，看 <a href="a-6-newton-references.html">Newton / VBD / AVBD 参考文献</a>；要追到 IPC（log-barrier / interior-point / CCD）的原始论文，看 <a href="a-7-ipc-references.html">a-7 IPC 参考文献</a>，对应的接触/IPC 术语已收进 <a href="a-1-glossary.html#contact-ipc">a-1 术语表的「接触与 IPC」段</a>。</p>
         </div>
       </article>
     </main>

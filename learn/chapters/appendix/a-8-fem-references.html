@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FEM / 连续介质 参考文献 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="a-8">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Appendix · Reference · a-8</div>
+        <h1>FEM / 连续介质 参考文献</h1>
+        <p class="lede">「FEM 篇」（<a href="../09-fem/9-1-why-fem.html">Part 9</a>）把弹性项从弹簧的 $\tfrac12k(l-l_0)^2$ 推广到连续介质的 $\int_\Omega \psi(F)\,\mathrm dV$：形变梯度 <span class="term">deformation gradient</span> $F$、应变能密度 <span class="term">strain energy density</span> $\psi(F)$、第一 Piola-Kirchhoff 应力 $P=\partial\psi/\partial F$，再装配回每顶点的 $f_i/H_i$。这一页把这条路的源头列清楚：一个标准的、可读性最好的入门 course，本书 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1</a> 实际用的那篇 stable Neo-Hookean，一本严谨的连续介质教材，以及 co-rotational 与现代超弹性的若干路标。每条都附一句中文，告诉你它值不值得点进去、该带着什么问题去读。</p>
+
+        <h2 id="papers">论文与教程 <span class="term">Papers &amp; Courses</span></h2>
+        <ul>
+          <li>
+            <b>FEM Simulation of 3D Deformable Solids: A Practitioner's Guide to Theory, Discretization and Model Reduction.</b> Eftychios Sifakis &amp; Jernej Barbič. SIGGRAPH course。
+            <b>从这一篇进门</b>：它是图形学里讲「形变体 FEM」最易读的一份系统材料——从 <span class="term">deformation gradient</span> $F$、<span class="term">strain energy</span>、到力 $f=-\partial\Psi/\partial x$ 与 <span class="term">force differentials</span>（即装配进 Hessian 的那块），一路把直觉和离散化讲透。读 <a href="../09-fem/9-2-deformation-gradient.html">9-2</a>~<a href="../09-fem/9-4-piola-assembly.html">9-4</a> 之前先翻它，能省下大量「这些张量从哪来」的想象成本。
+            课程页：<a href="https://viterbi-web.usc.edu/~jbarbic/femdefo/" target="_blank" rel="noopener">viterbi-web.usc.edu/~jbarbic/femdefo</a>。
+          </li>
+          <li>
+            <b>Stable Neo-Hookean Flesh Simulation.</b> Breannan Smith, Fernando de Goes, Theodore Kim. ACM <span class="term">TOG</span> 37(2)（2018）。
+            <b>本书 10-1 用的就是它那一族能量。</b>经典 Neo-Hookean 在压缩 / 接近反转（$J\to0$）时数值会崩；这篇重写出一个<b>抗反转、处处良定义</b>的 stable 版本 $\psi=\tfrac\mu2(I_C-3)+\tfrac\lambda2(J-\alpha)^2-\mu\ln$-类项，并给出干净的力与 Hessian。想弄清 <a href="../09-fem/9-3-strain-energy.html">9-3</a> 里为什么选 stable NH、以及它怎么躲开 StVK 的「压穿不回弹」灾难，读它。
+            DOI：<a href="https://doi.org/10.1145/3180491" target="_blank" rel="noopener">10.1145/3180491</a> ·
+            PDF（作者页）：<a href="https://www.tkim.graphics/" target="_blank" rel="noopener">tkim.graphics</a>。
+          </li>
+          <li>
+            <b>Nonlinear Continuum Mechanics for Finite Element Analysis.</b> Javier Bonet &amp; Richard D. Wood. Cambridge University Press（textbook）。
+            想把 $F$、$E$、$P$、$J$ 的来龙去脉<b>从连续介质力学的第一性原理</b>补扎实——应变度量、超弹性本构、线性化与切线刚度——这本是标准教科书级参考。课程嫌浅、想要严谨推导时回到它。
+            出版页：<a href="https://www.cambridge.org/core/books/nonlinear-continuum-mechanics-for-finite-element-analysis/" target="_blank" rel="noopener">cambridge.org · Bonet &amp; Wood</a>。
+          </li>
+          <li>
+            <b>Co-rotational FEM（co-rotated linear elasticity）.</b> Müller et al.（warped stiffness / stiffness warping）一系 + Stomakhin 等的 co-rotational 处理。
+            <a href="../09-fem/9-3-strain-energy.html">9-3</a> 的「模型谱」里，co-rotational 介于线弹性与全非线性之间：<b>先用极分解 $F=RS$ 抽掉旋转 $R$、只线性惩罚拉伸 $S-I$</b>，于是大转动稳、压缩比 StVK 好，又比全 Neo-Hookean 便宜。想理解「为什么要先除掉旋转」，从这一族读起。注意这是一个方法家族而非单篇定论，具体公式以你选用的那篇为准。
+            参考实现 / 综述见下方 Kim &amp; Eberle course。
+          </li>
+          <li>
+            <b>Dynamic Deformables: Implementation and Production Practicalities（Optional）.</b> Theodore Kim &amp; David Eberle. SIGGRAPH course。
+            想更进一步——<b>现代超弹性的统一视角 + 特征分解 / PSD 投影</b>（即 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 里那步「把单元 Hessian 的负特征值钳到 $\ge0$」的系统化做法）——这份 production 取向的 course 把各家能量、它们的 eigensystem、以及如何保证 Hessian SPD 讲得很全。属于「读完地基想吃透工程细节」的进阶入口。
+            课程页：<a href="https://www.tkim.graphics/DYNAMIC_DEFORMABLES/" target="_blank" rel="noopener">tkim.graphics/DYNAMIC_DEFORMABLES</a>。
+          </li>
+        </ul>
+
+        <h2 id="how-to-read">怎么配着书读 <span class="term">How to Read</span></h2>
+        <p>这一页不是 IPC / Newton 篇那种「某个引擎的源头」，而是一门成熟学科的入口集合——连续介质力学与形变体 FEM 是定论领域，可以放心当地基学。建议的顺序：</p>
+        <ul>
+          <li>
+            <b>先 Sifakis &amp; Barbič 课程</b>建立 $F\to\psi\to f$ 的整条直觉，对照 <a href="../09-fem/9-1-why-fem.html">9-1</a>（为什么弹簧不够）、<a href="../09-fem/9-2-deformation-gradient.html">9-2</a>（$F=D_sD_m^{-1}$、极分解、$J=\det F$）。
+          </li>
+          <li>
+            <b>再 Smith 2018</b> 对照 <a href="../09-fem/9-3-strain-energy.html">9-3</a> 的模型谱（StVK 的反转灾难 → co-rotational → stable NH）与 <a href="../09-fem/9-4-piola-assembly.html">9-4</a> 的 $P=\partial\psi/\partial F$、单元力 $=V_0\,P\,D_m^{-\top}$ 装配。
+          </li>
+          <li>
+            <b>想严谨推导</b>翻 Bonet &amp; Wood；<b>想吃透 PSD 投影与工程细节</b>翻 Kim &amp; Eberle，正对应 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影与 <a href="../09-fem/9-5-worked-tet.html">9-5</a> 的手算。
+          </li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">关于事实与数字的诚实声明</div>
+          <p>本页把<b>连续介质力学的标准公式</b>（$F=D_sD_m^{-1}$、$E=\tfrac12(F^TF-I)$、$P=\partial\psi/\partial F$、Lamé 与 $E,\nu$ 互换等）当作成熟领域的定论引用，这部分可信。但<b>各论文 / 课程的具体版本号、确切发表年份与卷期</b>，以及任何性能 / 收敛数字，本教程<b>没有</b>逐一核对原始 PDF——上面凡是没把握的年份与卷期都按「SIGGRAPH course」「textbook」这样的笼统说法给出，请以各课程页 / DOI / 出版社页面为准。<a href="../09-fem/9-5-worked-tet.html">9-5</a> 的手算是「为讲解构造的自洽示例」，绝对能量量级随 $\mu,\lambda$ 与单位缩放，只对符号、方向、$J$ / 不变量的趋势较真。</p>
+          <p><b>配套入口：</b>术语含义见 <a href="a-1-glossary.html">术语表</a>，公式与符号见 <a href="a-2-cheatsheet.html">公式速查</a>，<a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1</a> 是这套地基在 Newton 里的落地，<a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 是单元 Hessian 的 SPD 投影。原书主线参考见 <a href="a-3-references.html">a-3</a>，Newton / VBD / AVBD 一侧见 <a href="a-6-newton-references.html">a-6</a>，IPC 一侧见 <a href="a-7-ipc-references.html">a-7</a>，MPM 一侧见 <a href="a-9-mpm-references.html">a-9</a>。</p>
+        </div>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

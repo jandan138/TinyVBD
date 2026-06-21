@@ -46,11 +46,16 @@
 
         <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 维度多了 1，公式一行没改</div><p>你读 <code>solve()</code> 时，惯性项写成 <code>f = m*(inertia-x)/dt²</code>、<code>h = m/dt²*I</code>。Newton 的 particle kernel 里，这两行一字不差，只是 <code>I</code> 变成 $3\times3$、求逆从 <code>colPivHouseholderQr</code> 换成带 $|\det\mathbf H|$ 阈值检查的 $3\times3$ 直接求逆。如果你能在脑子里把那根 strand 从纸面拎起来立到 3D 里，你就已经完成了维度一。</p></div>
 
+        <div class="callout note">
+          <div class="c-h">2D→3D 不只是把 H 从 2×2 写成 3×3：为什么 3D 才需要 $|\det\mathbf H|$ 阈值检查</div>
+          <p>上面那句「求逆带 $|\det\mathbf H|$ 阈值检查」不是随手加的保险，而是维度升上去后<b>真有必要</b>。原因是 $3\times3$ 的局部 Hessian 比 2D（或 strand 的标量/小系统）<b>更容易奇异</b>：一个顶点在 3D 里有三个方向，弹簧 Hessian 在压缩或退化构型下，可能沿<b>多个</b>方向同时塌成近零曲率（比如顶点被压到与邻居共线、共面，三角面退化成一条线）——这时 $\mathbf H_i$ 接近不可逆，$\det\mathbf H_i\to0$，直接 $\mathbf H_i^{-1}\mathbf f_i$ 会吐出爆炸的或乱指方向的 $\Delta\mathbf x$。所以 Newton 的 kernel 在求逆前先看 $|\det\mathbf H_i|$：低于阈值就判定这一步对该顶点不可靠、<b>跳过它这一轮的更新</b>（留给后续迭代和邻居更新把它救回良态）。惯性项 $\frac{m_i}{h^2}\mathbf I$ 本身正定、通常把 $\mathbf H_i$ 兜住，所以这只是退化构型下的兜底；但 2D 里三个方向同时塌的概率低，TinyVBD 用 <code>colPivHouseholderQr</code> 就够，没这一步——这是维度一一句带过的话背后真正的「为什么」。</p>
+        </div>
+
         <h3 id="elements">维度二：弹簧 → membrane / bending / tet 多种元件</h3>
         <p>TinyVBD 的 $E(\mathbf x)$ 只有一种砖：线段弹簧 $E=\tfrac12 k(l-l_0)^2$（外加一种连 $i$ 与 $i+2$ 的 skip spring，粗略模拟弯曲）。Newton 的 $E(\mathbf x)$ 是一个砖块库：cloth 三角面用 <span class="term">Neo-Hookean membrane</span>、布料折叠用 <span class="term">dihedral bending</span>、soft body 四面体用 <span class="term">volumetric Neo-Hookean</span>，当然也保留了普通 <span class="term">spring</span>。</p>
         <p>但请看清这件事的本质：换的只是「$\mathcal F_i$ 里每个元件 $E_j$ 怎么算它那一份 $\mathbf f$ 和 $\mathbf H$」。顶点级的装配逻辑——「把惯性项 + 所有邻接元件的力/Hessian 加起来，再走一步牛顿」——完全没动。多一种元件，就是多一个 <code>@wp.func</code> 往同一个 $\mathbf f_i$、$\mathbf H_i$ 里加料。</p>
 
-        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 你的 spring 是这个库里最简单的那块砖</div><p>更妙的是，Newton 的 spring 元件，力/Hessian 形式和你 TinyVBD 里写的那个一模一样——同样的 rest length、stiffness，同样的沿弹簧/垂直弹簧两组特征值。所以当你看到 Newton 的 membrane 或 bending kernel 时，不必慌：它们和 spring 站在同一个接口后面，都是「给我顶点位置，还我一份 $\mathbf f$ 和一份 $\mathbf H$」。你已经懂了这个接口，剩下的只是元件内部的弹性力学。</p></div>
+        <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 你的 spring 是这个库里最简单的那块砖</div><p>更妙的是，Newton 的 spring 元件，力/Hessian 形式和你 TinyVBD 里写的那个一模一样——同样的 rest length、stiffness，同样的沿弹簧/垂直弹簧两组特征值——就是你在原书 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 手算过的那对 $\lambda_\parallel=100$、$\lambda_\perp=-100$（$k=100,l_0=1,l=0.5$），可以点回去拿同一组数复算，确认 Newton spring 和你写的是同一个接口。所以当你看到 Newton 的 membrane 或 bending kernel 时，不必慌：它们和 spring 站在同一个接口后面，都是「给我顶点位置，还我一份 $\mathbf f$ 和一份 $\mathbf H$」。你已经懂了这个接口，剩下的只是元件内部的弹性力学。</p></div>
 
         <h3 id="parallel">维度三：串行 sweep → 按颜色的 GPU 并行 sweep</h3>
         <p>这是变化最大、也最值得停下来体会的一处。TinyVBD 的 <code>solve()</code> 是一个老老实实的串行 Gauss-Seidel：在 CPU 上从 <code>iV=1</code> 扫到 <code>numVerts-1</code>，一个顶点解完才动下一个，后面的顶点能立刻吃到前面的最新位置。一根 strand 二十个顶点，串行扫一遍眨眼就过。</p>

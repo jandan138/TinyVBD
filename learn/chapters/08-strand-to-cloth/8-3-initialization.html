@@ -72,6 +72,18 @@ def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
           <p>Newton 的 particle 路径用的是<b>朴素惯性初始化</b> $\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t$，<b>不是</b> TinyVBD 的自适应初始化。代码里没有 <code>accelerationComponent</code> 那套逻辑——这正是 TinyVBD 的 <code>forwardStep()</code> 里那段被注释掉的 <code>// mVertPos = inertia</code>「baseline」，在 Newton 这边成了实际选用的做法。</p>
         </div>
 
+        <h2 id="how-much">这「先挪一下」具体多远？一个被托住的顶点</h2>
+        <p>抽象说「先往下挪 $\mathbf g\,\Delta t^2$」不够痛——代个数看它到底多大。取一个<b>静止、被下方弹簧或地面托住</b>的顶点：它本该这一步几乎不动（支撑力正好顶住重力）。$\Delta t=\tfrac{1}{60}$、$g=9.8\,\text{m/s}^2$，两种初始化各把它挪多远？</p>
+        <div class="math-block">$$\text{朴素：}\ \Delta y_{\text{naive}}=g\,\Delta t^2=9.8\times\Big(\tfrac{1}{60}\Big)^2=\frac{9.8}{3600}\approx2.7\times10^{-3}\,\text{m}=2.7\,\text{mm}$$</div>
+        <p>朴素初始化不管三七二十一，把这个静止顶点先<b>下坠 2.7mm</b>——它被无差别当成自由下落处理。自适应初始化则不同：它先估出这个顶点的近似加速度、投影到重力方向得到标量 $\tilde a$，再钳进 $[0,g]$：</p>
+        <div class="math-block">$$\tilde a=\operatorname{clamp}\big(\hat{\mathbf g}\cdot\tilde{\mathbf a},\;0,\;g\big),\qquad \Delta y_{\text{adaptive}}=\Delta t^2\,\tilde a$$</div>
+        <p>对一个被托住、上一帧几乎没在加速下落的顶点，估出的 $\hat{\mathbf g}\cdot\tilde{\mathbf a}\approx0$，钳完 $\tilde a\approx0$，于是 $\Delta y_{\text{adaptive}}=\Delta t^2\times0=0$——<b>原地不动</b>。同一个顶点，朴素挪 2.7mm、自适应挪 0。这 2.7mm 不是错（迭代会把它拉回），但它是求解器开局就背上的一截「债」：弹性力/接触力得多花几次迭代把这个静止顶点从 $-2.7\text{mm}$ 拽回原位。在一整片叠放/被支撑的静止区域里，这种债逐顶点累积，热启动质量的差距就出来了。而真在自由下落的顶点，$\hat{\mathbf g}\cdot\tilde{\mathbf a}\approx g$、钳完 $\tilde a\approx g$，$\Delta y_{\text{adaptive}}\approx g\,\Delta t^2$——和朴素一致、吃满那 2.7mm。自适应的精髓正是这个<b>区别对待</b>：该落的落满、该停的真停。</p>
+
+        <div class="callout note">
+          <div class="c-h">2.7mm 是自洽示例，量级随 g、Δt 缩放</div>
+          <p>$2.7\,\text{mm}$ 是拿 $g=9.8$、$\Delta t=\tfrac{1}{60}$ 算出的自洽数，用来把「先挪一下」变成一个能掂量的长度。它随 $g$、$\Delta t^2$ 缩放（substep 越细这截下坠越小）。重点不是这个具体毫米数，而是<b>朴素对所有顶点一视同仁地挪满 $g\,\Delta t^2$，自适应靠 $\tilde a$ 钳制让被支撑的顶点挪 0</b>——这正是两条路在静止/接触场景下的可量化分岔。</p>
+        </div>
+
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> forwardStep() 的自适应分支，在 Newton 里没有对应物</div>
           <p>TinyVBD 的 <code>forwardStep()</code> 有一个 <code>if (strand.hasApproxAcceleration)</code> 分支：有历史速度时走自适应初始化（逐顶点算 $\tilde a$、按投影补重力），第一帧才回退到 <code>mVertPos = inertia</code>。Newton 的 <code>forward_step</code> 等于<b>永远走那个回退分支</b>——不管第几帧，都直接 <code>inertia_out = pos + vel_new * dt</code> 收尾。两边的惯性 $\mathbf y$ 算法一字不差（位置积分逻辑相同），分岔只在「要不要再为初始猜测做自适应加工」这一步：TinyVBD 做了，Newton 没做。</p>

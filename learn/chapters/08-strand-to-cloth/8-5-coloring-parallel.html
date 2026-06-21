@@ -51,6 +51,12 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
         <p>这两张图的稠密程度很不一样。顶点图里，一个顶点的「邻居」就是与它直接连边的那几个顶点——度数往往不大。约束图里，一条约束的「邻居」是所有<b>与它共享顶点的其它约束</b>：一个顶点上挂着好几条边、好几个三角，这些约束彼此就全连成了一团。约束更多、彼此纠缠更密，约束图自然比顶点图<b>稠密得多</b>。而图越稠密，graph coloring 需要的颜色就越多。</p>
         <p>结论是定性的、但很关键：对同一张网格，<b>顶点着色用的颜色数明显少于约束着色</b>。颜色少意味着什么，下一节就见分晓——它直接决定一遍 sweep 要分几个顺序阶段。</p>
 
+        <h3 id="count-by-hand">在一小片 fan 网格上亲手数颜色</h3>
+        <p>「顶点图比约束图稀疏」别只当口号——拿最小的一片 cloth 亲手数一遍，它就变成一个你能复算的几何事实。取一个 <b>fan（扇形）</b>小网格：一个中心顶点 $c$，外圈三个顶点 $v_1,v_2,v_3$，连成 <b>3 个共享中心的三角面</b>（$c v_1 v_2$、$c v_2 v_3$、$c v_3 v_1$）。中心顶点 $c$ 的度数是 3——它跟 $v_1,v_2,v_3$ 都连了边。</p>
+        <p><b>先数顶点图（primal）。</b>规则：相邻顶点（有边直连）必须不同色。$c$ 跟外圈三个都相邻，所以 $c$ 要一种颜色（比如 <b>颜色 A</b>）。外圈 $v_1,v_2,v_3$ 沿外环也两两相邻（$v_1\!-\!v_2\!-\!v_3\!-\!v_1$ 是个三角环），三个互相冲突，需要两种颜色错开：$v_1=$<b>B</b>、$v_2=$<b>C</b>、$v_3=$<b>B</b>。一共 <b>3 种颜色</b>（A/B/C）就够——而且无论 fan 再加多少个外圈三角，只要外环是偶数边就能压到 3 色附近，顶点图始终<b>稀疏</b>。</p>
+        <p><b>再数约束图（dual）。</b>这里「节点」是 3 个三角面（约束），规则：<b>共享任一顶点的两条约束必须不同色</b>。关键观察——这 3 个三角<b>全都挂在中心顶点 $c$ 上</b>，所以它们两两共享 $c$、<b>两两冲突</b>，在约束图里连成一个<b>完全图（clique）</b>。一个 $N$ 节点的 clique 给每个节点都要一种不同颜色 → 这 3 个三角需要 <b>3 种颜色</b>；推广开：挂在同一中心顶点上的 $N$ 个约束，约束图里就是 $N$-clique，需要的颜色数 = <b>约束数本身 $N$</b>。</p>
+        <p>对照就出来了：同一片 fan，顶点图大约 <b>3 色封顶、不随中心扇叶增多而涨</b>；约束图却随挂在中心上的约束数<b>线性涨到 $N$ 色</b>。这就是「顶点着色省颜色」背后可亲手验证的几何根源——中心顶点把所有约束焊成一团 clique，而顶点之间的连接稀疏得多。（具体省多少倍依网格而定，这里只数清机理，不下普适倍数。）</p>
+
         <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">顶点图 vs 约束图：数数颜色</span></div><div class="lab-body" data-widget="graph-coloring"></div><div class="lab-cap">切换 primal/dual，看哪种着色颜色更少 → 更多并行。</div></div>
 
         <h2 id="colored-sweep">按 color 的并行 sweep</h2>
@@ -68,6 +74,11 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
         </ul>
         <p>所以颜色数 = 一遍 sweep 里的顺序阶段数 = GPU 同步次数。颜色越少，并行批次越大、同步越少——这就是上面「顶点着色省颜色」为什么是工程基础：它让 cloth 这种大网格的一遍 sweep 只需要少数几次 launch。</p>
 
+        <div class="callout note">
+          <div class="c-h">同色内用「旧值」为什么不丢精度——这是免费的午餐</div>
+          <p>看到同色内部是 <span class="term">Jacobi</span> 风格「用这一遍开始时的旧值」，直觉会犯嘀咕：Jacobi 不是比 Gauss-Seidel 收敛慢吗？慢确实存在，但只发生在<b>相邻</b>顶点被迫用对方旧值的时候——少了「立刻代回」那点信息，收敛才打折。可同色顶点<b>按定义就互不相邻</b>：它们之间没有任何 force element，谁的更新都不依赖谁的当前值。于是对它们而言，「用旧值」和「用新值」算出来的 $\Delta\mathbf x_i$ <b>完全一样</b>——没有任何信息被丢掉。所以这里的并行不是「精度换速度」，而是真正的<b>免费午餐</b>：跨色仍是严格 Gauss-Seidel 拿收敛，同色内并行只是把本就互不依赖的更新凑到一起同时做。</p>
+        </div>
+
         <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">并行 by color vs 串行</span></div><div class="lab-body" data-widget="parallel-sweep"></div><div class="lab-cap">同色顶点同时更新、颜色依次推进；对比 TinyVBD 一次一个顶点。</div></div>
 
         <div class="bridge tinyvbd">
@@ -83,7 +94,7 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) GPU 上相邻顶点同时更新会有 <span class="term">data race</span>，<span class="term">builder.color()</span> 给顶点图着色、把互不相邻的顶点凑成同色组，结果存进 <code>model.particle_color_groups</code>（对 particle 必需）；(2) 一遍 sweep = <code>for color in color_groups</code>，同色内部 Jacobi 并行（一次 launch）、跨色 Gauss-Seidel 顺序，颜色数 = 顺序阶段数 = 同步次数，而<b>顶点(primal)着色比约束(dual)着色省颜色</b>，因为顶点图比约束图稀疏；(3) Newton 把 TinyVBD 的串行 <code>for iV</code> 重排成「按 color launch」，<span class="term">min G(x)</span> 与算法本身没变，变的只是扫描次序与并行粒度（且这里没有 Chebyshev）。</p>
-        <p>到这里，Part 8 把一根串行 strand 完整地搬成了一块 GPU 上的并行 cloth——惯性、牛顿步、装配、着色并行，全齐了。下一节进入 <b>Part 9</b>：<a href="../09-elasticity-collision/9-1-elastic-elements.html">9-1 弹性元件谱</a>，我们去看 cloth 真正用到的那几种 force element——<span class="term">membrane</span> / <span class="term">volumetric</span> / <span class="term">bending</span> / <span class="term">spring</span>——它们各自的能量、力与 Hessian 长什么样，又怎么接回你已经吃透的那根弹簧。</p>
+        <p>到这里，Part 8 把一根串行 strand 完整地搬成了一块 GPU 上的并行 cloth——惯性、牛顿步、装配、着色并行，全齐了。下一节进入 <b>Part 10</b>：<a href="../10-elasticity-collision/10-1-elastic-elements.html">9-1 弹性元件谱</a>，我们去看 cloth 真正用到的那几种 force element——<span class="term">membrane</span> / <span class="term">volumetric</span> / <span class="term">bending</span> / <span class="term">spring</span>——它们各自的能量、力与 Hessian 长什么样，又怎么接回你已经吃透的那根弹簧。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PB-MPM：position-based，接回 PBD 家族 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-7">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-7</div>
+        <h1>PB-MPM：position-based，接回 PBD 家族</h1>
+        <p class="lede">前面六节，MPM 一直走「力 → 网格速度 → 隐式求解」这条偏物理、偏 Newton 的路。这一节我们看一条把 MPM 整个掰过去、接回全书最早那条支线的现代路线——<span class="term">PB-MPM</span>（EA SEED，SIGGRAPH 2024，Chris Lewin）：它把 MPM 重写成一个 <b>position-based</b> 的约束求解问题，像 <a href="../02-family/2-1-pbd.html">2.1</a> 的 PBD 那样「掰位置满足约束」，换来大步长、高稳定，面向游戏物理。读这一节前，先把脑子调回 Part 2 的 PBD/XPBD——PB-MPM 是那套哲学搬到 material point 上的产物。</p>
+
+        <h2 id="recall-pbd">先把 PBD 的那句话从 Part 2 拎回来</h2>
+        <p>回到 <a href="../02-family/2-1-pbd.html">2.1</a>：<span class="term">Position Based Dynamics</span> 的灵魂只有一句——<b>先惯性预测一个候选位置，再直接「掰位置」让它满足约束，最后由位置变化反推速度</b>。它不走「力 → 加速度 → 速度」那条容易爆炸的链，而是直接操作位置，所以极稳、极简、几乎不炸，在游戏里横行十余年。它的代价我们也讲过（<a href="../02-family/2-2-xpbd.html">2.2</a>）：刚度容易随迭代/时间步漂移，<span class="term">XPBD</span> 用 compliance $\alpha$ 和 Lagrange multiplier $\lambda$ 把物理信息塞回投影来治这个病。</p>
+        <p>现在把镜头切到 MPM。前几节的 MPM 是个「物理优等生」：它有真本构 $\psi(F_p)$、真应力 $P_p$、真隐式 Newton（<a href="13-5-implicit-mpm.html">13.5</a>）。这套东西精确，但对游戏来说常常太重、太挑步长——显式 MPM 步长一大就炸，隐式 MPM 每步要解一个大方程。<b>PB-MPM 的提问是：能不能让 MPM 也享受 PBD 那种「大步长、不炸、好实现」的体质？</b>答案就是把求解器从「物理 Newton」换成「position-based 约束投影」。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从 PBD 看</span> 同一个哲学，换了个载体</div>
+          <p>PBD 掰的是<b>网格顶点 / 粒子</b>的位置去满足弹簧、距离这类约束；PB-MPM 掰的是 <b>material point（物质点）</b>的状态去满足由本构推出的约束。载体从「mesh 顶点」换成了「自由飞行的物质点」，但「预测—投影—反推速度」这条主干没变。你在 2.1 学的那句「硬掰位置不是比喻、是字面意思」，在 PB-MPM 里依然字面成立——只是被掰的对象现在是携带 $F_p$、能巨形变、能断裂的 material point。</p>
+        </div>
+
+        <h2 id="mechanism">机制：把 MPM 一步写成约束求解</h2>
+        <p>按 DO-NOT-STATE 的纪律，这里只讲<b>机制骨架</b>、引来源，不臆造原文的精确公式与性能数字。PB-MPM 的核心改造可以这样理解：</p>
+        <p><b>① 仍然有 MPM 的那套传输与网格。</b>PB-MPM 没有抛弃 MPM 的混合 Lagrangian-Eulerian 结构——粒子载状态、背景网格借力（<a href="13-2-mpm-cycle.html">13.2</a>），P2G / G2P 传输（<a href="13-3-transfers-apic.html">13.3</a>、常配 APIC 式仿射场）都还在。它换掉的是<b>「网格上怎么求出新速度/新位置」这一步</b>。</p>
+        <p><b>② 把本构关系读成约束，而不是力。</b>经典隐式 MPM 把 $\psi(F_p)$ 微分成应力 $P_p$、再散布成网格力，然后 Newton 求解（<a href="13-4-F-update-constitutive.html">13.4</a>、<a href="13-5-implicit-mpm.html">13.5</a>）。PB-MPM 转而把「材料应该处于的形变状态」表述成一组<b>约束</b> $C(\cdot)=0$（概念上类似 PBD 的 $C(\mathbf x)=0$），然后像 PBD/XPBD 那样<b>投影</b>这些约束——直接朝满足约束的方向掰状态，而不是组装一个全局线性系统去 Newton。</p>
+        <p><b>③ 用 position-based 的迭代换大步长 + 稳定。</b>这正是接回 PBD 的关键收益：position-based 投影天然耐大步长、不易爆炸（因为它不碰那条「力 → 速度」链），迭代少、好并行、好上 GPU——这套体质恰恰是<b>游戏物理</b>最想要的。PB-MPM 因此能在保留 MPM「巨形变、断裂、沙雪泥」通用性的同时，拿到接近 PBD 的实时友好度。</p>
+
+        <div class="callout note">
+          <div class="c-h">这一节只讲机制，不复述原文数字</div>
+          <p>PB-MPM 出自 <b>EA SEED 团队，SIGGRAPH 2024，作者 Chris Lewin</b>；论文与材料在 EA SEED 站点。本节刻意只描述「把 MPM 重写成 position-based 约束求解、换 PBD 式大步长与稳定」这一<b>机制层面</b>的事实，<b>不</b>给出原文的精确投影公式、迭代次数、加速倍数或场景规模——这些以原论文为准。要落实细节请读原文（入口见 <a href="../appendix/a-9-mpm-references.html">a-9</a>）。</p>
+        </div>
+
+        <h2 id="why-position-based">为什么 position-based 在这里管用</h2>
+        <p>把 PB-MPM 和经典隐式 MPM 并排看，差别和当年 PBD 之于隐式欧拉如出一辙。隐式 MPM 求的是网格 DOF 上那个真正的 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>）——精确，但每步要解大方程、对病态敏感。PB-MPM 像 PBD 一样，<b>用一串便宜的局部投影去近似那个解</b>：每次投影把某个约束朝满足方向推一点，扫几遍就收敛到一个「看起来对、不炸」的状态。</p>
+        <p>这换来的正是 PBD 的三大好处，原样落到 material point 上：</p>
+        <ul>
+          <li><b>大步长不炸</b>：position-based 投影是几何操作，不放大「力 → 速度」的不稳定，所以能吃比显式 MPM 大得多的步长——这是显式 MPM 的老痛点（<a href="13-5-implicit-mpm.html">13.5</a>）被直接绕过。</li>
+          <li><b>便宜、好并行</b>：一串局部投影天然适合 GPU，迭代次数可调、可早停，符合游戏的帧预算。</li>
+          <li><b>好实现、好调</b>：没有全局稀疏矩阵、没有线搜索 + SPD 投影那套 Newton 机器（对比 <a href="../03-vbd/3-1-block-descent.html">Part 3</a> 的 VBD / <a href="../12-ipc/12-9-solver-cost.html">12.9</a> 的全局 Newton），上手与维护成本低。</li>
+        </ul>
+        <p>当然，代价也和 PBD 同源：position-based 投影是对真解的<b>近似</b>，刚度/收敛对迭代与步长的依赖需要小心（这正是 XPBD 在 <a href="../02-family/2-2-xpbd.html">2.2</a> 处理的那类问题）。PB-MPM 站在「实时、稳、通用」这一侧，把「精确收敛到物理 $\min G$」让给隐式 MPM——这是一组取舍，不是高下。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">回看 PBD：刚度随迭代漂移——position-based 的体质与代价</span></div>
+          <div class="lab-body" data-widget="pbd-stiffness"></div>
+          <div class="lab-cap">这是 Part 2 那个 PBD/XPBD 对照 widget。PB-MPM 继承的正是这套 position-based 体质：左边实时、稳、好跑；右边提醒你它的代价——纯 PBD 式投影刚度随迭代漂（蓝线变陡），要可预测就得像 XPBD 那样把物理信息塞回投影。把这套取舍搬到 material point 上，就是 PB-MPM 的处境。</p>
+        </div>
+
+        <p>用这个 widget 体会 PB-MPM 的「人设」：它要的是左图那种<b>实时、稳、随便调迭代都不炸</b>，而不是右图那条曲线背后「收敛到唯一物理解」的严格性。游戏要的就是前者；要后者，回隐式 MPM。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从全书看</span> 又是同一个 min G(x)，只是换了求解侧</div>
+          <p>别被「position-based」三个字带偏：PB-MPM 没有逃出全书主线。它要逼近的，仍是 MPM 那个网格 DOF 上的 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>）——只是它选择像 PBD 一样在<b>位置 / 约束侧</b>做便宜的局部投影来近似它，而不是像隐式 MPM 那样在<b>对偶 / Newton 侧</b>精确解它。这和 <a href="../02-family/2-2-xpbd.html">2.2</a> 里「XPBD、PBD、VBD 解的是同一个 $\min G$、分歧只在怎么解」是一模一样的句式。MPM 的现代化，又一次落回这条主线。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) <b>PB-MPM</b>（EA SEED，SIGGRAPH 2024，Chris Lewin）把 MPM 重写成 <b>position-based 约束求解</b>——保留粒子载状态 + 网格借力 + APIC 式传输，但把「网格上求新速度」从 Newton 换成 PBD/XPBD 式的「掰状态满足约束」投影；(2) 这<b>明确接回 Part 2 的 PBD/XPBD</b>：同一个「预测—投影—反推速度」哲学搬到 material point 上，换来大步长、不炸、便宜可并行、好实现，正合游戏物理，代价是和 PBD 同源的近似性（刚度/收敛对迭代与步长敏感）；(3) 它仍没逃出全书主线——要逼近的还是 MPM 网格 DOF 上的同一个 $\min G(\mathbf x)$，只是选在<b>位置/约束侧</b>便宜近似，而非 Newton 侧精确求解。</p>
+        <p>下一节 <a href="13-8-ck-mpm.html">13.8</a>，我们看第二条现代路线 <span class="term">CK-MPM</span>：不动求解器、改动「核」本身——用一个 $C^2$ 连续的紧支撑核，在稳定性、精度、效率之间找新平衡，每粒子触及的网格节点数远少于经典二次 B-spline。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

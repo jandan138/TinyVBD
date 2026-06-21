@@ -71,6 +71,23 @@
         </ul>
         <p>一句话：<b>「迭代 100 次 solve」= 把这一 substep 的 $\arg\min G$ 解到够准；「substep」= 推进一个隐式欧拉时间步；「frame」= 攒够 substep 推进一整帧并写盘</b>。VBD 的无条件稳定意味着即使把 <code>numIterations</code> 压到很低，它也不炸，只是欠收敛、偏软（<a href="../00-orientation/0-1-where-we-go.html">0.1</a> 那个 strand-lab 就让你拉这个滑块）。</p>
 
+        <h2 id="substep-tradeoff">代数字：substeps=10 是「陡 100 倍、贵 10 倍」</h2>
+        <p>上面那句「小 $h$ = 惯性碗更陡更稳，代价 N 倍算量」是断言，把它代成数就成了一笔可算的账。开场那行 <code>params.dt /= params.substeps</code> 是关键：substep 不是多迭代，而是<b>把时间步切细</b>。取默认 $h=1/60$，惯性碗系数（<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的 $m/h^2$，$m=1$）：</p>
+        <div class="math-block">$$\frac{m}{h^2} = \frac{1}{(1/60)^2} = 3600$$</div>
+        <p>把 <code>substeps=10</code>，每个 substep 的步长 $h'=h/10=1/600$，惯性碗系数变成：</p>
+        <div class="math-block">$$\frac{m}{h'^2} = \frac{1}{(1/600)^2} = 3.6\times10^5 \quad(\text{陡 } 100\times)$$</div>
+        <p>切细 10 倍，惯性碗<b>陡了 $10^2=100$ 倍</b>——碗越陡，惯性项把 $\mathbf H_i$ 抬得越正（<a href="../03-vbd/3-5-stability.html">3.5</a> 理由一），越能压住硬弹簧、大形变带来的不稳定。但代价直接写在三层循环里：每帧 <code>solve()</code> 调用次数从 <code>substeps×numIterations = 1×100 = 100</code> 变成 <code>10×100 = 1000</code>，<b>贵了 10 倍</b>。</p>
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>「陡 100×、贵 10×」是 substep 调稳定性的本质权衡（与 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的惯性/弹性拔河、<a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a> 的迭代预算自洽）：稳定性按 $1/h^2$ 平方级改善，算量只按 $1/h$ 线性增长——所以遇到「迭代再多也压不稳」的硬场景，加 substep 常比加 iteration 更划算。数字为默认参数下的自洽示例。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">同样的总预算：分给更多 substep 还是更多 iteration</span></div>
+          <div class="lab-body" data-widget="substep-iteration-grid"></div>
+          <div class="lab-cap">x 轴 substeps、y 轴 numIterations，格子颜色编码一根 strand 在该预算下的最终能量残差 / 是否欠收敛偏软；选中格子看对应末态。调<b>总预算</b>、<b>时间步 $h$</b>、<b>末端质量比</b>，亲手感受「同样的总 solve 次数，分给更多 substep（更稳）还是更多 iteration（更收敛）」的不同效果。</div>
+        </div>
+
         <h2 id="updatevel">updateVelocity()：从位移反算速度</h2>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · updateVelocity()</span><button class="cp">复制</button></div><pre><code>void updateVelocity() {
     strand.mVelocitiesPrev = strand.mVelocity;
@@ -144,6 +161,7 @@
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

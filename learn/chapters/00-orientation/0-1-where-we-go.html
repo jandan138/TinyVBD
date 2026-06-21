@@ -40,6 +40,7 @@
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 它长得像你认识的 PBD，但内核换了</div>
           <p>你对 <span class="term">PBD</span> 的印象大概是：预测一下位置，然后<i>把粒子硬掰到约束上、一遍遍迭代</i>，迭代越多越「硬」。VBD 表面上也很像——它也直接更新位置、也用 Gauss-Seidel 一个个扫过去。但它<b>不把力转成约束去硬掰</b>，而是让每个顶点解一个小小的牛顿步，朝着「让总能量下降」的方向走。这一字之差，换来了 PBD 给不了的稳定性和物理正确性。这本书的主线，就是讲清楚这个「内核替换」。</p>
+          <p class="mt"><b>一句话钉死的误区：</b>VBD 不是「更猛的 PBD」——它换的是<b>内核</b>（解牛顿步 vs 掰约束），<b>不是</b>调更多迭代。同样迭代数下，二者收敛到的根本不是同一个东西。</p>
         </div>
 
         <h2 id="audience">这本书假设你已经会什么</h2>
@@ -61,6 +62,19 @@
           <li><b>Part 5 · 实验</b>：亲手复现论文里的招牌实验——高质量比、高刚度比、弯曲——并理解每个实验在「考」VBD 的什么。</li>
           <li><b>Part 6 + 附录</b>：VBD 的位置、局限与后续，外加术语表、公式速查、参考文献。</li>
         </ul>
+        <h3 id="roadmap-cheatsheet">路线图速查</h3>
+        <p>把上面四个核心 Part 压成一张可随时回扫的表——每个 Part 给你<b>一句话主题</b>、你会带走的那把<b>钥匙</b>、以及<b>配套 lab</b>：</p>
+        <table>
+          <thead>
+            <tr><th>Part</th><th>一句话主题</th><th>你会带走的钥匙</th><th>配套 lab</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>Part 1</b><br>数学地基</td><td>隐式欧拉的 variational 真身</td><td>一步隐式欧拉 = $\arg\min G(\mathbf x)$</td><td><code>potential-landscape</code></td></tr>
+            <tr><td><b>Part 2</b><br>谱系</td><td>PBD / XPBD / PD 都在解同一个 $\min G$</td><td>区别只在「怎么解」，不在「解什么」</td><td><code>pbd-stiffness</code> / <code>pd-local-global</code></td></tr>
+            <tr><td><b>Part 3</b><br>VBD 核心</td><td><span class="term">block coordinate descent</span>：一次只动一个顶点</td><td>局部下降 ⇒ 全局下降</td><td><code>vbd-sweep</code></td></tr>
+            <tr><td><b>Part 4</b><br>读代码</td><td><code>forwardStep</code> / <code>solve</code> / Chebyshev 逐行读透</td><td>每一行都对得上前面的公式</td><td><code>chebyshev</code></td></tr>
+          </tbody>
+        </table>
         <p>每一章都尽量配一个可交互的小实验。它们不是装饰——很多直觉用文字讲十句，不如你拖一下滑块看一眼。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CK-MPM：compact kernel 紧支撑核 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-8">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-8</div>
+        <h1>CK-MPM：compact kernel 紧支撑核</h1>
+        <p class="lede">上一节的 PB-MPM 换的是<b>求解器</b>。这一节的 <span class="term">CK-MPM</span>（Compact-Kernel MPM，arXiv:2412.10399）换的是更底层的东西——<b>核（kernel）本身</b>。它提出一个 $C^2$ 连续却紧支撑（compact-support）的核，在稳定性、精度、效率三者之间找一个新平衡点：既不像线性核那么粗糙，又不像经典二次 B-spline 那样让每个粒子触及一大片网格节点。读这一节，你会看到「换核」如何成为 MPM 现代化的第三条独立路线。</p>
+
+        <h2 id="why-kernel-matters">先想清楚：核为什么是 MPM 的命门</h2>
+        <p>回到 <a href="13-2-mpm-cycle.html">13.2</a>、<a href="13-3-transfers-apic.html">13.3</a>：MPM 一步里，粒子和网格之间所有的来回（P2G 散质量动量、G2P 收速度、$F$ 更新里的速度梯度 $\nabla v_p=\sum_i v_i\nabla w_{ip}$）都靠<b>核权重 $w_{ip}$</b> 完成。核决定了两件互相打架的事：</p>
+        <ul>
+          <li><b>支撑宽度</b>——一个粒子要碰几个网格节点。窄核（线性，每维触及 2 个节点）便宜，但只有 $C^0$ 连续，速度梯度跨格不连续，精度与稳定性差；宽核（二次 B-spline，每维 3 个节点、3D 下 $3^3=27$）光滑稳定，但每粒子触及节点多、P2G/G2P 与隐式装配的 stencil 都大、<b>开销随之膨胀</b>。</li>
+          <li><b>连续性</b>——核的可微阶数直接决定速度场、力的光滑度。$C^0$ 核会在格界引入抖动/伪影，这正是经典 MPM 偏爱 $C^1$ 的二次 B-spline、用宽换稳的原因。</li>
+        </ul>
+        <p>于是 MPM 长期卡在一个三角权衡里：<b>窄 = 便宜但糙，宽 = 光滑但贵。</b>CK-MPM 的提问就是——能不能要一个<b>既窄又光滑</b>的核？</p>
+
+        <h2 id="mechanism">机制：一个 C² 连续的紧支撑核</h2>
+        <p>按 DO-NOT-STATE 纪律，这里只讲机制与来源，不臆造原文的精确核函数解析式与数值。CK-MPM 的核心贡献可以这样理解：</p>
+        <p><b>① 紧支撑 + 高连续性的「既要又要」。</b>CK-MPM 设计了一个 <b>$C^2$ 连续</b>的核，却把支撑保持得很<b>紧</b>（compact）。$C^2$ 意味着核及其一阶、二阶导都连续——比经典二次 B-spline 的 $C^1$ 还光滑，对力/速度梯度的连续性更友好，利于稳定与精度；而「紧支撑」意味着它没为这份光滑付出宽 stencil 的代价。</p>
+        <p><b>② 每粒子关联的网格节点数约为线性核的 2×——远少于二次 B-spline。</b>这是它最直观的卖点：紧支撑让一个粒子触及的节点数大致是线性核的两倍量级，<b>显著少于</b>二次 B-spline 那种 3D 下 $27$ 节点的宽核。节点少，P2G/G2P 的散布/收集、以及隐式求解里每个粒子贡献的稀疏装配，都跟着变轻——直接缓解了 <a href="13-6-mpm-lite.html">13.6</a> MPM Lite 也在攻击的那个「宽核 × 每格粒子数 → 隐式开销大」的瓶颈，只是 CK-MPM 从「核」这一侧下手，MPM Lite 从「去粒子求积」那一侧下手。</p>
+        <p><b>③ 与 APIC / MLS-MPM 无缝衔接。</b>CK-MPM 不要求你重写传输框架：它能直接接到 <a href="13-3-transfers-apic.html">13.3</a> 讲的 <span class="term">APIC</span>（Jiang 2015，传仿射场 $C_p$、保角动量低耗散）与 <span class="term">MLS-MPM</span>（Hu 2018，用 moving least squares 统一传输与力）之上——把它们用的核换成这个紧支撑 $C^2$ 核即可，其余流水线照旧。</p>
+        <p><b>④ 工程可落地。</b>它可以用 <span class="term">Taichi</span> 或现成的开源 GPU MPM 框架实现，不需要异于主流的特殊基础设施。</p>
+
+        <div class="callout note">
+          <div class="c-h">这一节只讲机制，精确数值以论文为准</div>
+          <p>CK-MPM 出自 <b>arXiv:2412.10399</b>（<i>A Compact-Kernel Material Point Method</i>）。本节只陈述「$C^2$ 连续 + 紧支撑、约线性核 2× 节点、衔接 APIC/MLS、可 Taichi/开源 GPU 实现」这些<b>机制层面</b>的事实，<b>不</b>给出原文的核解析式、精确节点数表、误差阶或性能数字——这些以论文为准（入口见 <a href="../appendix/a-9-mpm-references.html">a-9</a>）。</p>
+        </div>
+
+        <h2 id="kernel-compare">看一眼：三种核的支撑宽度与节点数</h2>
+        <p>把线性核、经典二次 B-spline、CK-MPM 的紧支撑核并排放，「窄/宽 × 光滑度」这组权衡立刻可视化。下面这个 widget 画一个粒子落在网格里，高亮三种核各自覆盖的节点，并报出每粒子触及的节点数。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">linear / quadratic B-spline / compact(CK) 核：支撑宽度与每粒子节点数</span></div>
+          <div class="lab-body" data-widget="mpm-kernel-compare"></div>
+          <div class="lab-cap">切换三种核：linear 最窄但只有 C⁰；quadratic B-spline 光滑（C¹）却宽、每粒子触及节点多；compact(CK) 既保持接近线性核的紧支撑，又做到 C² 连续——「既窄又光滑」的那个新平衡点。注意 3D 下二次 B-spline 是 27 节点量级，而紧支撑核停在远低于此的水平。</p>
+        </div>
+
+        <p>这张图是 CK-MPM 论点的核心证据：横向比「窄到宽」，纵向比「糙到光滑」。线性核站在「窄但糙（$C^0$）」的角，二次 B-spline 站在「光滑（$C^1$）但宽」的角，CK-MPM 试图占住「窄且更光滑（$C^2$）」这个原本以为不存在的角——这就是它在稳定性/精度/效率三角里挪动平衡点的方式。</p>
+
+        <div class="bridge fem">
+          <div class="c-h"><span class="tag">从全书看</span> 换核不改本构，也不改主线</div>
+          <p>注意 CK-MPM 动的<b>只是核</b>：粒子上的形变梯度 $F_p$ 更新、本构 $\psi(F_p)\to P_p$ 仍然<b>原样复用 FEM 篇</b>（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>、<a href="../09-fem/9-3-strain-energy.html">9.3</a>）——核只决定粒子↔网格之间权重 $w_{ip}$ 和 $\nabla w_{ip}$ 怎么算，不碰材料本身。隐式 CK-MPM 求的也还是网格 DOF 上那个 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>），只是 stencil 更紧、装配更轻。三条现代路线里，CK-MPM 是「不改本构、不改主线，只把传输的基函数换得更聪明」的那一条。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) <b>CK-MPM</b>（arXiv:2412.10399）换的是 MPM 最底层的<b>核</b>——提出一个 <b>$C^2$ 连续却紧支撑</b>的核，在稳定性/精度/效率三角里找新平衡，破解经典 MPM「窄核糙、宽核贵」的两难；(2) 它每粒子关联的网格节点数<b>约为线性核的 2×、远少于二次 B-spline</b>（3D 下 27 节点量级），因而 P2G/G2P 与隐式装配都更轻，并能<b>无缝衔接 APIC/MLS-MPM</b>、用 Taichi 或开源 GPU MPM 框架实现；(3) 它只动核、<b>不改本构</b>（$F_p$、$\psi$ 仍复用 <a href="../09-fem/9-2-deformation-gradient.html">FEM 篇</a>），隐式求解仍是网格 DOF 上的同一个 $\min G(\mathbf x)$——是三条现代路线里「只把传输基函数换聪明」的那条。</p>
+        <p>下一节 <a href="13-9-closing.html">13.9</a> 是 MPM 篇、也是全书当前的收尾：把三条现代 MPM 路线（MPM Lite 去粒子求积 / PB-MPM 约束求解 / CK-MPM 紧核）摆进一张对照表，再把 MPM 接回 FEM、VBD、IPC，看整本书如何在「一个 $\min G(\mathbf x)$」上闭合。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

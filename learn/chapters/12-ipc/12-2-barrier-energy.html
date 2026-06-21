@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>log-barrier 接触能量：从性质到解析式 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-2</div>
+        <h1>log-barrier 接触能量：从性质到解析式</h1>
+        <p class="lede">上一节说 IPC 是「用 interior-point 做接触」。内点法的全部魔法，都浓缩在一个函数里——接触 barrier $b(d,\hat d)$。它不是什么新发明，<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 里你已经亲手把这一类 log-barrier 累加进过 $\mathbf f_i$ / $\mathbf H_i$。这一节我们把它单独拎出来：先讲清它的三个脾气（<b>什么时候开始发力、靠近时发多大力、为什么必须光滑到能进 Newton</b>），再把 IPC 论文常用的<b>解析式</b>摆出来，逐个因子拆开看——每一项到底在管哪一条性质。</p>
+
+        <h2 id="what-is-barrier">barrier 是一道立在边界上的墙</h2>
+        <p>设 $d$ 是一对 surface primitive 之间的<b>无符号距离</b>（unsigned distance，下一节细说怎么算）。可行域就是 $d>0$——只要不穿透就合法。barrier 的任务，是在 $d\to0$ 这道边界上<b>立起一道发散的墙</b>，让任何想把 $d$ 推到零的力，都被一股越来越大的反作用顶回去。</p>
+        <p>它的脾气可以用三句话概括：</p>
+        <ul>
+          <li><b>有激活阈值 $\hat d$。</b>当距离还远（$d\ge\hat d$）时，barrier <b>完全不发力</b>，能量为零——远处的几何对不该互相干扰。只有当 $d<\hat d$、两者逼近到这个用户给定的薄壳厚度之内，barrier 才<b>激活</b>，开始往外推。$\hat d$ 是你交给 IPC 的一个旋钮。</li>
+          <li><b>$d\to0$ 时发散到无穷。</b>距离越小，能量涨得越凶，到趋零时<b>冲向无穷</b>。能量对距离求导就是力，发散的能量意味着<b>可以产生任意大的接触力</b>——于是无论外界怎么挤，距离<b>永远跨不过 0</b>。这就是「不穿透」在能量层面的根：不是事后拽回来，而是根本到不了零。</li>
+          <li><b>设计成 $C^2$。</b>barrier 被刻意构造成<b>二次连续可微</b>。原因很实在：IPC 要拿它进 Newton，Newton 需要梯度（力）和 Hessian（曲率）都连续、良态。一个有折角或跳变的 barrier 会让 Newton 步抽风，所以光滑性是<b>硬指标</b>，不是锦上添花。</li>
+        </ul>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">barrier 曲线：阈值内激活、趋零发散</span></div>
+          <div class="lab-body" data-widget="barrier-curve"></div>
+          <div class="lab-cap">拖动距离 $d$，看 barrier 能量怎么在 $d<\hat d$ 处抬头、在 $d\to0$ 处冲向无穷；调 $\hat d$ 看激活窗口怎么变宽变窄，并可叠加 penalty 对照。</div>
+        </div>
+
+        <h2 id="analytic-form">解析式：一个把三条性质都装下的具体函数</h2>
+        <p>光说性质有点像隔靴搔痒。现在我们把 IPC 论文常用的那条 barrier <b>写出来</b>，让你看见「激活阈值、趋零发散、$C^2$ 光滑」这三条脾气，是怎么被两个简单因子<b>恰好</b>装进一个式子里的。对 $0<d<\hat d$：</p>
+        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0<d<\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
+        <p>这条式子看着不起眼，却是<b>两个因子相乘</b>：一个 $\ln(d/\hat d)$，一个 $(d-\hat d)^2$。神奇之处在于，它们各管一头——$\ln$ 管「靠近 $0$ 这一端怎么发散」，$(d-\hat d)^2$ 管「靠近 $\hat d$ 这一端怎么平滑收尾」。我们一项一项拆。</p>
+
+        <h3 id="factor-log">因子一：$\ln(d/\hat d)$ —— 趋零发散的发动机</h3>
+        <p>先盯住 $\ln(d/\hat d)$。当距离逼近零（$d\to0^+$），比值 $d/\hat d\to0^+$，于是 $\ln(d/\hat d)\to-\infty$。前面那个<b>负号</b>把它翻过来，$b\to+\infty$——<b>这就是发散（不穿透）的来源</b>：距离越想往零挤，能量越冲向正无穷，对应的排斥力也越大，把它顶回去。</p>
+        <p>再看另一端：当 $d=\hat d$，$d/\hat d=1$，$\ln 1=0$。也就是说<b>在激活边界上 $\ln$ 因子自己就归零</b>，能量自然从那里起步。$\ln$ 这一项天生就「内端炸、外端归零」，正好对上 barrier「趋零发散、阈值处不发力」这两头的需求。</p>
+
+        <h3 id="factor-sq">因子二：$(d-\hat d)^2$ —— 让边界处光滑接零的刹车</h3>
+        <p>但只有 $\ln$ 还不够。如果光用 $-\ln(d/\hat d)$，它在 $d=\hat d$ 处虽然值为零，<b>斜率却不为零</b>——曲线会带一个折角斜插进零。$d>\hat d$ 那边 barrier 恒为零（平的），$d<\hat d$ 这边却带着非零斜率冲下来，两段在 $\hat d$ 接不平滑，导数不连续。Newton 最怕这种折角。</p>
+        <p>$(d-\hat d)^2$ 就是来按这个刹车的。它是一个在 $\hat d$ 处<b>二阶为零</b>的乘子：它本身、它的一阶导、它的二阶导在 $d=\hat d$ 处的行为，足够把整个乘积按到「值、一阶、二阶都连续接零」。具体说，乘上它之后：</p>
+        <div class="math-block">$$b(\hat d)=0,\qquad b'(\hat d)=0,\qquad b''(\hat d)=0.$$</div>
+        <p>值、一阶导（力）、二阶导（Hessian）在激活边界上<b>全部光滑地落到零</b>，于是 $d<\hat d$ 的 barrier 段和 $d\ge\hat d$ 的零段在 $\hat d$ 处严丝合缝地拼成一条 $C^2$ 曲线——没有折角、没有跳变。没有 $(d-\hat d)^2$ 这个刹车，barrier 在 $\hat d$ 处就会有折角，Newton 的梯度/Hessian 在那里跳一下，迭代不友好。</p>
+
+        <h3 id="factor-together">两者相乘：内陡外平、处处二阶光滑的一道墙</h3>
+        <p>把两个因子放回去看整体：$\ln(d/\hat d)$ 负责在 $d\to0$ 那一端把能量推向无穷（那道发散的墙），$(d-\hat d)^2$ 负责在 $d=\hat d$ 那一端把能量、力、曲率<b>同时平滑地收到零</b>（让墙的外缘和「不发力」区无缝相接）。相乘的结果，是一条「<b>内端陡峭发散、外端二阶光滑收尾</b>」的曲线——上一节那条你拖着玩过的曲线，正是它。三条性质不是三个独立的设计，而是这两个因子各管一头、自然长出来的。</p>
+
+        <div class="callout note">
+          <div class="c-h">这是常用形式，关键是三条性质而非这一个式子</div>
+          <p>上面这条 $b(d,\hat d)=-(d-\hat d)^2\ln(d/\hat d)$ 是 IPC 论文采用的<b>常见形式</b>，我们把它摆出来，是为了讲清三个因子各自的作用。但<b>精确定义、单位约定、以及可能的分段/归一化常数，以论文 PDF（Li et al. 2020, Eq.）为准</b>。更要紧的是：换任何一个满足「$d\to0$ 发散、$d=\hat d$ 处 $C^2$ 接零、有激活阈值」这三条性质的函数，IPC 的结论<b>都不变</b>——保证不穿透、能进 Newton，靠的是这三条性质，不是这一个具体式子。所以记性质、别死记公式。</p>
+        </div>
+
+        <div class="callout note">
+          <div class="c-h">想自己验证力与 Hessian？照着求一次导就行</div>
+          <p>力是 barrier 对距离的负斜率，对 $d<\hat d$ 直接求导：$b'(d)=-2(d-\hat d)\ln(d/\hat d)-(d-\hat d)^2/d$。你不必背它，重点是看<b>符号与趋势</b>：$b'(d)<0$（能量随 $d$ 减小而升），所以负梯度的力把距离往<b>增大</b>方向推（即把两个几何对推开）；而当 $d\to0$，$|b'|\to\infty$——力可以无限大，这正对上「任意大接触力」。再求一次导得 $b''(d)$（Hessian），它在 $d\to0$ 时同样爆涨——这就是下一篇会反复出现的「越贴近、条件数越差」的根。下一章 12-4 会把这两步求导接进 Newton，这里先有个印象即可。</p>
+        </div>
+
+        <h2 id="same-min-g">它只是 min G(x) 里又一项</h2>
+        <p>讲了半天 barrier，落点其实平淡得让人安心：它<b>不是另起炉灶的子系统</b>，而是加进那个你从第一篇就在解的目标里的<b>又一个能量项</b>。IPC 仍然在求</p>
+        <div class="math-block">$$\min_{\mathbf x}\ G(\mathbf x) = \underbrace{\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_M^2}_{\text{惯性}} + \underbrace{\Psi(\mathbf x)}_{\text{弹性}} + \underbrace{\sum_{(k,l)\in\mathcal C} b\big(d_{kl}(\mathbf x),\,\hat d\big)}_{\text{接触 barrier}}$$</div>
+        <p>最后那一项，就是对所有逼近中的 surface primitive 对 $\mathcal C$（point-triangle / edge-edge）累加它们各自的 barrier。它的梯度进合力、Hessian 进合 Hessian，和惯性项、弹性项站在<b>同一行加号上</b>——这套话术，你在 10.3 听过一字不差的版本。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个对象，两种用法</div>
+          <p>10.3 的 Newton cloth 和 IPC 用的是<b>同一个数学对象</b>——log-barrier 接触能量。但它们摆放它的方式不同，这正是这一篇的核心对照：</p>
+          <ul>
+            <li><b>10.3（per-vertex 局部 + 几何兜底）：</b>barrier 的力/Hessian 被累加进<b>每个顶点</b>各自的 $\mathbf f_i$ / $\mathbf H_i$，按 color sweep 做局部牛顿步；能量挡不住的「跨步穿透」，靠那道 <span class="term">penetration-free</span> 截断（DAT）在每个 sweep 后<b>几何兜底</b>砍位移。barrier 是软挡，截断是硬保险，两层。</li>
+            <li><b>IPC（全局 interior-point）：</b>同一个 barrier 进的是一个<b>全局</b>稀疏 Newton 的目标，靠 interior-point 的「迭代点永不离开可行域」+ 下一篇的 CCD line search，把不穿透从「软挡 + 事后兜底」升级成<b>迭代全程的几何保证</b>。不需要事后砍位移这道补丁，因为它压根不让你越界。</li>
+          </ul>
+          <p>一句话：<b>同样的 barrier，10.3 是局部用 + 截断补，IPC 是全局用 + line search 保。</b></p>
+        </div>
+
+        <div class="callout warn">
+          <div class="c-h">$\hat d$ 不是越小越好</div>
+          <p>很容易觉得「激活阈值 $\hat d$ 调得越小，barrier 越接近真实的硬接触，越好」。但 $\hat d$ 收得越紧，barrier 在临近 $0$ 处就越陡、刚度越极端，带来的代价是<b>条件数变差、Newton 迭代变多</b>。这是一个实打实的取舍——更紧的几何精度，换更难解的优化问题。12-4 讲 Hessian 时我们会把这一点说透，这里先记住：$\hat d$ 是精度与可解性之间的旋钮，不是「越小越对」。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) IPC 的灵魂是接触 barrier $b(d,\hat d)$——它有<b>激活阈值 $\hat d$</b>（$d<\hat d$ 才发力）、在 <b>$d\to0$ 时发散到无穷</b>（产生任意大接触力，使距离永远跨不过 0）、并被设计成 <b>$C^2$</b> 以便进 Newton。(2) 论文常用的解析式 $b=-(d-\hat d)^2\ln(d/\hat d)$ 把这三条装进两个因子：$\ln(d/\hat d)$ 配负号驱动 $d\to0$ 的发散，$(d-\hat d)^2$ 让值/一阶/二阶在 $\hat d$ 处全部光滑接零（$C^2$）；但关键是这三条性质，不是这一个式子，精确形式以论文为准。(3) 它<b>不是新子系统</b>，只是加进 $\min G(\mathbf x)$ 的又一个能量项，且和 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 是<b>同一个对象</b>，区别在「局部 + 截断兜底」vs「全局 interior-point + line search 保证」。</p>
+        <p>下一节 <a href="12-3-distance-geometry.html">11-3（距离几何）</a>，我们把 barrier 咬住的那个 $d$ 讲透：point-triangle / edge-edge 的<b>无符号距离</b>怎么定义、它的梯度 $\partial d/\partial\mathbf x$ 怎么按 barycentric 权重落到各顶点上，以及最近点滑到边/顶点时的退化分区。把 $d$ 和 $\partial d/\partial\mathbf x$ 备好，12-4 才能接着把 barrier 沿 $d$ 求导、连同 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 <span class="term">PSD projection</span> 一起送进 Newton。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

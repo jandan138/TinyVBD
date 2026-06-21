@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>形变梯度 F：把 rest 映到 world · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-2</div>
+        <h1>形变梯度 F：把 rest 映到 world</h1>
+        <p class="lede"><a href="9-1-why-fem.html">9.1</a> 立了个新主角：形变梯度 $\mathbf F$，连续介质用它取代弹簧的标量长度比。这一节把 $\mathbf F$ 从口号变成能算的东西——它是什么（rest$\to$world 映射的局部线性化）、在三角形/四面体单元上为什么是个<b>常数</b>、怎么用两个边矩阵 $\mathbf F=\mathbf D_s\mathbf D_m^{-1}$ 算出来、$J=\det\mathbf F$ 读什么、以及一个对「好能量」至关重要的拆解：极分解 $\mathbf F=\mathbf R\mathbf S$，把旋转和拉伸分开。</p>
+
+        <h2 id="what-is-F">F 是 rest→world 映射的局部线性化</h2>
+        <p>给材料里每个点贴两个坐标：它在 rest（未变形）状态的位置 $\mathbf X$，和它在 world（当前变形）状态的位置 $\mathbf x$。变形就是一个映射 $\mathbf x=\boldsymbol\phi(\mathbf X)$。<span class="term">deformation gradient</span> 是这个映射的雅可比——它在每个点附近用一个<b>线性变换</b>逼近 $\boldsymbol\phi$：</p>
+        <div class="math-block">$$\mathbf F=\frac{\partial\mathbf x}{\partial\mathbf X}.$$</div>
+        <p>怎么读它：在 rest 里画一个微小的方向向量 $d\mathbf X$，变形后它变成 $d\mathbf x=\mathbf F\,d\mathbf X$。所以 $\mathbf F$ 告诉你「rest 里的每一条小箭头，被拉伸/旋转/剪切成 world 里的什么箭头」。$\mathbf F=\mathbf I$（单位阵）意味着这一小块没变形（顶多整体平移——平移被求导抹掉了，这正是我们想要的：能量不该依赖材料摆在哪）。$\mathbf F$ 偏离 $\mathbf I$ 越远，形变越剧烈。<a href="9-1-why-fem.html">9.1</a> 说弹簧的长度比 $l/l_0$ 是 $\mathbf F$ 的一维退化——现在你能看清：一维里 $d\mathbf X$、$d\mathbf x$ 都是标量，$\mathbf F$ 就缩成那个比值。</p>
+
+        <h2 id="constant-strain">在三角形/四面体上，F 是个常数</h2>
+        <p>$\mathbf F$ 一般随位置变（材料不同地方形变不同）。但 FEM 的离散化用了一个让一切可算的简化：<span class="term">linear shape function</span>。它假设每个单元内部，从 $\mathbf X$ 到 $\mathbf x$ 的映射是<b>仿射</b>的（线性 + 平移）。仿射映射的雅可比是常数，于是：</p>
+        <div class="callout note">
+          <div class="c-h">constant-strain 单元</div>
+          <p>用线性 shape function 的三角形（2D 膜）和四面体（3D 体），单元<b>内部 $\mathbf F$ 处处相同</b>——一个单元一个常数 $\mathbf F$。这叫 <span class="term">constant-strain</span> 单元。好处巨大：一个单元只需算<b>一个</b> $\mathbf F$、一份能量、一份应力、一份力，不必在单元内做积分采样。代价是单元内部不能表达弯曲（形变在单元内是均匀的）——所以要表达复杂形变就得把网格切细。这是 FEM 最常用、最朴素的一档单元。</p>
+        </div>
+        <p>维度对一下：2D 三角形膜嵌在三维里时 $\mathbf F$ 是 $3\times2$（rest 是 2D 面，world 在 3D 中，正是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> membrane 那个两列的 $\mathbf F$）；纯 2D 问题里 $\mathbf F$ 是 $2\times2$；3D 四面体体单元里 $\mathbf F$ 是堂堂正正的 $3\times3$。下面的算法对它们是统一的。</p>
+
+        <h2 id="edge-matrices">怎么算 F：两个边矩阵相除</h2>
+        <p>既然单元内是仿射映射，$\mathbf F$ 可以直接从顶点坐标读出来——不用求导，用「边」就够。以一个三角形为例，顶点 rest 坐标 $\mathbf X_0,\mathbf X_1,\mathbf X_2$、world 坐标 $\mathbf x_0,\mathbf x_1,\mathbf x_2$。以 $0$ 号顶点为基点，搭两组边向量，拼成两个<span class="term-i">边矩阵</span>：</p>
+        <div class="math-block">$$\mathbf D_m=\big[\,\mathbf X_1-\mathbf X_0,\ \mathbf X_2-\mathbf X_0\,\big]\ \text{(rest)},\qquad \mathbf D_s=\big[\,\mathbf x_1-\mathbf x_0,\ \mathbf x_2-\mathbf x_0\,\big]\ \text{(world)}.$$</div>
+        <p>关键的一步逻辑：仿射映射把 rest 边映成 world 边，对每条边都有 $\mathbf x_i-\mathbf x_0=\mathbf F(\mathbf X_i-\mathbf X_0)$。把两条边一起写成矩阵就是 $\mathbf D_s=\mathbf F\,\mathbf D_m$。$\mathbf D_m$ 只看 rest 形状、是个<b>常数矩阵</b>，可以预先求逆，于是</p>
+        <div class="math-block">$$\boxed{\ \mathbf F=\mathbf D_s\,\mathbf D_m^{-1}\ }$$</div>
+        <p>这就是 $\mathbf F$ 的实算公式。$\mathbf D_m^{-1}$ 在 rest 阶段算一次、存起来（它就是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 代码里那个 <code>DmInv</code>）；每一步仿真只需用当前 world 坐标拼出 $\mathbf D_s$、做一次矩阵乘，就拿到这个单元的 $\mathbf F$。四面体同理，只是边矩阵各多一列（三条边、$3\times3$）。下面这个 widget 让你拖 world 三角形的顶点，实时看 $\mathbf F$ 怎么变。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">拖三角形，看 F = Ds·Dm⁻¹</span></div>
+          <div class="lab-body" data-widget="deformation-gradient-tri"></div>
+          <div class="lab-cap">左：rest 三角形（固定）。右：world 三角形（拖顶点）。实时算 $\mathbf F$、$J=\det\mathbf F$（面积比，$<0$=翻转）、以及极分解 $\mathbf F=\mathbf R\mathbf S$ 的旋转角与两个主拉伸。整片三角形共享同一个 $\mathbf F$——这就是 constant-strain。</div>
+        </div>
+
+        <h2 id="det-J">J = det F：面积/体积比，与翻转</h2>
+        <p>$\mathbf F$ 里藏着一个特别好读的标量——它的行列式 $J=\det\mathbf F$。线性代数早告诉你：矩阵的行列式是它对面积/体积的<b>放缩因子</b>。所以</p>
+        <div class="math-block">$$J=\det\mathbf F=\frac{\text{world 体积}}{\text{rest 体积}}\quad(\text{3D});\qquad J=\frac{\text{world 面积}}{\text{rest 面积}}\quad(\text{2D}).$$</div>
+        <p>逐档读这个数：</p>
+        <ul>
+          <li>$J=1$：体积/面积不变（材料可能被剪歪、被拉伸但保体积）。</li>
+          <li>$J>1$：膨胀（被撑大）；$0<J<1$：压缩（被压小）。</li>
+          <li>$J\to0$：单元被压到<b>塌缩</b>（趋于零体积，几乎退化成一片/一条线）。好的材料模型会让能量在这里爆炸来抵抗（<a href="9-3-strain-energy.html">9.3</a> 的 $\ln J$ 项）。</li>
+          <li>$J<0$：单元<b>翻转</b>（inverted）——顶点穿过了对面，朝向反了，物理上「里翻到外」。这是仿真里最棘手的退化态之一。在 widget 里把一个顶点拖过对边，你会看到 $J$ 变负。</li>
+        </ul>
+        <p>$J$ 是后面所有体积相关能量项的核心变量。$(J-1)^2$ 罚体积偏离 rest，$\ln J$ 在 $J\to0^+$ 发散来抗塌缩、抗翻转——这些你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 volumetric Neo-Hookean 里都见过，现在知道 $J$ 是从 $\det\mathbf F$ 来的。</p>
+
+        <h2 id="polar">极分解 F = RS：旋转不该花能量</h2>
+        <p>$\mathbf F$ 里混着两种完全不同性质的形变：一种是<b>旋转</b>（把材料整个转个向），一种是<b>拉伸/剪切</b>（真把材料的形状改了）。物理上它们天差地别：把一块没变形的橡皮整个转 $90^\circ$，它<b>一点能量都不该储存</b>（刚体运动无应力）；但把它拉长，就得储能。要写出「好」的能量，必须能把这两者分开。<span class="term">polar decomposition</span>（极分解）正是干这个的：</p>
+        <div class="math-block">$$\mathbf F=\mathbf R\,\mathbf S,$$</div>
+        <p>其中 $\mathbf R$ 是<b>正交矩阵</b>（$\mathbf R^\top\mathbf R=\mathbf I$，纯旋转，不改形状），$\mathbf S$ 是<b>对称正定矩阵</b>（纯拉伸/剪切，不含旋转）。读法：先把材料拉伸成 $\mathbf S$，再整体旋转 $\mathbf R$ 摆到当前朝向。widget 右侧实时显示 $\mathbf R$ 的旋转角和 $\mathbf S$ 的两个主拉伸 $\sigma_1,\sigma_2$——你转动三角形时旋转角变、但只要不改形状，$\sigma_1,\sigma_2$ 就停在原地。</p>
+
+        <div class="callout warn">
+          <div class="c-h">为什么这件事是「好能量」的生死线</div>
+          <p>如果一个能量模型直接惩罚 $\mathbf F-\mathbf I$（即「$\mathbf F$ 偏离单位阵多少」），它会把<b>旋转也当成形变来罚</b>——你把材料转个大角度，它就误以为被狠狠拉伸了，凭空生出回复力，物理全错。这正是线性弹性（小应变 $\boldsymbol\varepsilon=\tfrac12(\mathbf F+\mathbf F^\top)-\mathbf I$）在<b>大转动</b>下失真的根源。正确的做法是让能量只依赖<b>去掉旋转后的拉伸</b>——即只看 $\mathbf S$，或等价地只看 $\mathbf F^\top\mathbf F=\mathbf S^2$（$\mathbf R$ 被 $\mathbf F^\top\mathbf F=\mathbf S^\top\mathbf R^\top\mathbf R\mathbf S=\mathbf S^2$ 自动消掉）。「能量只依赖 $\mathbf S$ 或 $\mathbf F^\top\mathbf F$」就是下一节 <span class="term">rotation-invariant</span>（旋转不变）超弹性的全部出发点。极分解不是数学摆设，它是判断一个材料模型「会不会在大转动下发疯」的试金石。</p>
+        </div>
+
+        <h3 id="FtF-stretch">F<sup>T</sup>F：不用真做极分解也能拿到拉伸信息</h3>
+        <p>实际算的时候，往往不必显式求 $\mathbf R,\mathbf S$（极分解要开方、迭代，较贵）。一个轻便的替身是 <span class="term-i">right Cauchy-Green 张量</span> $\mathbf C=\mathbf F^\top\mathbf F$：它<b>天然不含旋转</b>（如上，$\mathbf R$ 被消掉），又只需一次矩阵乘就能算。两个常用的旋转不变量直接从它读出：</p>
+        <div class="math-block">$$I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)=\sigma_1^2+\sigma_2^2+\dots\ (\text{拉伸量平方和}),\qquad J=\det\mathbf F\ (\text{体积比}).$$</div>
+        <p>$I_C$ 罚「整体被拉伸」，$J$ 罚「体积变化」——这两个不变量就是下一节搭各种 $\psi(\mathbf F)$ 的积木。你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过的 $I_c=\operatorname{tr}(\mathbf F^\top\mathbf F)$ 和 $J_s=\sqrt{\det(\mathbf F^\top\mathbf F)}$，正是这里的 $I_C$ 和 $J$。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 弹簧的「长度比」就是退化的 F</div>
+          <p>回看 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>：一根弹簧的全部形变信息是长度比 $l/l_0$。把它放进本节的语言——一维里 rest 边就是一个标量 $D_m=l_0$、world 边是 $D_s=l$，于是 $\mathbf F=D_s D_m^{-1}=l/l_0$，一个数。$J=\det\mathbf F=l/l_0$ 也是它自己（一维「体积比」就是长度比）。极分解？一维没有旋转，$\mathbf R=1$、$\mathbf S=l/l_0$。所以弹簧能量 $\tfrac12k(l-l_0)^2$ 其实就是「只依赖 $\mathbf S$（即 $l/l_0$）」的旋转不变能量——它早就遵守了本节那条生死线，只是一维里旋转问题不存在，看不出张力。升到二维三维，旋转一来，$\mathbf F=\mathbf R\mathbf S$ 的拆分就成了非做不可的事。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 形变梯度 $\mathbf F=\partial\mathbf x/\partial\mathbf X$ 是 rest$\to$world 映射的局部线性化，在 constant-strain 三角形/四面体单元上是个常数，实算公式 $\mathbf F=\mathbf D_s\mathbf D_m^{-1}$（world 边矩阵 × rest 边矩阵的逆，$\mathbf D_m^{-1}$ 预存）；(2) $J=\det\mathbf F$ 读体积/面积比——$J=1$ 不变、$J\to0$ 塌缩、$J<0$ 翻转（inverted）；(3) 极分解 $\mathbf F=\mathbf R\mathbf S$ 把旋转 $\mathbf R$ 和拉伸 $\mathbf S$ 分开，<b>刚体旋转不该花能量</b>，所以好的能量只依赖 $\mathbf S$ 或 $\mathbf F^\top\mathbf F$（rotation-invariant）。</p>
+        <p>$\mathbf F$ 立住了、$I_C$ 和 $J$ 两个不变量也备好了，就该往上挂能量。下一节 <a href="9-3-strain-energy.html">9.3</a> 讲应变能密度 $\psi(\mathbf F)$ 的模型谱：StVK（和它著名的压缩反转灾难）、co-rotational、以及 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 用的那个稳定 Neo-Hookean，各自怎么用 $I_C$、$J$ 拼出来、各自的坑在哪。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

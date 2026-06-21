@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>应变能密度 ψ(F) 与超弹性模型谱 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="9-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 9 · 9-3</div>
+        <h1>应变能密度 ψ(F) 与超弹性模型谱</h1>
+        <p class="lede"><a href="9-2-deformation-gradient.html">9.2</a> 备好了形变梯度 $\mathbf F$ 和两个旋转不变量 $I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)$、$J=\det\mathbf F$。现在往上挂能量。<span class="term">strain energy density</span>（应变能密度）$\psi(\mathbf F)$ 就是「这一小块材料被形变成 $\mathbf F$，储了多少能量」——它是整个 FEM 弹性的<b>心脏</b>。这一节先讲它必须满足什么（只依赖 $\mathbf F$、旋转不变），再铺开经典的模型谱：StVK（带它臭名昭著的压缩反转灾难）、co-rotational、以及 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 用的稳定 Neo-Hookean。每个模型配一个坑。</p>
+
+        <h2 id="hyperelastic">超弹性：能量只依赖当前的 F</h2>
+        <p>我们只考虑一类材料：能量<b>只由当前形变 $\mathbf F$ 决定</b>，与「走了什么路径到这」无关。这叫 <span class="term">hyperelastic</span>（超弹性）。它的好处是干净——力直接是能量的负梯度（没有历史、没有耗散藏在里面），整个 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的 $\min G(x)$ 框架原样适用。弹簧就是超弹性的最简例子：能量 $\tfrac12k(l-l_0)^2$ 只看当前长度。把这个性质写下来：</p>
+        <div class="math-block">$$\Psi=\int_\Omega\psi(\mathbf F)\,dV,\qquad \psi=\psi(\mathbf F)\ \text{只依赖当前 }\mathbf F.$$</div>
+        <p>真实材料的塑性、黏性、迟滞这一节不碰——它们要给 $\psi$ 加历史变量，是后话。超弹性是地基，先把它打牢。</p>
+
+        <h2 id="rotation-invariant">铁律：旋转不变</h2>
+        <p><a href="9-2-deformation-gradient.html">9.2</a> 那条生死线在这里成了硬约束：刚体旋转不储能，所以 $\psi$ 必须<b>旋转不变</b>——对任意旋转 $\mathbf R$，$\psi(\mathbf R\mathbf F)=\psi(\mathbf F)$。满足它最省事的办法，就是<b>只用旋转不变量搭 $\psi$</b>。我们手上正好有两个（来自 $\mathbf F^\top\mathbf F$，$\mathbf R$ 被自动消掉）：</p>
+        <div class="math-block">$$I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)\ (\text{拉伸量平方和}),\qquad J=\det\mathbf F\ (\text{体积比}).$$</div>
+        <p>下面三个模型，全是用 $I_C$、$J$（或等价的应变张量 $\mathbf E$、拉伸 $\mathbf S$）拼出来的。它们的差别不在「满不满足旋转不变」——都满足——而在<b>压缩与翻转时的行为</b>。这才是真正分高下的地方。先建立一个度量。</p>
+
+        <h3 id="green-strain">应变度量：Green-Lagrange E</h3>
+        <p>有些模型不直接用 $I_C$，而用 <span class="term">Green-Lagrange strain</span></p>
+        <div class="math-block">$$\mathbf E=\tfrac12\big(\mathbf F^\top\mathbf F-\mathbf I\big).$$</div>
+        <p>读它：$\mathbf E=\mathbf 0$ 当且仅当 $\mathbf F^\top\mathbf F=\mathbf I$，即没有拉伸/剪切（顶多旋转）——所以 $\mathbf E$ 量的是「偏离无形变多远」，且<b>旋转不变</b>（含 $\mathbf F^\top\mathbf F$）。它是 StVK 的主角。顺带提一句线弹性常用的小应变近似 $\boldsymbol\varepsilon=\tfrac12(\mathbf F+\mathbf F^\top)-\mathbf I$——它在大转动下会失真（<a href="9-2-deformation-gradient.html">9.2</a> warn 里说过的根源），所以仿真里大形变场景不用它，这里只作对照提一下。</p>
+
+        <h2 id="stvk">StVK：最朴素，也最容易出事</h2>
+        <p><span class="term">St. Venant-Kirchhoff</span>（StVK）是最直接的想法：拿 Green-Lagrange 应变 $\mathbf E$，像弹簧那样「平方一下」当能量：</p>
+        <div class="math-block">$$\psi_{\text{StVK}}=\mu\,\lVert\mathbf E\rVert_F^2+\tfrac{\lambda}{2}\,(\operatorname{tr}\mathbf E)^2,\qquad \mathbf E=\tfrac12(\mathbf F^\top\mathbf F-\mathbf I).$$</div>
+        <p>$\mu,\lambda$ 是 <span class="term">Lamé parameters</span>（拉梅参数，下面解释）。第一项罚整体应变大小，第二项罚体积应变 $\operatorname{tr}\mathbf E$。在<b>拉伸</b>区它表现得很合理、推导也简单，所以入门最常见。但它藏着一个著名的灾难。</p>
+
+        <div class="callout warn">
+          <div class="c-h">StVK 的压缩反转灾难</div>
+          <p>把材料<b>压缩</b>——把 $\mathbf F$ 沿某方向缩小。直觉上能量该一路单调上涨（压得越狠越费力，最好压到塌缩时能量趋于无穷来挡住翻面）。StVK 偏偏不是：当压缩超过某个点，$\psi_{\text{StVK}}$ 不增反<b>降</b>，越过塌缩点（$J\to0$）后甚至随翻转（$J<0$）继续走低。后果是物理性的：单元被压到一定程度后，<b>翻面比不翻面能量更低</b>——于是它乐意被压穿、翻过去，而且翻过去后没有回复力把它掰回来。仿真里这表现为软体在重压下「啪」地内爆翻面、再也回不来。根因是 $\mathbf E$ 是 $\mathbf F^\top\mathbf F$ 的多项式，对 $J\to0$ 没有任何屏障。下面的 widget 切到 StVK、把压缩拉到底，你能亲眼看到能量曲线在压缩区掉头向下。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">三种模型的能量曲线对照</span></div>
+          <div class="lab-body" data-widget="strain-energy-models"></div>
+          <div class="lab-cap">切 StVK / co-rotational / Neo-Hookean，沿拉伸-压缩扫一遍。盯住<b>压缩区</b>：StVK 越压能量越掉头向下（反转灾难）；Neo-Hookean 在 $J\to0$ 处能量冲向无穷（抗翻面）。</div>
+        </div>
+
+        <h2 id="corotational">co-rotational：先抽掉旋转，再线性惩罚拉伸</h2>
+        <p><span class="term">co-rotational</span>（共旋）模型走的是另一条思路：既然 <a href="9-2-deformation-gradient.html">9.2</a> 的极分解 $\mathbf F=\mathbf R\mathbf S$ 能把旋转 $\mathbf R$ 抽出来，那就<b>显式地抽掉它</b>，只对纯拉伸 $\mathbf S$ 偏离 $\mathbf I$ 的量做线性惩罚：</p>
+        <div class="math-block">$$\psi_{\text{corot}}=\mu\,\lVert\mathbf S-\mathbf I\rVert_F^2+\tfrac{\lambda}{2}\,\big(\operatorname{tr}(\mathbf S-\mathbf I)\big)^2\quad(\text{等价地用 }\lVert\mathbf F-\mathbf R\rVert_F^2).$$</div>
+        <p>它的好处：因为旋转被极分解干净地剥离了，<b>大转动下不失真</b>（这正是线弹性做不到的），而且压缩行为比 StVK 健康得多——它惩罚的是 $\mathbf S-\mathbf I$ 的线性量，不会像 StVK 那样在压缩区掉头。代价是它需要每步做一次极分解（求 $\mathbf R$，有点贵），且因为对 $\mathbf S$ 是<b>线性</b>惩罚、没有 $\ln J$ 那种屏障，对极端压缩到塌缩翻面仍不是天然免疫。它是工程上很常用的折中：稳、直观、比 StVK 安全。</p>
+
+        <h2 id="neohookean">Neo-Hookean（stable）：production 标准，抗翻面</h2>
+        <p><span class="term">Neo-Hookean</span> 是目前 production 仿真的默认选择，本书 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 用的就是它的稳定版（<span class="term">stable Neo-Hookean</span>，Smith et al. 2018）。一个常见写法是：</p>
+        <div class="math-block">$$\psi_{\text{NH}}=\tfrac{\mu}{2}\,(I_C-3)-\mu\ln J+\tfrac{\lambda}{2}\,(\ln J)^2,\qquad I_C=\operatorname{tr}(\mathbf F^\top\mathbf F),\ J=\det\mathbf F.$$</div>
+        <p>它的杀手锏是那些 $\ln J$ 项。读 $\psi$ 的三块：$\tfrac{\mu}{2}(I_C-3)$ 罚形变（剪切+拉伸）；$\tfrac{\lambda}{2}(\ln J)^2$ 罚体积偏离；而 $-\mu\ln J$ 是抗反转的关键——当 $J\to0^+$（体积被压向塌缩），$\ln J\to-\infty$、$-\mu\ln J\to+\infty$，能量<b>冲向无穷</b>。于是材料在被压穿之前就遇到一堵无限高的能量墙，<b>天然抗拒翻面与塌缩</b>。这正是 StVK 缺的那道屏障，也是 Neo-Hookean 在重压、强碰撞下不内爆的原因。</p>
+        <div class="callout note">
+          <div class="c-h">和 10.1 里那个变体对得上</div>
+          <p><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 membrane 写的是 $\psi=\tfrac{\mu}{2}(I_c-2)+\tfrac{\lambda}{2}(J_s-\alpha)^2$、volumetric 写的是 $\tfrac{\mu}{2}(I_1-3-2\ln J)+\tfrac{\lambda}{2}(J-1)^2$——这是同一族 stable Neo-Hookean 的不同变体（膜版降一维、体积版换了体积项与 $\alpha=1+\mu/\lambda$ 的 rest-无应力修正）。<b>具体哪一项怎么写会随实现略有差别，本书以 10.1 已用的为准</b>；但骨架是统一的：一个 $I_C$ 形变项 + 一个体积项 + 一个含 $\ln J$ 或 $1/J$ 的抗反转屏障。能量的绝对量级随 $\mu,\lambda$ 与单位整体缩放，要较真的是<b>$J\to0$ 处能量发散</b>这条趋势。</p>
+        </div>
+
+        <h2 id="lame">Lamé 参数 μ, λ：和杨氏模量/泊松比的换算</h2>
+        <p>上面每个模型都有 $\mu,\lambda$ 这对 <span class="term">Lamé parameters</span>。它们和工程上更熟悉的<b>杨氏模量</b> $E$（材料有多硬）、<b>泊松比</b> $\nu$（横向收缩多少、$\nu\to0.5$ 近不可压）一一对应：</p>
+        <div class="math-block">$$\mu=\frac{E}{2(1+\nu)},\qquad \lambda=\frac{E\,\nu}{(1+\nu)(1-2\nu)}.$$</div>
+        <p>直觉分工：$\mu$（剪切模量）主管「抗剪切/抗形状改变」，$\lambda$ 主管「抗体积改变」。把材料调得越不可压（$\nu\to0.5$），$\lambda$ 越大（分母 $1-2\nu\to0$），体积项的权重就压过形变项——这就是「水球难压瘪」在参数上的兑现。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 这一族 ψ 就是弹簧能量的「升维版」</div>
+          <p>把三个模型摆在 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的弹簧能量 $\tfrac12k(l-l_0)^2$ 旁边，你会看见同一个母题反复出现：弹簧罚「长度偏离 $l_0$」的平方，StVK 罚「应变 $\mathbf E$ 偏离 $\mathbf 0$」的平方，co-rotational 罚「拉伸 $\mathbf S$ 偏离 $\mathbf I$」的平方——都是「偏离 rest 的平方惩罚」，只是把标量长度换成了张量。Neo-Hookean 多走一步，给体积项加了 $\ln J$ 这道弹簧没有的非线性屏障（一维弹簧不会翻面，不需要它）。<b>能量→力→Hessian 的节奏一字不变</b>：下一节 <a href="9-4-piola-assembly.html">9.4</a> 就像 1.4 对弹簧那样，对 $\psi$ 求一阶导（Piola 应力→力）、二阶导（Hessian），再装配进每个顶点——和那根弹簧用的是同一个口。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 应变能密度 $\psi(\mathbf F)$ 是 FEM 弹性的心脏，必须 <span class="term">hyperelastic</span>（只依赖当前 $\mathbf F$）且 <span class="term">rotation-invariant</span>（刚体旋转不储能），最省事的做法是只用旋转不变量 $I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)$、$J=\det\mathbf F$ 搭它；(2) 模型谱按压缩/翻转行为分高下——StVK 简单但有<b>压缩反转灾难</b>（压过头能量掉头、乐意翻面不回弹），co-rotational 抽掉旋转后稳、压缩比 StVK 健康，Neo-Hookean 靠 $\ln J$ 在 $J\to0$ 处筑无限能量墙、天然抗翻面，是 production 标准（10.1 用的就是它）；(3) Lamé 参数 $\mu,\lambda$ 分管抗剪切与抗体积，与杨氏模量 $E$、泊松比 $\nu$ 可互换。</p>
+        <p>有了 $\psi(\mathbf F)$，弹性能量就齐了——但求解器要的不是能量本身，是<b>力</b>和 <b>Hessian</b>。下一节 <a href="9-4-piola-assembly.html">9.4</a> 对 $\psi$ 求导：第一 Piola-Kirchhoff 应力 $\mathbf P=\partial\psi/\partial\mathbf F$ 怎么来、单元力 $\mathbf f=-V_0\,\mathbf P\,\mathbf D_m^{-\top}$ 怎么把应力分配到各节点、又怎么和弹簧一样装配进每顶点的 $\mathbf f_i/\mathbf H_i$，以及压缩时单元 Hessian 不定该怎么办（接 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影）。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

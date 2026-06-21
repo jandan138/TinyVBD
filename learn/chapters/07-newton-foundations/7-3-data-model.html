@@ -66,7 +66,7 @@
         <h2 id="contacts">Contacts：碰撞检测的产物</h2>
         <p><span class="term">Contacts</span> 装的是<b>碰撞检测算出来的接触对</b>——哪两个东西碰上了、接触点在哪、法向是什么。它不是你手填的，而是由 <code>model.collide(state, contacts)</code> 这一步根据当前 State 现场算出来再写进去的：</p>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">collide → 填充 contacts</span><button class="cp">复制</button></div><pre><code>model.collide(state_in, contacts)   # 读 state_in 的位置，写满 contacts</code></pre></div>
-        <p>之所以每步都要重新 <code>collide</code>，是因为接触关系随位置变——这一帧贴着的两片布，下一帧可能就分开了。算好的 contacts 再交给 solver，让接触力进到每个顶点的 $\mathbf f_i$ / $\mathbf H_i$ 里。<a href="../09-elasticity-collision/9-3-collision.html">9.3</a> 会讲 Newton 的 self-collision 怎么进 VBD 的牛顿步。</p>
+        <p>之所以每步都要重新 <code>collide</code>，是因为接触关系随位置变——这一帧贴着的两片布，下一帧可能就分开了。算好的 contacts 再交给 solver，让接触力进到每个顶点的 $\mathbf f_i$ / $\mathbf H_i$ 里。<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 会讲 Newton 的 self-collision 怎么进 VBD 的牛顿步。</p>
 
         <h2 id="builder">ModelBuilder：搭场景，然后 finalize 冻结</h2>
         <p>Model 既然是静态的，就需要一个「搭建阶段」把它一次性建好。这个角色是 <span class="term">ModelBuilder</span>：你在它上面一点点加粒子、加 cloth、加形状、加关节，配好材料参数，最后调一次 <code>builder.finalize()</code>——它把所有零散设置打包、上传到 GPU、冻结成一个不可变的 <code>Model</code>。在 finalize 之前还可以改；finalize 之后 Model 就定型了，后面所有 step 都查它、但不改它。这条「<b>build → finalize</b>」的分界，正是「可变搭建」和「静态运行」的交接点。</p>
@@ -94,6 +94,13 @@ for frame in range(N):
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你的主循环其实也在做同一件事，只是省了一个 buffer</div>
           <p>TinyVBD 的 <code>simulate()</code> 每个 substep 是 <code>forwardStep()</code> → 迭代若干次 <code>solve()</code> → <code>updateVelocity()</code>，全在 <b>同一个</b> strand 对象上原地改。它不需要 <code>state_in</code>/<code>state_out</code> 两块，是因为它不可微、不录 CUDA graph、也只有一根 strand。Newton 把同样的「读旧态、算新态」拆成两个显式对象，换来的是可微和零开销重放的能力。核心节奏没变——都是「预测/初始化 → 解 → 推进速度」，只是 Newton 把「解」这步连同接触一起塞进了 <code>solver.step</code>，并要求你显式管好那两块 buffer。</p>
+        </div>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">双缓冲 ping-pong：看 swap 到底换了什么</span></div><div class="lab-body" data-widget="state-ping-pong"></div><div class="lab-cap">两块 State 缓冲 A / B：每步从 <code>in</code> 读、往 <code>out</code> 写、再 <code>swap</code> 指针——上一步的 <code>out</code> 变成这一步的 <code>in</code>。底部灰色的 Model 方块从不被写。把「explicit / in-place」开关切到 in-place，就退化成 TinyVBD 那样的单缓冲原地改，对照看为什么 Newton 要两块。</div></div>
+
+        <div class="callout note">
+          <div class="c-h">为什么非要两块 State，而不是原地改一块</div>
+          <p>单缓冲（原地改）省内存，TinyVBD 就是这么干的——它不可微、不录 graph、只有一根 strand，原地覆盖完全够用。Newton 坚持显式两块，是为了两件单缓冲做不到的事：<b>(1) 可微</b>——反向传播要算梯度，就得在新态写好后仍能读到<b>旧态</b>；原地覆盖会把旧值毁掉，梯度就断了。<b>(2) CUDA graph 重放</b>——把整段循环录成 graph 零开销重放，要求每步的读/写目标固定、不互相踩；in / out 分开正好满足。代价只是多一块 State 的显存，换来可微与零开销重放，对一个面向研究和 robotics 的引擎是划算的。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
@@ -128,6 +135,7 @@ for frame in range(N):
   <script src="../../assets/js/widgets/cloth-core.js"></script>
   <script src="../../assets/js/widgets/cloth-lab.js"></script>
   <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

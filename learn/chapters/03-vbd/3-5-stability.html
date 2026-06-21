@@ -44,6 +44,27 @@
           <p>TinyVBD 的 <code>solve()</code> 用的是 Eigen 的 <code>h.colPivHouseholderQr().solve(f)</code>——列主元 QR 本身就对接近奇异的 $\mathbf H_i$ 很稳健，不会像直接求逆那样炸出垃圾。论文里那个「$|\det(\mathbf H_i)|\le\varepsilon$ 就跳过」的策略，我们在本教程的 JS 移植（<span class="term-i">vbd-sweep</span> 等部件）里如实镜像了：算一下行列式，太小就把这个顶点的 $\Delta\mathbf x_i$ 置零、留到下一遍。两种写法殊途同归——核心都是<b>不让一个退化的局部 Hessian 把仿真带飞</b>。</p>
         </div>
 
+        <h2 id="numbers">代数字：惯性抬得正 vs 抬不正，两个数</h2>
+        <p>前两条理由都是定性的——「惯性够大就兜得住」「真退化就跳过」。用共享参数把它们算成两个具体的数，「兜得住 / 兜不住」立刻有了边界。取一根被压缩到一半的弹簧：$l_0=1$、当前 $l=0.5$（$l&lt;l_0$，垂直特征值为负），惯性底 $m/h^2=3600$（$m=1$、$1/h^2=3600$）。</p>
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>下面两组数字是为说清「理由一何时成立、何时失效」挑的共享参数（与 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>、<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 自洽），可上计算器复算，不是某次真实运行的输出。</p>
+        </div>
+        <p><b>软弹簧 $k=100$（理由一成立）。</b>垂直方向特征值：</p>
+        <div class="math-block">$$\lambda_\perp = k\Big(1-\frac{l_0}{l}\Big) = 100\,(1-\tfrac{1}{0.5}) = 100\times(-1) = -100$$</div>
+        <p>弹簧块这一向是负的 $-100$。但加上惯性底 $m/h^2=3600$：</p>
+        <div class="math-block">$$-100 + 3600 = 3500 \;>\; 0$$</div>
+        <p>有效特征值 $3500>0$——$\mathbf H_i$ 在这一向仍正定，$\mathbf H_i^{-1}\mathbf f_i$ 是真下降方向。<b>惯性把软弹簧的负特征值轻松抬过零，理由一直接成立。</b></p>
+        <p><b>硬弹簧 $k=10^8$（理由一失效，靠理由二）。</b>同样压到 $l=0.5$：</p>
+        <div class="math-block">$$\lambda_\perp = 10^8\,(1-\tfrac{1}{0.5}) = -10^8,\qquad -10^8 + 3600 \approx -10^8 \;<\; 0$$</div>
+        <p>惯性底 $3600$ 在 $10^8$ 面前是杯水车薪，有效特征值仍 $\approx-10^8<0$，$\mathbf H_i$ <b>不定</b>。此时理由一救不回来——若再压过头使 $|\det(\mathbf H_i)|\le\varepsilon$，就触发理由二的「跳过这个顶点」，靠邻居下一遍松动它兜底。<b>这正是「偏置 3600 救得回 $k=100$、救不回 $k=10^8$」的两个数。</b></p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">3×3 局部 Hessian 的特征值条 + det 阈值守卫</span></div>
+          <div class="lab-body" data-widget="hessian-spd-guard"></div>
+          <div class="lab-cap">左侧拖弹簧端点改压缩比 $l/l_0$；右侧三根特征值条：惯性底 $m/h^2$（恒正，绿）与叠上弹簧块后的合成三特征值。把弹簧压到 $l&lt;l_0$，垂直特征值条往下探；切换刚度 <b>k = 100 vs $10^8$</b> 看惯性底何时仍把它抬到 $\ge 0$（理由一），何时压过头触发红色「SKIP this vertex」（理由二）。再调时间步 $h$ 看绿底高度怎么变。</div>
+        </div>
+
         <h2 id="reason-3">理由三：有全局下降兜底，不需要 line search</h2>
         <p>最后一根支柱回到 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 的那条定理。Newton 之所以离不开 line search，是怕某一步冲过头让能量反升、失去单调性。而 VBD 有一个更强的结构性保证：<b>整个 sweep 让全局 $G$ 单调下降</b>，且 $G$ 下有界，所以序列必收敛。论文据此<b>直接关掉了 line search</b>——在实践中，逐顶点的牛顿步几乎总落在「让 $G_i$（因而 $G$）下降」的安全区里，省下逐步回溯的开销。</p>
         <p>把三条合起来看：惯性项把 Hessian 大多数时候摁成正定（理由一），偶尔真退化就跳过、靠邻居松动它（理由二），而单调下降这把大尺子在宏观上保证整盘棋不会走崩（理由三）。三层兜底叠在一起，VBD 才敢省掉 SPD 投影和 line search 这两道在 Newton 里必备的保险，还照样稳。</p>
@@ -81,6 +102,7 @@
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

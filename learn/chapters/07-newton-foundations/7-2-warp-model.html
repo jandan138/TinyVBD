@@ -46,7 +46,25 @@ wp.launch(my_kernel, dim=N, inputs=[a, b])   # 一口气开 N 个 thread</code><
         <div class="math-block">$$\texttt{i = wp.tid()}\quad\Longrightarrow\quad i \in \{0,1,\dots,N-1\}$$</div>
         <p><span class="term">wp.tid()</span> 返回这个线程的全局编号。线程 0 拿到 <code>i=0</code>，线程 1 拿到 <code>i=1</code>，依此类推。拿到自己的 <code>i</code> 之后，整个 kernel 体就只围着「第 <code>i</code> 份数据」打转——读 <code>a[i]</code>、写 <code>b[i]</code>。它<b>不知道、也不关心</b>别的线程在干什么。每个 thread 都可以独立地走自己的 <code>if</code> 分支、独立地 <code>return</code> 提前退出，互不影响。把这句话刻进脑子，后面读 kernel 会顺很多：<b>kernel 体描述的是「一个线程对一个元素做的事」，而不是「对整个数组做的事」</b>。</p>
 
-        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">wp.launch：N 个 thread 各取自己那份</span></div><div class="lab-body" data-widget="warp-launch"></div><div class="lab-cap">点一个格子，看那个 thread 的 tid 与它读写的数据。</div></div>
+        <h3 id="dim5-trace">追一遍 <code>dim=5</code>：thread 2 的下标全是 2</h3>
+        <p>抽象说「第 $i$ 个线程碰第 $i$ 份数据」可能还飘。我们把它<b>钉死成一次具体 launch</b>：拿上面那个 <code>my_kernel</code>，对一个 5 元素的数组发 <code>wp.launch(my_kernel, dim=5, inputs=[a, b])</code>。Warp 会开出 5 个线程，编号 $0,1,2,3,4$；每个线程进门 <code>i = wp.tid()</code> 拿到自己那个号，然后<b>所有下标都用这个号</b>。把这 5 份独立执行平摊开看：</p>
+        <table>
+          <thead><tr><th>thread</th><th><code>i = wp.tid()</code></th><th>读</th><th>写</th><th>它干的事</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>0</td><td><code>a[0]</code></td><td><code>b[0]</code></td><td><code>b[0] = a[0]*2</code></td></tr>
+            <tr><td>1</td><td>1</td><td><code>a[1]</code></td><td><code>b[1]</code></td><td><code>b[1] = a[1]*2</code></td></tr>
+            <tr><td><b>2</b></td><td><b>2</b></td><td><b><code>a[2]</code></b></td><td><b><code>b[2]</code></b></td><td><b><code>b[2] = a[2]*2</code></b></td></tr>
+            <tr><td>3</td><td>3</td><td><code>a[3]</code></td><td><code>b[3]</code></td><td><code>b[3] = a[3]*2</code></td></tr>
+            <tr><td>4</td><td>4</td><td><code>a[4]</code></td><td><code>b[4]</code></td><td><code>b[4] = a[4]*2</code></td></tr>
+          </tbody>
+        </table>
+        <p>盯着 <b>thread 2</b> 这一行：它的 <code>tid()</code> 是 2，于是这个线程体里出现的<b>每一个下标都是 2</b>——读 <code>a[2]</code>、写 <code>b[2]</code>，绝不碰别人的格子。5 个线程同时跑，各自的 <code>i</code> 把它们锁在自己那一列上，互不串门。这就是「kernel 体描述一个线程对一个元素做的事」最朴素的样子：写代码时你只写<b>第 <code>i</code> 行</b>，<code>dim=5</code> 帮你把它复制成 5 行同时跑。</p>
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> thread 2 ↔ <code>for iV</code> 的第 2 次迭代</div>
+          <p>把这张表接回 TinyVBD 的 <code>solve()</code>：那里是 <code>for (iV = 1; iV &lt; numVerts; iV++)</code> 一个串行循环，CPU 依次取 <code>iV=1,2,3,…</code>。<b>循环走到 <code>iV=2</code> 那一次，干的事和上面 thread 2 一模一样</b>——只处理 2 号顶点：读 2 号的位置、算 2 号的 $\mathbf f_2,\mathbf H_2$、把 <code>dx</code> 写回 2 号。Newton 只是把「循环变量 <code>iV</code> 顺着取值」翻译成「<code>dim=N</code> 的 launch 里每个线程的 <code>wp.tid()</code> 同时取值」：<b>串行的第 <code>iV</code> 次迭代 = 并行的第 <code>iV</code> 号线程</b>。下标 2 在 CPU 那边是「第 2 圈循环」，在 GPU 这边是「2 号线程」，碰的都是 2 号顶点那份数据。（唯一要小心的是并行后 Gauss-Seidel 次序会乱——那是下面 coloring 要补的事，这里先只看下标映射。）</p>
+        </div>
+
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">wp.launch：N 个 thread 各取自己那份</span></div><div class="lab-body" data-widget="warp-launch"></div><div class="lab-cap">点一个格子（比如 2 号），看那个 thread 的 tid 与它读写的数据——对照上面 <code>dim=5</code> 的表，thread 2 的下标全是 2。</div></div>
 
         <div class="callout note">
           <div class="c-h">和你熟的 tensor / SIMD 框架对比一下</div>

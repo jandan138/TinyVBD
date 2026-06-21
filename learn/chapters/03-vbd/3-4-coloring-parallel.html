@@ -54,9 +54,21 @@
           <p>把顶点按颜色分组。处理颜色 1（一整批顶点并行更新）→ 处理颜色 2（并行，但用得上颜色 1 的新值）→ … 一遍 sweep = 走完所有颜色。颜色数 = 一遍 sweep 里的顺序阶段数。颜色越少，并行度越高、同步开销越小。所以「图能用几种颜色染好」直接决定了 VBD 在 GPU 上跑多快。</p>
         </div>
 
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">给顶点图着色：相邻必异色</span></div>
+          <div class="lab-body" data-widget="graph-coloring"></div>
+          <div class="lab-cap">每条 force element 的两个端点颜色必须不同。在一根 strand 上，顶点交替染两色就够——这就是经典的 red-black ordering。注意同色的顶点之间永远<b>没有边直接相连</b>，所以它们可以安全地并行更新。试着加上 skip spring（连向 $i\pm2$ 的边）看颜色数怎么涨。</div>
+        </div>
+
         <h2 id="vertex-vs-constraint">为什么顶点着色比约束着色省颜色</h2>
         <p>这里有一个 VBD 相对 PBD/XPBD 的结构性便宜。PBD/XPBD 是<b>约束</b>（对偶）求解器，它们要并行就得给<b>约束图 / dual graph</b> 着色——保证同色的约束不共享顶点。而 VBD 是<b>顶点</b>（primal）求解器，它给<b>顶点图</b>着色。</p>
         <p>顶点图通常比约束/对偶图<b>稀疏得多</b>：一个顶点接的边数（度数），往往远小于一条约束周围纠缠的其它约束数。图越稀疏，需要的颜色越少。论文报告，对同样的网格，VBD 的<b>顶点着色所需颜色数，比 XPBD 的约束/对偶图着色少约一个数量级</b>。颜色少意味着一遍 sweep 的顺序阶段更少、GPU 同步更少、并行批次更大——这是 VBD 能在 GPU 上高效跑大场景的工程基础之一。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">一遍 sweep：按颜色分批推进</span></div>
+          <div class="lab-body" data-widget="parallel-sweep"></div>
+          <div class="lab-cap">同一种颜色的顶点<b>同时</b>更新（同色 Jacobi，彼此无依赖），处理完一种颜色再处理下一种（跨色 Gauss-Seidel，后一批读得到前一批的新值）。看进度条：一遍 sweep 的顺序阶段数 = 颜色数。把它和上一个着色部件对照，就明白「为什么颜色越少越快」。</div>
+        </div>
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 同样要着色，但着的是不同的图</div>
@@ -96,6 +108,8 @@
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

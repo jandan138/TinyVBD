@@ -95,6 +95,27 @@
           <li><b><code>saveOutputs()</code></b>：把这一帧的顶点位置写成一个 JSON 文件（<code>A00000001.json</code>…，字段 <code>pos</code>）。</li>
         </ul>
 
+        <h3 id="simulate-trace">一次 simulate() 的执行 trace</h3>
+        <p>抽象的「帧 → substep → 迭代」三层结构容易看过就忘。把它代上默认参数（<code>substeps=1</code>、<code>numIterations=100</code>）走一遍具体计数，就成了一次「真实运行」的流水账——纵向是三层循环变量的取值，横向是「此刻调什么 × 改了哪个状态」：</p>
+        <table>
+          <thead>
+            <tr><th>frame</th><th>step</th><th>iter</th><th>此刻调什么</th><th>改了哪个状态</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>0</td><td>—</td><td><code>forwardStep()</code></td><td>施重力 / pin 0 号 / 算 inertia $\mathbf y$ / 定初始猜测</td></tr>
+            <tr><td>1</td><td>0</td><td>0</td><td><code>solve()</code>（第 1 遍 sweep）</td><td>顶点 1…19 各挪一个 $\Delta\mathbf x$</td></tr>
+            <tr><td>1</td><td>0</td><td>1…98</td><td><code>solve()</code> 再扫 98 遍</td><td>$G$ 一遍遍下降</td></tr>
+            <tr><td>1</td><td>0</td><td>99</td><td><code>solve()</code>（第 100 遍，末遍）</td><td>位置基本收敛到 $\arg\min G$</td></tr>
+            <tr><td>1</td><td>0</td><td>—</td><td><code>updateVelocity()</code></td><td>由 $(\mathbf x-\mathbf x^{t})/h$ 反推 $\mathbf v$</td></tr>
+            <tr><td>1</td><td>—</td><td>—</td><td><code>saveOutputs()</code></td><td>写 <code>A00000001.json</code></td></tr>
+            <tr><td>2…299</td><td>0</td><td>0…99</td><td>整套重复</td><td>每帧一个 JSON，直到 299</td></tr>
+          </tbody>
+        </table>
+        <div class="callout note">
+          <div class="c-h">把「100 次迭代」放到全程尺度</div>
+          <p>默认 <code>numFrames=300 × substeps=1 × numIterations=100</code>，而 frame 0 只 <code>saveOutputs()</code> 不解算，所以一次完整运行共调 <code>solve()</code> 约 <b>$299\times1\times100 = 29900$</b> 次。「每帧 100 次迭代」听着不多，落到全程其实是<b>近三万次 sweep</b>——这就是 VBD「小步多迭」的尺度感（数字为默认参数下的自洽示例）。</p>
+        </div>
+
         <div class="bridge g103">
           <div class="c-h"><span class="tag">从 GAMES103 看</span> 这个外壳你太熟了</div>
           <p>「每帧：施加外力 → 解出新位置 → 更新速度 → 输出」——这就是你写过无数遍的时间积分主循环骨架，<code>forwardStep</code> / <code>updateVelocity</code> 对应的正是 GAMES103 里的 predict 与 velocity update。唯一被换掉的，是中间「解出新位置」那一块：别人用一次大线性求解或一堆约束投影，VBD 用的是「重复 <code>numIterations</code> 次、每次扫一遍所有顶点」的 block coordinate descent。整本书的重头戏，就是这个被换掉的内核。</p>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三条路总对照 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-10">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-10</div>
+        <h1>三条路总对照：penalty / AVBD / IPC</h1>
+        <p class="lede">从一根孤零零、压根不碰撞的 strand 出发，这本书把「接触」这件事讲了一整条线：<a href="../10-elasticity-collision/10-3-collision.html">10-3</a> 的 log-barrier + 几何截断，<a href="../11-avbd/11-1-avbd-idea.html">11-1</a> 的 penalty 与 AVBD ramp，再到整个 Part 12 的 IPC。现在是收线的时候了。这一节不引入任何新东西，只做一件事：把 <span class="term">penalty</span>、<span class="term">AVBD</span>、<span class="term">IPC</span> 三条路并排放在一张表里，沿着六个维度逐项对照，然后诚实地告诉你——<b>没有银弹</b>，该怎么选。</p>
+
+        <h2 id="the-big-table">六个维度的总对照表</h2>
+        <p>三条路的差别，可以压进六个维度：接触能量怎么写、求解是局部还是全局、无穿透是保证还是逼近、摩擦怎么处理、Hessian 怎么对待、代价几何。把它们并排看，三条路的「人设」一下就清楚了。</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>penalty（软）</th>
+              <th>AVBD（逼近硬）</th>
+              <th>IPC（保证）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>接触能量</b></td>
+              <td>penalty 软能量：穿得越深、回推越大</td>
+              <td>penalty + <span class="term">augmented Lagrangian</span>（$\lambda$ + ramp）</td>
+              <td>interior-point <span class="term">log-barrier</span>，定义在每对 surface primitive</td>
+            </tr>
+            <tr>
+              <td><b>求解范围</b></td>
+              <td><b>局部</b>：累加进 $\mathbf f_i/\mathbf H_i$，per-vertex 下降</td>
+              <td><b>局部</b>：VBD block descent + primal-dual</td>
+              <td><b>全局</b>：每步一个稀疏 Newton 解</td>
+            </tr>
+            <tr>
+              <td><b>无穿透保证</b></td>
+              <td>不保证（软惩罚，理论上可穿）</td>
+              <td>逼近：靠 ramp 把刚度推向极硬</td>
+              <td><b>严格保证</b>：CCD-filtered line search 卡每一步</td>
+            </tr>
+            <tr>
+              <td><b>摩擦</b></td>
+              <td>多为简单 penalty / 经验模型</td>
+              <td>同框架内 primal-dual 处理</td>
+              <td>lagged + 光滑化（mollified）Coulomb，同一优化框架内</td>
+            </tr>
+            <tr>
+              <td><b>Hessian 处理</b></td>
+              <td>局部 3×3，常做 SPD/PSD 兜底</td>
+              <td>局部 3×3 + $\lambda$ 维护良态</td>
+              <td>弹性 + barrier Hessian 各做 <span class="term">PSD projection</span>，装配全局稀疏矩阵</td>
+            </tr>
+            <tr>
+              <td><b>代价</b></td>
+              <td><b>便宜</b>、可并行</td>
+              <td><b>便宜</b>、可并行（跨帧 warm-start，收敛快）</td>
+              <td><b>贵</b>：全局解 + 每步 CCD + barrier 病态多迭代</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>这张表读下来有一条清晰的脊梁：从左到右，<b>无穿透从「不保证」走到「严格保证」，代价从「便宜局部」走到「昂贵全局」</b>。penalty 和 AVBD 共享「局部 + 便宜 + 可并行」的体质，区别只在 AVBD 多了一层 augmented Lagrangian 把约束逼得更硬、收敛得更稳；IPC 则独自站在「全局 + 昂贵 + 严格保证」的另一端。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">三条路压向地面：最后再看一眼穿透深度</span></div>
+          <div class="lab-body" data-widget="contact-three-ways"></div>
+          <div class="lab-cap">同一个物体压向地面：penalty 会陷进去，AVBD 逼得很近、但仍是渐进，IPC 始终停在面前——这就是「不保证 / 逼近 / 保证」三种承诺的样子。</div>
+        </div>
+
+        <h2 id="when-to-pick">怎么选：没有银弹</h2>
+        <p>看完表你可能想问：那到底用哪条？答案是那句老实话——<b>没有银弹</b>，按场景选。三条路是一组取舍，不是高下排名。</p>
+        <ul>
+          <li><b>要实时、要并行、能容忍一点点穿透</b> → penalty 或 AVBD。它们便宜、可并行，正是 VBD 局部下降的强项；游戏、交互式仿真、机器人实时控制这类场景，速度和并行度压倒一切，AVBD 还能把硬约束逼得相当好。</li>
+          <li><b>要可靠、要在极端接触下绝不穿帮、能接受离线算力</b> → IPC。大形变、极端压缩、致密接触、需要严格 intersection-free 保证的离线高质量仿真，IPC 的那笔「贵」买的就是这份别人给不出的鲁棒。</li>
+          <li><b>介于两者之间</b> → 看你更怕什么。怕慢，往 penalty/AVBD 走；怕穿帮，往 IPC 走。这条天平上没有免费的午餐：你想要的「保证」越严，付的算力越多。</li>
+        </ul>
+
+        <div class="callout note">
+          <div class="c-h">三条路，同一个 barrier，同一条主线</div>
+          <p>别忘了一个贯穿全篇的事实：penalty 的软能量、AVBD ramp 出的硬约束、IPC 的 interior-point barrier，本质上都是往 $G(\mathbf x)$ 里加<b>接触项</b>。你在 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 亲手累加进 $\mathbf f_i/\mathbf H_i$ 的那个 log-barrier，和 IPC 全局优化里的 barrier 是<b>同一个数学对象</b>，区别只在「局部 + 几何截断兜底」还是「全局 + CCD 严格保证」。三条路看似各走各的，其实都站在同一行加号上。</p>
+        </div>
+
+        <h2 id="main-thread">收线：还是那一句 min G(x)</h2>
+        <p>从 Part 1 的变分欧拉，到 Part 3 的 block coordinate descent，到 Part 10 的接触，到 Part 11 的 AVBD，再到这一整篇 IPC——你会发现整本书其实只讲了一件事：<b>把一个 time step 的动力学，写成最小化一个 incremental potential $G(\mathbf x)$</b>。</p>
+
+        <div class="math-block">$$\mathbf x^{t+1} \,=\, \arg\min_{\mathbf x}\; G(\mathbf x),\qquad G(\mathbf x) \,=\, \underbrace{\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_{\mathbf M}^2}_{\text{惯性}} \,+\, \underbrace{E_{\text{elastic}}(\mathbf x)}_{\text{弹性}} \,+\, \underbrace{E_{\text{contact}}(\mathbf x)}_{\text{接触：三条路之一}}$$</div>
+
+        <p>惯性项、弹性项，从 strand 到 cloth 到 IPC 一字未改。变的，只有最后那个接触项 $E_{\text{contact}}$ 的写法：penalty 的软能量、AVBD 的 ramp，还是 IPC 的 log-barrier。怎么解它——per-vertex 局部下降，还是全局稀疏 Newton——也只是同一个 $\min G(\mathbf x)$ 的不同求解策略。<b>整本书的接触主线，到这里闭合：三条路，三种接触项写法，一条 $\min G(\mathbf x)$。</b></p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你早就握着这把钥匙</div>
+          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触项都没有。但正是从那根 strand 上，你学会了把动力学读成 $\min G(\mathbf x)$、读成 per-vertex 的 $\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$。这把钥匙一路开到了 IPC——IPC 再贵再复杂，骨子里还是「往 $G$ 里加一项、再把它解出来」。你不是学了三套互不相干的接触算法，而是学会了用同一条主线，看穿三种接触写法的取舍。</p>
+        </div>
+
+        <h2 id="further-reading">进一步阅读</h2>
+        <p>这一篇是概念篇，刻意没碰那些只有读原文才能落实的细节（精确 barrier 解析式、收敛性证明、具体性能数据）。要往下走，从原始论文进——IPC 2020、以及它的几个重要后续工作（C-IPC、Convergent IPC、Affine Body Dynamics），都整理在附录 <a href="../appendix/a-7-ipc-references.html">a-7：IPC 参考文献</a>，每条都附一句中文告诉你值不值得点进去。术语见 <a href="../appendix/a-1-glossary.html">术语表</a>，公式见 <a href="../appendix/a-2-cheatsheet.html">公式速查</a>。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 三条路沿六维度对照——penalty <b>软、局部、便宜、不保证</b>；AVBD <b>用 augmented Lagrangian 逼近硬、局部、便宜可并行</b>；IPC <b>用 interior-point barrier + CCD line search 严格保证、全局稀疏 Newton、贵</b>，整张表的脊梁就是「无穿透越严、代价越贵」。(2) <b>没有银弹</b>：要实时可并行、容忍微穿透就选 penalty/AVBD，要严格 intersection-free、能接受离线算力就选 IPC，按场景取舍而非排高下。(3) 三条路本质都是往 $\min G(\mathbf x)$ 里加一个<b>接触项</b>——你在 10.3 亲手见过的那个 log-barrier 就是同一个数学对象——整本书的接触主线到此闭合：三种写法，一条主线。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

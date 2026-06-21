@@ -101,13 +101,13 @@
             <tr>
               <td><b>弹性</b></td>
               <td>弹簧 only（线段 $E=\tfrac12k(l-l_0)^2$）<br><a href="../01-foundations/1-4-spring-energy.html">1.4</a></td>
-              <td>membrane / volumetric <span class="term">Neo-Hookean</span> + dihedral bending + spring（spring 力/Hessian 同 TinyVBD）<br><a href="../09-elasticity-collision/9-1-elastic-elements.html">9.1</a></td>
+              <td>membrane / volumetric <span class="term">Neo-Hookean</span> + dihedral bending + spring（spring 力/Hessian 同 TinyVBD）<br><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
               <td>对应 USD 物理材质（<span class="term">PhysicsMaterial</span> / 形变体属性）声明的本构</td>
             </tr>
             <tr>
               <td><b>碰撞</b></td>
               <td><b>无</b>碰撞</td>
-              <td><span class="term">BVH</span> self-collision + penetration-free 截断（每色 sweep 后保守截断位移）<br><a href="../09-elasticity-collision/9-3-collision.html">9.3</a></td>
+              <td><span class="term">BVH</span> self-collision + penetration-free 截断（每色 sweep 后保守截断位移）<br><a href="../10-elasticity-collision/10-3-collision.html">10.3</a></td>
               <td><span class="term">PhysX</span> broadphase / narrowphase（Isaac 的碰撞管线）</td>
             </tr>
             <tr>
@@ -120,6 +120,37 @@
         </table>
 
         <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> spring 是公共子集</div><p>别被 Neo-Hookean 吓到：Newton 的 spring 元件用 <code>spring_rest_length / stiffness / damping</code>，力和 Hessian 的代数形式和你原书弹簧<b>逐项相同</b>，只是从 2D 升到 3D。membrane / volumetric / bending 是在这个公共子集之外、为面/体单元新加的本构；碰撞和着色则是你那根孤零零的 strand 从来没遇到过的新问题。</p></div>
+
+        <div class="callout note">
+          <div class="c-h">IPC 不在这张表里——它是概念篇</div>
+          <p>上面「碰撞」行里的 Newton 列是 <span class="term">BVH</span> self-collision + penetration-free 截断；Isaac 列是 <span class="term">PhysX</span>。<b>IPC 不是 Newton/Isaac 代码里的求解器</b>——Newton 的 particle/rigid 用 VBD/AVBD（10-3 的 local barrier + DAT、10-x 的 penalty/AVBD）。Part 12 是<b>算法/概念篇</b>，单独讲第三条接触路线（interior-point barrier + CCD 严格 intersection-free），所以它没有「Newton 代码列」可填。出处见 <a href="a-7-ipc-references.html">a-7 IPC 参考文献</a>。</p>
+        </div>
+
+        <h2 id="contact-three-roads">接触的三条路线（penalty / AVBD / IPC）</h2>
+        <p>把「碰撞」这一格再拆细：本书一路走过三种接触哲学，软硬与保证强度递增（对照 <a href="../12-ipc/12-10-three-roads.html">12.10</a>）。</p>
+        <table>
+          <thead><tr><th>路线</th><th>机制</th><th>零穿透保证</th><th>代价 / 出处</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>penalty</b>（惩罚）</td>
+              <td>违约即加弹簧式罚力，软约束</td>
+              <td><b>不</b>保证零穿透（刚度有限就会穿一点）</td>
+              <td>便宜、简单；Newton 10-3 的 local barrier 属此类 · <a href="../10-elasticity-collision/10-3-collision.html">10.3</a></td>
+            </tr>
+            <tr>
+              <td><b>AVBD</b>（增广拉格朗日）</td>
+              <td>penalty + 拉格朗日乘子 + ramp，逐步逼近硬约束</td>
+              <td>逼近硬约束，实践中很硬但非严格几何保证</td>
+              <td>warm-start / 增长 / 衰减的调度；Newton rigid 路径 · <a href="../11-avbd/11-1-avbd-idea.html">11.1</a></td>
+            </tr>
+            <tr>
+              <td><b>IPC</b>（interior-point barrier）</td>
+              <td>log-barrier + CCD-filtered line search</td>
+              <td><b>保证</b>每步 intersection-free（几何严格）</td>
+              <td>代价高：全局稀疏 Newton + CCD；概念篇 · <a href="../12-ipc/12-1-why-ipc.html">12.1</a> · <a href="../12-ipc/12-10-three-roads.html">12.10</a></td>
+            </tr>
+          </tbody>
+        </table>
 
         <h2 id="api-quaternion">求解器入口与跨栈陷阱</h2>
         <p>最后是「怎么把它跑起来」和一个容易踩的坑。三个栈的单帧入口长得很不一样；而四元数顺序是 Newton ↔ Isaac 之间最隐蔽的 bug 源。</p>
@@ -156,7 +187,7 @@
         <div class="math-block">$$\underbrace{\min_{\mathbf x} G(\mathbf x)}_{\text{没变}}\quad\text{；}\quad\underbrace{\text{一根 strand 串行}\ \longrightarrow\ \text{一块 cloth 在 GPU 上按颜色并行}}_{\text{变了}}$$</div>
         <p><b>没变</b>：变分目标 $\min G$、每顶点局部牛顿 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$、惯性项 $\frac{m_i}{h^2}\mathbf I$ 的正定结构、弹簧的力/Hessian 形式、后向差分更新速度 $\mathbf v=(\mathbf x-\mathbf x_{prev})/h$。</p>
         <p><b>变了</b>：单对象 → Model/State 拆分；2D → 3D；仅弹簧 → membrane/volumetric Neo-Hookean + bending + spring；无碰撞 → BVH 自碰 + penetration-free 截断；串行单 sweep → graph coloring 多色并行；自适应初始化 → 朴素惯性；<b>有</b> Chebyshev → <b>无</b> Chebyshev。</p>
-        <p>读到这里，你应该能拿着任意一个 Newton particle VBD 的概念，反手指回原书那根 strand 上的对应物——这正是这一页存在的意义。完整术语见 <a href="a-4-newton-glossary.html">Newton 术语表</a>，外部出处见 <a href="a-6-newton-references.html">Newton 参考</a>。</p>
+        <p>读到这里，你应该能拿着任意一个 Newton particle VBD 的概念，反手指回原书那根 strand 上的对应物——这正是这一页存在的意义。完整术语见 <a href="a-4-newton-glossary.html">Newton 术语表</a>，外部出处见 <a href="a-6-newton-references.html">Newton 参考</a>；接触的第三条路线 IPC 是概念篇，出处见 <a href="a-7-ipc-references.html">a-7 IPC 参考</a>。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

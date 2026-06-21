@@ -70,6 +70,36 @@
         <div class="math-block">$$\Delta\lambda=\frac{-C-\tilde\alpha\,\lambda}{\sum_j w_j\lVert\nabla_j C\rVert^2+\tilde\alpha},\qquad \Delta\mathbf x_i=w_i\,\nabla_i C\,\Delta\lambda,\qquad \lambda\mathrel{+}=\Delta\lambda$$</div>
         <p>$\alpha\to0$（无穷硬）退回 PBD。本质是隐式欧拉 KKT 系统的 Gauss-Seidel。</p>
 
+        <h2 id="contact-ipc">接触 barrier 与 IPC（Part 12）</h2>
+        <p>原书公式止于 XPBD；下面这一组是「IPC 篇」的接触公式，记号与 <a href="../12-ipc/12-2-barrier-energy.html">12.2</a>–<a href="../12-ipc/12-9-solver-cost.html">12.9</a> 一致。</p>
+
+        <p>log-barrier 能量与它的三条 $C^2$ 性质，以及带接触项的 $G$（<a href="../12-ipc/12-2-barrier-energy.html">12.2</a>）：</p>
+        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0<d<\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
+        <div class="math-block">$$b(\hat d)=0,\qquad b'(\hat d)=0,\qquad b''(\hat d)=0.$$</div>
+        <div class="math-block">$$\min_{\mathbf x} G(\mathbf x)=\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_M^2+\Psi(\mathbf x)+\sum_{(k,l)\in\mathcal C} b\big(d_{kl}(\mathbf x),\hat d\big)$$</div>
+        <p>这是论文采用的常见形式，关键是三条性质（$d\to0$ 发散、$d=\hat d$ 处 $C^2$ 接零），精确定义以 Li et al. 2020 PDF 为准。</p>
+
+        <p>距离梯度与重心坐标 falloff（最近点 $\mathbf q$ 在三角上，<a href="../12-ipc/12-3-distance-geometry.html">12.3</a>）：</p>
+        <div class="math-block">$$\mathbf q=\lambda_a\mathbf a+\lambda_b\mathbf b+\lambda_c\mathbf c,\quad \lambda_a+\lambda_b+\lambda_c=1,\quad d=\lVert\mathbf p-\mathbf q\rVert$$</div>
+        <div class="math-block">$$\hat{\mathbf n}=\frac{\mathbf p-\mathbf q}{d},\qquad \frac{\partial d}{\partial\mathbf p}=\hat{\mathbf n},\quad \frac{\partial d}{\partial\mathbf a}=-\lambda_a\hat{\mathbf n},\quad \frac{\partial d}{\partial\mathbf b}=-\lambda_b\hat{\mathbf n},\quad \frac{\partial d}{\partial\mathbf c}=-\lambda_c\hat{\mathbf n}$$</div>
+
+        <p>接触力与 Hessian 的链式法则，两项（<a href="../12-ipc/12-3-distance-geometry.html">12.3</a> · <a href="../12-ipc/12-4-barrier-grad-psd.html">12.4</a>）：</p>
+        <div class="math-block">$$\frac{\partial b}{\partial\mathbf x}=b'(d)\frac{\partial d}{\partial\mathbf x},\qquad \mathbf f_\text{contact}=-b'(d)\frac{\partial d}{\partial\mathbf x}$$</div>
+        <div class="math-block">$$\frac{\partial^2 b}{\partial\mathbf x^2}=\underbrace{b''(d)\frac{\partial d}{\partial\mathbf x}\Big(\frac{\partial d}{\partial\mathbf x}\Big)^{\!\top}}_{\text{(I) 外积项}}+\underbrace{b'(d)\frac{\partial^2 d}{\partial\mathbf x^2}}_{\text{(II) 距离二阶项, 不保 PSD}}$$</div>
+
+        <p>PSD 投影（特征值钳到非负，<a href="../12-ipc/12-4-barrier-grad-psd.html">12.4</a> · <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a>）：</p>
+        <div class="math-block">$$\mathbf H_\text{local}=\mathbf Q\,\mathrm{diag}(\lambda_1,\dots,\lambda_n)\,\mathbf Q^\top\ \longrightarrow\ \mathbf Q\,\mathrm{diag}(\max(\lambda_1,0),\dots,\max(\lambda_n,0))\,\mathbf Q^\top$$</div>
+
+        <p>CCD-filtered line search 步长（<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a> · <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a>）：</p>
+        <div class="math-block">$$t^\star=\max\{t\in(0,1]:\mathbf x+s\mathbf p\ \text{对所有}\ s\in[0,t]\ \text{都无交叉}\}$$</div>
+        <div class="math-block">$$\alpha=\min\bigl(\alpha_\text{Newton},\ c\cdot t^\star,\ \alpha_\text{CFL}\bigr),\qquad 0<c<1$$</div>
+
+        <p>全局稀疏牛顿解一步并更新（<a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> · <a href="../12-ipc/12-9-solver-cost.html">12.9</a>）：</p>
+        <div class="math-block">$$\mathbf H=\mathbf H_\text{elastic}+\mathbf H_\text{barrier}\ (\text{各做 PSD 投影}),\qquad \mathbf H\,\mathbf p=\mathbf f,\qquad \mathbf x\leftarrow\mathbf x+\alpha\mathbf p$$</div>
+
+        <p>库仑摩擦（IPC 用 lagged + mollified 的可微光滑版，<a href="../12-ipc/12-6-friction.html">12.6</a>）：</p>
+        <div class="math-block">$$\mathbf f_t=-\mu f_n\frac{\mathbf v_t}{\lVert\mathbf v_t\rVert}\ (\text{滑动}),\qquad \lVert\mathbf f_t\rVert\le\mu f_n\ (\text{静止不定})$$</div>
+
         <h2 id="symbols">符号表</h2>
         <table>
           <thead><tr><th>符号</th><th>含义</th></tr></thead>
@@ -91,12 +121,27 @@
             <tr><td>$\omega$</td><td>Chebyshev 外推系数（代码 <code>getAcceleratorOmega</code>）</td></tr>
             <tr><td>$\alpha$</td><td>compliance 柔度 $=1/k$（XPBD）；$\tilde\alpha=\alpha/h^2$</td></tr>
             <tr><td>$\lambda$</td><td>Lagrange multiplier 拉格朗日乘子 / 约束力对偶变量（XPBD）</td></tr>
+            <tr><td>$d$</td><td>无符号距离（一对接触 primitive 间最近距离，barrier 自变量，IPC）</td></tr>
+            <tr><td>$\hat d$</td><td>activation distance 激活阈值（$d<\hat d$ 才发力，IPC）</td></tr>
+            <tr><td>$b(d,\hat d)$</td><td>log-barrier 接触能量 $=-(d-\hat d)^2\ln(d/\hat d)$（IPC）</td></tr>
+            <tr><td>$\hat{\mathbf n}$</td><td>单位法向 $=(\mathbf p-\mathbf q)/d$（IPC）</td></tr>
+            <tr><td>$\lambda_a,\lambda_b,\lambda_c$</td><td>重心坐标权重（最近点在三角上的权重；距离梯度按它落到各顶点）</td></tr>
+            <tr><td>$\mathbf q$</td><td>三角上最近点 $=\lambda_a\mathbf a+\lambda_b\mathbf b+\lambda_c\mathbf c$（IPC）</td></tr>
+            <tr><td>$t^\star$</td><td>CCD 最大安全步长（沿轨迹不穿透的最大 $t$，IPC）</td></tr>
+            <tr><td>$\alpha$（IPC）</td><td>line-search 步长 $=\min(\alpha_\text{Newton},c\,t^\star,\alpha_\text{CFL})$（注意与 XPBD 的 compliance $\alpha$ 同名异义）</td></tr>
+            <tr><td>$\alpha_\text{CFL}$</td><td>CFL 式保守接触界（单步位移保守上限，IPC）</td></tr>
+            <tr><td>$c$</td><td>CCD 安全系数 $\in(0,1)$（把步长收进可行域，IPC）</td></tr>
+            <tr><td>$\mathbf p$</td><td>Newton 方向（全局稀疏系统 $\mathbf H\mathbf p=\mathbf f$ 的解，IPC）</td></tr>
+            <tr><td>$\mu$</td><td>摩擦系数（Coulomb friction，IPC）</td></tr>
+            <tr><td>$f_n,\mathbf f_t$</td><td>法向力 / 切向摩擦力（IPC）</td></tr>
+            <tr><td>$\mathcal C$</td><td>活跃接触对集合（barrier 求和的下标，IPC）</td></tr>
+            <tr><td>$\kappa$</td><td>barrier 刚度（worked-example 用，IPC）</td></tr>
           </tbody>
         </table>
 
         <div class="callout note">
           <div class="c-h">两种 G 写法的提醒</div>
-          <p>有的论文把 $G$ 写成 $\frac12\lVert\mathbf x-\mathbf y\rVert_M^2+h^2 E$（惯性项不除 $h^2$、弹性项乘 $h^2$）。这和本页写法只差一个整体常数 $h^2$，最小值点相同。TinyVBD 用的是本页这版（惯性项带 $1/h^2$，代码里 <code>dtSqrReciprocal=1/dt²</code>）。术语含义见 <a href="a-1-glossary.html">术语表</a>。</p>
+          <p>有的论文把 $G$ 写成 $\frac12\lVert\mathbf x-\mathbf y\rVert_M^2+h^2 E$（惯性项不除 $h^2$、弹性项乘 $h^2$）。这和本页写法只差一个整体常数 $h^2$，最小值点相同。TinyVBD 用的是本页这版（惯性项带 $1/h^2$，代码里 <code>dtSqrReciprocal=1/dt²</code>）。术语含义见 <a href="a-1-glossary.html">术语表</a>；IPC 接触公式的论文出处见 <a href="a-7-ipc-references.html">a-7 参考文献</a>。</p>
         </div>
       </article>
     </main>

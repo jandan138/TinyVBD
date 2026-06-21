@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>为什么 MPM：Lagrangian / Eulerian / hybrid · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-1</div>
+        <h1>为什么 MPM：Lagrangian / Eulerian / hybrid</h1>
+        <p class="lede">全书到现在都在网格上——质点连成弹簧、顶点连成三角形与四面体，每个 DOF 都钉在一张固定连接关系的 mesh 上。MPM 是第一次真正跳出 mesh：物质点（粒子）自由地满世界跑、携带全部物理状态，背景网格每步借来算一次力就扔。这一节先讲清它为什么必须这样——网格法在哪儿撞了墙，纯 Eulerian 又为什么不够，<span class="term">material point method</span> 怎么把两者的好处缝在一起。</p>
+
+        <h2 id="two-views">两种看世界的方式：跟着物质走，还是守着空间看</h2>
+        <p>所有连续介质仿真，骨子里都要回答一个问题：我把「未知量」放在哪儿？有两套互斥的答案，它们是整个计算物理的两块基石。</p>
+        <p><b>Lagrangian（拉格朗日）视角</b>：未知量贴在<i>物质</i>上，跟着材料一起运动。一根弹簧的两个端点、一个四面体的四个顶点，都是物质点——它们走到哪，DOF 就跟到哪。这正是本书前 12 部分的世界：mass-spring、FEM、VBD、IPC，无一例外。它的好处是<b>追踪物质天经地义</b>：每个顶点永远是「同一块材料」，形变历史、应力、塑性状态都自然地挂在它身上，形变梯度 $\mathbf F$（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>）也直接从顶点的 rest/world 坐标读出来。</p>
+        <p><b>Eulerian（欧拉）视角</b>：未知量钉在<i>空间</i>的固定格点上，材料从格子里流过。烟、水、火的经典做法就是这一套——你不追某一团水，你守在每个格点上问「此刻流过我这里的速度、密度是多少」。它的好处是<b>处理流动与巨形变毫不费力</b>：格子永远是规整的，不会因为材料被搅烂而变形、退化。</p>
+
+        <h2 id="lagrangian-wall">网格法的墙：撕裂、缠死、拓扑变不了</h2>
+        <p>Lagrangian mesh 的命门，恰恰是它最大的优点的反面——连接关系是<b>固定</b>的。顶点之间谁连谁，从一开始就定死了。这在小到中等形变下完美，但材料一旦被狠狠折腾，麻烦就来了：</p>
+        <ul>
+          <li><b>巨形变下单元被压扁、翻转</b>：一个四面体被压到 $J=\det\mathbf F\to0$ 甚至 $J&lt;0$（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 的 inverted 态），能量和力都病态，求解器开始挣扎。沙、雪、泥这种本来就要流动、要被搅成一团的材料，mesh 单元几步之内就缠死。</li>
+          <li><b>断裂与拓扑变化</b>：mesh 要表达「裂开」，就得在运行时切单元、重连顶点——动态改拓扑既难写又难稳。一块材料碎成两块、两团泥并成一团，对固定连接的 mesh 是结构性的难题。</li>
+          <li><b>重网格化的代价</b>：传统出路是周期性 remesh（重新划分网格），但每次重划都要把状态从旧网格插值到新网格，引入耗散、还很贵。</li>
+        </ul>
+        <p>一句话：mesh 擅长「形状大体不变、只是弹来弹去」的固体；一旦进入「材料像物质一样自由流动、合并、碎裂」的领域，它的固定连接就成了枷锁。</p>
+
+        <h2 id="eulerian-wall">纯 Eulerian 的墙：对流耗散、物质难追</h2>
+        <p>那干脆全用固定网格（纯 Eulerian）？流体仿真长期这么做，但它换来另一组麻烦：</p>
+        <ul>
+          <li><b>对流（advection）带来数值耗散</b>：材料从一个格子流到下一个格子，每一步都要把场量「搬运」过去，而搬运需要插值——插值就抹平、就糊。久而久之，本该锐利的界面、本该守住的旋涡，都被这股 <span class="term">numerical diffusion</span> 磨平了。</li>
+          <li><b>难以追踪「这是哪一块材料」</b>：固定格点天生不记得「流过我的是谁」。要追踪材料界面、要把形变历史（$\mathbf F$、塑性、损伤）挂在具体物质上，纯 Eulerian 得额外背一套 level-set 或 marker，既麻烦又容易丢精度。固体力学要的就是「这块材料被怎么形变过」，这正是 Eulerian 的软肋。</li>
+        </ul>
+
+        <div class="callout">
+          <div class="c-h">两堵墙正好互补</div>
+          <p>注意 Lagrangian 和 Eulerian 的强弱<b>恰好对偶</b>：Lagrangian 天生会追物质、算形变历史，却怕巨形变把 mesh 缠死；Eulerian 天生不怕巨形变、网格永远规整，却追不住物质、还被对流耗散磨钝。一边的优点正是另一边的缺点。这就给了一个显然的念头——能不能两样都要？</p>
+        </div>
+
+        <h2 id="hybrid">MPM 的答案：粒子载状态，网格借算力</h2>
+        <p><span class="term">MPM</span>（material point method，Sulsky 等 1994，从更早的 PIC/FLIP 流体法发展而来）就是那个「两样都要」的混合方案。它的设计可以浓缩成一句贯穿全篇的话：</p>
+        <div class="callout note">
+          <div class="c-h">MPM 一句话</div>
+          <p>MPM 是混合 Lagrangian-Eulerian：<b>物质点（粒子）携带全部物理状态、永久 Lagrangian</b>；<b>背景网格只是每步借来算力、用完即弃的 scratch（Eulerian）</b>。它天生擅长巨形变、断裂、沙/雪/泥/流体这种 mesh 会撕裂或缠死的场景。</p>
+        </div>
+        <p>怎么做到的？分工：</p>
+        <ul>
+          <li><b>粒子（material point）是 Lagrangian 的</b>：它满世界自由运动，身上挂着质量、速度、形变梯度 $\mathbf F$、应力、塑性状态——所有「这块材料被怎么对待过」的历史。粒子之间<b>没有固定连接</b>，所以材料随便流、随便碎、随便合并，都没有 mesh 去撕裂或缠死。形变历史天然被追住（解决 Eulerian 的软肋）。</li>
+          <li><b>背景网格是 Eulerian 的</b>：一张规整的固定格子，每一步临时借用——粒子把质量和动量散布上去，在网格上算一次力、更新一次速度，再把结果收回粒子，然后网格<b>清零作废</b>，下一步重来。网格永远规整、永不退化（解决 Lagrangian 的命门）。因为算力的网格是临时重建的，材料之间的「自碰撞 / 自合并」也由网格天然处理——不需要显式的接触检测。</li>
+        </ul>
+        <p>于是两堵墙都被绕开了：算「力」这件需要邻接关系、需要梯度的活，交给永远规整的网格；记「物质」这件需要追踪历史的活，交给永远跟着材料跑的粒子。这就是 hybrid 的全部精髓，下一节 <a href="13-2-mpm-cycle.html">13.2</a> 会把这套「散上去、算一次、收回来、再清零」拆成四个具体阶段。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从全书看</span> 跳出 mesh，但没跳出 min G(x)</div>
+          <p>别误会「跳出 mesh」等于「另起炉灶」。本构还是同一套：粒子上的形变梯度 $\mathbf F$、应变能 $\psi(\mathbf F)$、应力 $\mathbf P$，<b>完全复用 FEM 篇</b>（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>、<a href="../09-fem/9-3-strain-energy.html">9.3</a>）——MPM 只是不在固定单元上算 $\mathbf F$，而让每个粒子带着自己的 $\mathbf F$ 随它运动更新。变分骨架也还在：<b>隐式 MPM 仍是在网格 DOF 上最小化同一个 incremental potential $\min G(\mathbf x)$</b>（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>），只是 DOF 从「物质顶点」换成了「背景网格节点」（<a href="13-5-implicit-mpm.html">13.5</a> 详谈）。换了离散，没换灵魂。</p>
+        </div>
+
+        <h2 id="domain">MPM 的主场：mesh 会缠死的那些材料</h2>
+        <p>把上面的优势翻译成「该用 MPM 的场景」，就是一张材料清单——它们的共同点是<b>大形变 + 物质重组</b>：</p>
+        <ul>
+          <li><b>沙、雪、泥、颗粒物</b>：要流动、要堆积、要被搅成一团，又要保留「这是固体颗粒」的本构记忆。MPM 的多材料通用性在这里最闪光（<a href="13-4-F-update-constitutive.html">13.4</a>：同一套框架换个 $\psi$ 就从弹性变弹塑性、变流体）。</li>
+          <li><b>断裂、碎裂</b>：材料碎成任意多块，对无固定连接的粒子是免费的——不需要切 mesh、不需要重连。</li>
+          <li><b>流固耦合、黏性流</b>：液体、黏弹性体、混合物在同一个网格上自然耦合，界面由粒子分布隐式表达。</li>
+        </ul>
+        <p>反过来，对「形状大体稳定、要求高精度应力、要薄壳/细杆」的固体，FEM/VBD 仍是更锐利的工具——MPM 不是来取代它们的，而是接管它们撞墙的那一段。你可以拖动下面这个对照实验感受 mesh 一侧的边界：把布料拉到极端、揉皱、对折，看连接关系如何被逼到极限——那正是 MPM 想接手的地方。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">mesh 的边界：把布料逼到极限</span></div>
+          <div class="lab-body" data-widget="cloth-lab"></div>
+          <div class="lab-cap">这是 Newton 篇用过的布料 lab（一张固定连接的三角网格）。把它拉伸、揉皱、对折——感受 Lagrangian mesh 在「形状稳定的弹性体」上多么称手。再想象把这块材料换成沙或泥、要它流动碎裂：固定连接就成了枷锁，那一步正是 MPM 接手的地方。</div>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) Lagrangian mesh（FEM/VBD）天生会追物质、算形变历史，却怕巨形变把单元压扁/翻转/缠死、怕断裂改拓扑；纯 Eulerian 固定网格永不退化，却被对流耗散磨钝、追不住「这是哪块材料」——两者的强弱恰好对偶。(2) MPM 是混合方案：粒子永久 Lagrangian、携带质量/速度/$\mathbf F$/应力等全部状态、无固定连接所以随便流碎合并；背景网格只是每步借来算一次力的 Eulerian scratch、用完清零、永远规整。(3) 它没跳出全书主线——本构复用 FEM 的 $\mathbf F/\psi$，隐式求解仍是网格 DOF 上的 $\min G(\mathbf x)$；它的主场是沙/雪/泥/流体/断裂这些 mesh 会撕裂或缠死的材料。</p>
+        <p>下一节 <a href="13-2-mpm-cycle.html">13.2</a>，我们把「散上去、算一次、收回来、再清零」拆成四个具体阶段——P2G、grid solve、G2P、advect——这就是 MPM 的一步循环。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

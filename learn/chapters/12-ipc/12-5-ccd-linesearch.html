@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>intersection-free 的真正来源：CCD-filtered line search · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-5">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-5</div>
+        <h1>intersection-free 的真正来源：CCD-filtered line search</h1>
+        <p class="lede">前几节我们把 IPC 的 <span class="term">log-barrier</span> 接触能量、它的距离/梯度/Hessian 都摆好了——能量在 $d\to0$ 时发散到无穷，理论上「距离永远跨不过零」。但理论是连续的，求解是<b>离散</b>的：一步 Newton 迈得太大，再陡的能量墙也可能被一脚跨过去。这一节讲 IPC 真正把 <span class="term">intersection-free</span> 从「应该不会穿」升级成「保证不穿」的那台机器——<b>CCD-filtered line search</b>。它也是整个 IPC 篇的心脏。</p>
+
+        <h2 id="barrier-not-enough">能量墙再陡，离散的一步也能跨过去</h2>
+        <p>先把上一节的结论接过来：barrier $b(d,\hat d)$ 在距离 $d$ 趋近零时能量发散，对应的接触力可以变得任意大。在<b>连续</b>的意义上，这道墙确实拦得住任何东西——没有有限的力能把距离压到零。可一旦真正去解，你面对的是一个迭代：每一步先求出一个下降方向，再沿这个方向走一段。问题就出在「走一段」这三个字上。</p>
+        <p>设当前位形是 $\mathbf x$，全局 Newton 解出了一个方向 $\mathbf p$（怎么解出来的下一节再说，这里只当它是一个「往能量更低处去」的方向）。接下来要决定<b>步长</b> $\alpha$，更新成 $\mathbf x + \alpha\,\mathbf p$。如果 $\alpha$ 取得太大，哪怕能量墙在 $d=0$ 处是无穷高，离散的这一跳也可能<b>直接落到墙的另一侧</b>——两个几何元件已经交叉，距离变成了「负」的，barrier 公式甚至失去意义。能量发散保证的是「连续轨迹跨不过」，它管不住「离散采样跳过去」。</p>
+
+        <div class="callout warn">
+          <div class="c-h">这正是 10-3 你已经撞过的那堵墙</div>
+          <p>这个「一步跨过去」的风险，你在 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 已经亲眼见过。那里 Newton cloth 的 log-barrier 同样在能量层面挡穿透，但 VBD 是按 color 一遍遍扫的离散迭代，某一步算出的 $\Delta\mathbf x_i$ 可能步子太大一脚跨过三角形——所以 10-3 在 <b>每个 color sweep 之后</b>加了一道 <span class="term">penetration-free</span> 截断（DAT）做几何兜底。<b>同样的离散跨步风险，IPC 和 10-3 都有；区别全在「怎么解决它」。</b>这一节就是讲 IPC 的解法。</p>
+        </div>
+
+        <h2 id="ccd">第一道闸：filtered CCD 求最大安全步长</h2>
+        <p>IPC 的办法不是「先走完再检查、穿了再砍」，而是<b>在走之前就先问清楚：沿方向 $\mathbf p$ 最多能走多远而不发生任何交叉？</b>回答这个问题的，是 <span class="term">CCD</span>——continuous collision detection（连续碰撞检测）。</p>
+        <p>CCD 和我们熟悉的「离散碰撞检测」不同。离散检测只看某个时刻的快照：这一帧有没有交叉。CCD 看的是<b>整段运动</b>：把每个顶点从 $\mathbf x$ 到 $\mathbf x + \mathbf p$ 想象成一条直线轨迹，问「在这段连续扫掠的过程中，第一次发生 point-triangle 或 edge-edge 接触（距离归零）是在哪个比例 $t^\star\in(0,1]$」。这个 $t^\star$ 就是<b>最大不穿透步长</b>（time of impact）：只要 $\alpha \le t^\star$，整段运动里就<b>没有任何一对几何元件穿过对方</b>。</p>
+        <div class="math-block">$$t^\star \;=\; \max\;\bigl\{\,t\in(0,1] \;:\; \mathbf x + s\,\mathbf p \ \text{对所有 } s\in[0,t]\ \text{都无交叉}\,\bigr\}$$</div>
+        <p>所谓 <span class="term">filtered</span>，是说 CCD 不会傻乎乎对每一对几何元件都做这套连续求根——那是平方级灾难。它先用空间加速结构和保守的包围盒「过滤」掉绝大多数不可能在这步内相撞的元件对，只对真正逼近的少数几对做精确的 time-of-impact 计算。这一步是 IPC 每次迭代里实打实的开销，也是后面 12-6 要讲「IPC 贵在哪」的第一笔账。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">CCD 求最大安全步长：点永远停在墙前</span></div>
+          <div class="lab-body" data-widget="ccd-linesearch"></div>
+          <div class="lab-cap">一个点朝线段运动，Newton 提出一个方向，CCD 求出 time-of-impact、line search 把步长截到可行域内——拖动方向/步长，点永远停在前面，绝不穿过。</div>
+        </div>
+
+        <h2 id="cfl-bound">第二道闸：CFL 式保守接触界</h2>
+        <p>光有 $t^\star$ 还不够「安全」。如果每步都正好走到 $t^\star$，那就意味着这一步走完后某对元件的距离<b>恰好压到了零</b>——而 barrier 在 $d=0$ 处是发散的，下一步的能量、梯度、Hessian 会瞬间爆炸，数值上完全没法继续。IPC 因此在 $t^\star$ 之外再叠一道更保守的限制：一个 <span class="term">CFL</span> 式的<b>保守接触界</b>，进一步把步长往回收一点，确保走完之后元件之间<b>仍留着一条正的安全缝</b>，距离停在 $\hat d$ 这道激活阈值能温柔接管的范围里，而不是贴死在零上。</p>
+        <p>「CFL 式」是个借喻：经典的 <span class="term-i">CFL condition</span>（Courant–Friedrichs–Lewy）在显式时间积分里限制「一步走过的距离不能超过一个网格格子」，本质是「别让一步跨得比你能分辨的尺度还大」。IPC 这里同理——别让一步走得比「当前最近的那对元件之间还剩多少缝」更激进。两道闸合起来，最终步长是</p>
+        <div class="math-block">$$\alpha \;=\; \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0<c<1$$</div>
+        <p>其中 $\alpha_{\text{Newton}}$ 是普通 line search（保证能量真的下降、Armijo 之类）想要的步长，$c\cdot t^\star$ 是 CCD 给的不穿透上限（留了系数 $c$ 不贴死），$\alpha_{\text{CFL}}$ 是保守接触界。三者取最小——<b>谁最保守听谁的</b>。</p>
+
+        <div class="callout note">
+          <div class="c-h">为什么不直接走到 t* 再说</div>
+          <p>因为 barrier 不是「碰到才发力」，而是「在 $\hat d$ 之内就发力、越近越猛」。如果允许步长走到距离恰好为零，barrier 能量和它的导数都已发散，整个二次模型在那一点失效，Newton 没法在下一轮继续。保守界的作用是<b>始终把系统留在 barrier 还能正常工作的「内部」</b>——这正是 interior-point（内点法）这个名字的字面意思：永远待在可行域<b>内部</b>，绝不踩到边界上。</p>
+        </div>
+
+        <h2 id="feasible-all-iters">关键：可行性贯穿每一次非线性迭代</h2>
+        <p>现在把它和 10-3 的差别钉死。10-3 的 penetration-free 截断是<b>一步牛顿之后</b>的几何动作：先按能量算出 $\Delta\mathbf x_i$，再回头按保守距离界把这批位移<b>砍短</b>——它是事后的、per-color 的、不可微的几何兜底。它管用，但它发生在求解步的<b>外面</b>，是给离散迭代加的一道补丁。</p>
+        <p>IPC 把这件事<b>焊进了求解的内部</b>。每一次 Newton 迭代提出方向后，line search 本身就带着 CCD 和保守界去挑步长——于是<b>这一步走完，位形必然仍在可行域内</b>（无交叉）。而一个 time step 往往要做<b>很多次</b>这样的非线性迭代才收敛；既然<b>每一次</b>迭代都从可行点出发、又落在可行点上，那么不管中间迭代了多少轮、压缩得多厉害，<b>整条迭代链上的每一个位形都是 intersection-free 的</b>。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 还是 min G(x)，只是 line search 学会了「看路」</div>
+          <p>别忘了这一切仍在主线 <code>min G(x)</code> 之内。IPC 没有另起炉灶——它最小化的还是一个 incremental potential，接触项还是那个 log-barrier。变的只是<b>怎么沿方向走一步</b>：普通优化里 line search 只关心「能量有没有下降」，IPC 的 line search 额外背上了一个硬约束——「这一步不许跨过任何几何边界」。CCD 求 $t^\star$、保守界再收一点，本质上是给 line search 装了一双能<b>看见前方墙在哪</b>的眼睛。主线没改，只是走路更小心了。</p>
+        </div>
+
+        <h2 id="contrast">和 10-3、11-1 三方对照</h2>
+        <p>把三条路在「无穿透」这一维上摆齐，差别一目了然：</p>
+        <ul>
+          <li><b>10-3 Newton cloth</b>：log-barrier 软挡 + <b>每个 color sweep 之后</b>的 penetration-free 截断（DAT）做<b>事后几何兜底</b>。无穿透靠的是「截断这道补丁」，发生在 per-vertex 局部求解步之外。</li>
+          <li><b>11-1 AVBD</b>：把非穿透当一道<b>硬约束</b>，靠 penalty stiffness 一路 <span class="term-i">ramp</span> 向无穷去<b>逼近</b>它（见 <a href="../11-avbd/11-1-avbd-idea.html">11.1</a>）。逼近得很近，但「保证」二字仍是渐近意义上的。</li>
+          <li><b>11 IPC</b>：把无穿透<b>烤进全局求解的 line search</b>。CCD-filtered line search + CFL 保守界让<b>每一次迭代</b>都停在可行域内部——于是 intersection-free 不是兜底、不是逼近，而是<b>每一步都严格成立的不变量</b>，与压缩程度无关。</li>
+        </ul>
+        <p>同一个数学对象（log-barrier），同一个目标（不穿透），三种「怎么保证它」的工程哲学。IPC 最贵，但它给的是三者里唯一<b>带严格保证</b>的那一个。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) barrier 在连续意义上挡穿透，但<b>离散的一步可能跨过能量墙</b>——10-3 和 IPC 都有这个风险，区别全在解法；(2) IPC 的解法是 <b>CCD-filtered line search</b>：用连续碰撞检测求出最大不穿透步长 $t^\star$，再叠一道 <span class="term">CFL</span> 式保守接触界把步长进一步收紧，最终 $\alpha=\min(\alpha_{\text{Newton}},\,c\,t^\star,\,\alpha_{\text{CFL}})$，<b>永远停在可行域内部</b>；(3) 因为这道保证<b>烤进了每一次非线性迭代</b>（而非像 10-3 那样在求解步之外做事后截断），所以整个 time step 严格 <span class="term">intersection-free</span>，与压缩程度无关——这就是 IPC「保证」二字的真正来源。</p>
+        <p>到这里 IPC 的「不穿透」这条主线讲完了。但真实接触从不只有「推开」，还有<b>沿着接触面相互摩擦</b>。理想 Coulomb 摩擦有一处 Newton 最讨厌的不连续阶跃——下一节 <a href="12-6-friction.html">11-6：摩擦——lagged、光滑化的 Coulomb</a>，我们看 IPC 怎么把摩擦也<b>塞进同一个优化框架</b>，并把那个阶跃磨成可微的曲线。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

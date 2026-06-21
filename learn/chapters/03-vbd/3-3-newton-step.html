@@ -63,6 +63,49 @@ for (iNeiE : vertAdjacentEdges[iV]) {
           <p>$\mathbf H_{aa}$ 沿弹簧方向的特征值是 $k$（永远正），垂直方向的特征值是 $k(1-l_0/l)$——当弹簧被<b>压缩</b>（$l<l_0$）时这个值<b>变负</b>，弹簧 Hessian 就不定了（<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 详谈）。Newton/Projective Dynamics 通常要把 Hessian 做 SPD 投影才敢用。VBD 不做这个投影：它指望惯性块 $\frac{m_i}{h^2}\mathbf I$ 这个恒正定的大块把 $\mathbf H_i$ 整体撑回可解的范围，并在万一退化时直接跳过这个顶点。这是 <a href="../03-vbd/3-5-stability.html">3.5</a> 的主题。</p>
         </div>
 
+        <h2 id="worked">手算一遍：一个中间顶点的完整装配</h2>
+        <p>说了这么多「小到能手算」，那就真算一遍。我们取一根 strand 中间的顶点 $i$，用<a href="../01-foundations/1-4-spring-energy.html">全书共享的那组参数</a>，把 $\mathbf H_i$、$\mathbf f_i$ 一格一格填出来，最后解出 $\Delta\mathbf x_i$。坐标特意选得干净，让每一步都能用心算复核。</p>
+
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>下面的具体数字（坐标、$\mathbf y_i$）是为了把装配过程算给你看而精心挑的，<b>示意性</b>地展示「惯性块 + 两条压缩弹簧」怎么拼成一个 $3\times3$。趋势（惯性块兜底、压缩弹簧贡献负的垂直特征值、对称力相消）是真的；具体小数不对应任何真实帧。</p>
+        </div>
+
+        <h3 id="worked-setup">布置：坐标与参数</h3>
+        <p>顶点 $i$ 当前在原点，左右各有一个邻居，两条弹簧都沿 $x$ 轴、且都被压到原长的一半：</p>
+        <div class="math-block">$$\mathbf x_i=(0,0,0),\quad \mathbf x_{\text{左}}=(-0.5,0,0),\quad \mathbf x_{\text{右}}=(0.5,0,0)$$</div>
+        <div class="math-block">$$m_i=1,\quad h=\tfrac1{60}\ \Rightarrow\ \frac{m_i}{h^2}=3600;\qquad k=100,\ l_0=1,\ l=0.5\ \Rightarrow\ \frac{l_0}{l}=2$$</div>
+        <p>惯性目标取 $\mathbf y_i=(0,-0.01,0)$——顶点这一步「想」往下掉一点点（重力把惯性碗底压到了 $x_i$ 下方）。</p>
+
+        <h3 id="worked-inertia">第 1 块：惯性</h3>
+        <p>按 $\mathbf f_i\mathrel{+}=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$、$\mathbf H_i\mathrel{+}=\frac{m_i}{h^2}\mathbf I$：</p>
+        <div class="math-block">$$\mathbf f_i^{\text{惯}}=3600\cdot(0,-0.01,0)=(0,-36,0),\qquad \mathbf H_i^{\text{惯}}=3600\,\mathbf I=\mathrm{diag}(3600,3600,3600)$$</div>
+
+        <h3 id="worked-spring">第 2 块：两条弹簧（$\mathbf d$、外积、± 号）</h3>
+        <p><b>左弹簧</b>（端点 $v_1=i,\ v_2=\text{左}$）：$\mathbf d=\mathbf x_i-\mathbf x_{\text{左}}=(0.5,0,0)$，$l=\lVert\mathbf d\rVert=0.5$。外积归一化：</p>
+        <div class="math-block">$$\frac{\mathbf d\mathbf d^\top}{l^2}=\frac{1}{0.25}\begin{pmatrix}0.25&0&0\\0&0&0\\0&0&0\end{pmatrix}=\mathrm{diag}(1,0,0)$$</div>
+        <p>代进弹簧 Hessian $\mathbf H_{aa}=k\big[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})\big]$。内层 $\mathbf I-\mathrm{diag}(1,0,0)=\mathrm{diag}(0,1,1)$，乘 $\frac{l_0}{l}=2$ 得 $\mathrm{diag}(0,2,2)$，再被 $\mathbf I$ 减：</p>
+        <div class="math-block">$$\mathbf H_{aa}^{\text{左}}=100\cdot\big[\mathrm{diag}(1,1,1)-\mathrm{diag}(0,2,2)\big]=100\cdot\mathrm{diag}(1,-1,-1)=\mathrm{diag}(100,-100,-100)$$</div>
+        <p>这正是共享参数集预告的 $\lambda_\parallel=100$（沿弹簧的 $x$ 方向，硬）、$\lambda_\perp=k(1-l_0/l)=100(1-2)=-100$（垂直方向，<b>因压缩而为负</b>，不定）。弹簧力按 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$，系数 $100\cdot\frac{1-0.5}{0.5}=100$：</p>
+        <div class="math-block">$$\mathbf f^{\text{左}}=100\cdot(0.5,0,0)=(50,0,0)\quad(\text{因 }v_1=i,\ \text{取}+\text{号})$$</div>
+        <p><b>右弹簧</b>（端点 $v_1=\text{右},\ v_2=i$）：$\mathbf d=\mathbf x_{\text{右}}-\mathbf x_i=(0.5,0,0)$——和左边形状相同，所以 Hessian 块<b>一模一样</b> $\mathrm{diag}(100,-100,-100)$（Hessian 不分端点，见上一节的 callout）。但<b>力要反号</b>：现在 $i$ 是 $v_2$，代码走 <code>else</code> 分支 $\mathbf f\mathrel{-}=\ldots$，而 $\mathbf d$ 指向 $i$ 的反方向，合起来：</p>
+        <div class="math-block">$$\mathbf f^{\text{右}}=-100\cdot(0.5,0,0)=(-50,0,0)$$</div>
+        <div class="callout note">
+          <div class="c-h">两条力恰好相消——这正是 ± 号在干活</div>
+          <p>$\mathbf f^{\text{左}}+\mathbf f^{\text{右}}=(50,0,0)+(-50,0,0)=(0,0,0)$。对称压缩下，左右弹簧把 $i$ 往两边推的力大小相等、方向相反，净弹簧力为 0。这不是巧合，正是 ± 号（<code>v1==iV</code> 的判断）保证了「同一根弹簧从不同端看，力反向」。</p>
+        </div>
+
+        <h3 id="worked-assemble">装配 $\mathbf H_i$ 与 $\mathbf f_i$</h3>
+        <p>把惯性块和两条弹簧块全加起来（本例都是对角阵，逐元素相加即可）：</p>
+        <div class="math-block">$$\mathbf H_i=\underbrace{\mathrm{diag}(3600,3600,3600)}_{\text{惯性}}+\underbrace{2\times\mathrm{diag}(100,-100,-100)}_{\text{两条弹簧}}=\mathrm{diag}(3800,\,3400,\,3400)$$</div>
+        <div class="math-block">$$\mathbf f_i=\underbrace{(0,-36,0)}_{\text{惯性}}+\underbrace{(0,0,0)}_{\text{弹簧（相消）}}=(0,-36,0)$$</div>
+        <p>注意垂直方向：单看弹簧是 $-200$（两条各 $-100$，<b>负的</b>，不定），但惯性块的 $+3600$ 一加，整体变成 $+3400>0$ ——<b>恒正定的惯性块把不定的弹簧块兜回了正定</b>。这就是 <a href="../03-vbd/3-5-stability.html">3.5</a> 那句「VBD 不做 SPD 投影也能稳」的算术版。</p>
+
+        <h3 id="worked-solve-num">解这个 3×3</h3>
+        <p>$\mathbf H_i$ 是对角阵，求逆就是逐元素取倒数，$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 直接逐分量除：</p>
+        <div class="math-block">$$\Delta\mathbf x_i=\Big(\frac{0}{3800},\ \frac{-36}{3400},\ \frac{0}{3400}\Big)=(0,\,-0.01059,\,0)$$</div>
+        <p>读出来：这一步把顶点 $i$ 往下挪了约 $0.0106$，方向正是惯性想要的 $-y$。它<b>没</b>挪满 $\mathbf y_i$ 的 $-0.01$ 吗？——其实略超了一点点（$-0.0106$ vs $-0.01$），因为压缩的弹簧在垂直方向是「软」的（有效刚度只有 $3400$ 而非纯惯性的 $3600$），对 $y$ 方向的束缚比纯惯性更松。一步牛顿就这么解完了——整个过程没碰一个大稀疏矩阵，全是 $3\times3$ 的逐元素算术。</p>
+
         <h2 id="the-solve">那个 3×3 求解：小到可以解析</h2>
         <p>装配完，$\mathbf f_i$ 是一个 $3\times1$ 向量，$\mathbf H_i$ 是一个 $3\times3$ 矩阵，求位移就是解</p>
         <div class="math-block">$$\mathbf H_i\,\Delta\mathbf x_i=\mathbf f_i\quad\Longrightarrow\quad \Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$$</div>

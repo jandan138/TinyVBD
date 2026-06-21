@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="9-3">
+<body data-root="../../" data-section="10-3">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,7 +23,7 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 9 · 9-3</div>
+        <div class="eyebrow">Part 10 · 10-3</div>
         <h1>self-collision 与 penetration-free</h1>
         <p class="lede">前两节我们把布料的弹性元件和 production 稳定性补齐了。但有一件事 TinyVBD 那根 strand 从头到尾<b>压根没碰过</b>：碰撞。一根孤零零的头发不会撞到自己，也没有别的东西可撞。可一块布会折叠、会贴住自己、会落在桌子上——<span class="term">self-collision</span> 和不穿透，是布料从「能动」走向「能看」的最后一道坎。这一节讲 Newton 怎么把这道坎，<b>不动声色地塞进同一个 Newton 步里</b>。</p>
 
@@ -74,9 +74,16 @@
           <p>容易误以为 log-barrier 一个就够了。实际是<b>两层防线</b>：log-barrier 让连续能量在穿透处发散（软的、可微的、进 Hessian 的）；penetration-free 截断在每个离散步之后做硬性的几何兜底（不可微、直接砍位移）。前者负责「让接触有正确的力学行为」，后者负责「保证这一步绝不穿帮」。两者缺一，要么没接触力，要么偶尔会穿。</p>
         </div>
 
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">三阶段碰撞流水线：检测 → 接触力 → 截断</span></div><div class="lab-body" data-widget="collision-pipeline"></div><div class="lab-cap">把本节三段机器走一遍：① BVH 找逼近对 → ② log-barrier 把接触换成进 $\mathbf f_i/\mathbf H_i$ 的力（距离越小、排斥越陡）→ ③ penetration-free 截断把过大的一步砍回不穿透处。<b>把「关掉截断」开关一关</b>，就看到那一步真的穿过去——亲手验证 warn 里「两层防线缺一就穿帮」。</div></div>
+
+        <div class="callout note">
+          <div class="c-h">消歧：10-3 的 log-barrier 是「强」的那条碰撞路，别和 6-1/11-1 说的 VBD penalty 混了</div>
+          <p>全书会在两处看似矛盾地谈碰撞，这里点破。<b>10-3（本节）</b>讲的是 Newton self-contact 真正走的路：<span class="term">log-barrier</span> + penetration-free 截断——属 <span class="term">IPC</span> 谱系的<b>硬保证</b>（$d\to0$ 时 $-\log d\to\infty$，能量挡 + 几何砍，双层兜底保证不穿透）。而 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> / <a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 反复说的「完整 VBD 用 <b>penalty</b> 碰撞、软的、不保证无穿透」，指的是<b>纯惩罚力</b>那条更弱的路——只往能量里加一个「穿透越深、回推越大」的软项，没有 barrier 的发散、也没有截断兜底，理论上允许穿透。同一本书里两种碰撞处理并存：<b>10-3 讲的是强的那条</b>。barrier 这条路的完整故事——距离几何、barrier 求导与 PSD、CCD line search 截步长——是 <b>Part 12 IPC 篇</b>的主题；这里折进 $\mathbf f_i/\mathbf H_i$ 的「每顶点 log-barrier + 局部截断」是它在 VBD 里的<b>局部</b>体现，而 IPC 那套 <a href="../12-ipc/12-5-ccd-linesearch.html">CCD line search（11-5）</a>提供的是<b>全局</b>步长保证，可点过去看二者如何衔接。</p>
+        </div>
+
         <h2 id="recap">这一节你要带走的</h2>
         <p>三件事：(1) TinyVBD 那根 strand <b>完全没有碰撞</b>——这一整套机器是 Newton cloth 凭空多出来的，别去 strand 里找对应。(2) 碰撞分两问：<span class="term">TriMeshCollisionDetector</span> 用 <span class="term">BVH</span> 做 vertex-triangle + edge-edge 检测回答「谁撞谁」；<span class="term">accumulate_self_contact_force_and_hessian</span>（log-barrier + Coulomb friction）把接触<b>折进同一个 $\mathbf f_i$ / $\mathbf H_i$</b>，body-particle 接触也走这个口子——本质上还是<b>同一个 $\min G(\mathbf x)$，只是多了几项</b>。(3) 在能量防线之外，<b>penetration-free 截断</b>（DAT，每个 color sweep 后保守砍位移）提供几何上的硬保证。</p>
-        <p>到这里，我们已经把 Newton 的 cloth VBD 从弹性、稳定性到碰撞拼完整了。它强大、稳定、能并行，但仍有一处软肋——<b>高刚度比、硬约束</b>这种场景，纯 VBD 的局部下降会力不从心。下一篇 <b>Part 10</b>，我们就从这块软肋出发，看 <a href="../10-avbd/10-1-avbd-idea.html">10-1：VBD 的软肋 → AVBD</a> 怎么用 augmented Lagrangian 把这最后一块补上。</p>
+        <p>到这里，我们已经把 Newton 的 cloth VBD 从弹性、稳定性到碰撞拼完整了。它强大、稳定、能并行，但仍有一处软肋——<b>高刚度比、硬约束</b>这种场景，纯 VBD 的局部下降会力不从心。下一篇 <b>Part 11</b>，我们就从这块软肋出发，看 <a href="../11-avbd/11-1-avbd-idea.html">10-1：VBD 的软肋 → AVBD</a> 怎么用 augmented Lagrangian 把这最后一块补上。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>
@@ -106,6 +113,7 @@
   <script src="../../assets/js/widgets/cloth-core.js"></script>
   <script src="../../assets/js/widgets/cloth-lab.js"></script>
   <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MPM 一步循环：粒子 ↔ 背景网格 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-2</div>
+        <h1>MPM 一步循环：粒子 ↔ 背景网格</h1>
+        <p class="lede"><a href="13-1-why-mpm.html">13.1</a> 说 MPM 是「粒子载状态、网格借算力」。这一节把那句口号拆成可执行的四个阶段：<b>P2G</b>（粒子把质量/动量散布到网格）→ <b>grid solve</b>（在网格上加力、更新速度、定边界）→ <b>G2P</b>（粒子从网格收回新速度）→ <b>advect</b>（粒子移动、更新 $\mathbf F$）。一步走完，网格<b>整张清零</b>，下一步从空白网格重来。读懂这个循环，你就握住了整个 MPM。</p>
+
+        <h2 id="two-clocks">两套时钟：永久的粒子，一次性的网格</h2>
+        <p>开始之前先记牢一个区分，它是理解整个循环的钥匙：</p>
+        <ul>
+          <li><b>粒子（material point）是永久的、Lagrangian 的</b>。它从第一帧活到最后一帧，身上的质量 $m_p$、位置 $\mathbf x_p$、速度 $\mathbf v_p$、形变梯度 $\mathbf F_p$ 都<b>跨步保留</b>——这是材料状态真正的家。</li>
+          <li><b>背景网格是一次性的、Eulerian 的</b>。它是一张规整的固定格子，但格点上的量（质量 $m_i$、动量/速度 $\mathbf v_i$）<b>每一步先清零、用完再丢</b>。网格不存任何跨步状态——它只是这一步用来算力的草稿纸（scratch）。</li>
+        </ul>
+        <p>所以一步 MPM，本质是「<b>把状态从粒子临时投影到网格，在网格上算一次物理，再投影回粒子</b>」。状态的家始终是粒子；网格只是借来做一次需要邻接关系的计算（加力、解速度），因为算梯度、算力这种活在规整网格上又快又稳，而在散乱粒子上很难。下面逐阶段拆。</p>
+
+        <h2 id="p2g">① P2G：粒子把质量与动量散布到网格</h2>
+        <p><span class="term">P2G</span>（particle-to-grid，scatter）是循环的第一步：把每个粒子的质量和动量「撒」到它附近的几个网格节点上。撒多少由<b>核权重</b> $w_{ip}$ 决定——节点 $i$ 离粒子 $p$ 越近，分到的份额越大。最基本的两条守恒式是质量与动量的累加：</p>
+        <div class="math-block">$$m_i=\sum_p w_{ip}\,m_p,\qquad m_i\mathbf v_i=\sum_p w_{ip}\,m_p\,\mathbf v_p.$$</div>
+        <p>读它：每个节点的质量，是所有「够近」的粒子按权重贡献的质量之和；节点动量同理。注意我们累加的是<b>动量</b> $m_p\mathbf v_p$ 而不是直接平均速度——这样质量与动量都被严格守恒地搬上网格，节点速度最后由 $\mathbf v_i=(m_i\mathbf v_i)/m_i$ 反解。权重 $w_{ip}$ 来自一个<span class="term">kernel</span>（核函数，常用二次或三次 B-spline），它决定每个粒子触及哪几个节点、各占多少——核的宽窄是 MPM 精度与稳定性的关键旋钮，<a href="13-6-mpm-lite.html">13.6</a> 会专门拿它做文章。</p>
+        <div class="callout note">
+          <div class="c-h">为什么必须先清零网格</div>
+          <p>上面的求和 $\sum_p$ 写的是「从零开始累加」。所以 P2G 的第 0 步永远是把网格的 $m_i$、$m_i\mathbf v_i$ <b>全置零</b>——它们不是上一步的残留，而是这一步现摊的。这正是「网格是 scratch」的字面含义：每步都是一张干净的草稿纸。</p>
+        </div>
+
+        <h2 id="grid-solve">② grid solve：在网格上加力、更新速度、定边界</h2>
+        <p>质量和动量上了网格，现在网格手里有一个规整的速度场 $\mathbf v_i$，可以像 Eulerian 求解器那样在它上面做物理。这一步做三件事：</p>
+        <ul>
+          <li><b>加内力</b>：从粒子带上来的形变梯度 $\mathbf F_p$ 算出应力（本构 $\psi(\mathbf F_p)\to\mathbf P_p$ 复用 FEM，见 <a href="../09-fem/9-3-strain-energy.html">9.3</a>），再把应力散布成节点上的弹性力 $\mathbf f_i$。<a href="13-4-F-update-constitutive.html">13.4</a> 会把这个力的具体形式写清楚。</li>
+          <li><b>加外力、更新速度</b>：把重力等外力一并算进去，按动量定理更新节点速度。显式做就是 $\mathbf v_i^{\text{new}}=\mathbf v_i+\Delta t\,\mathbf f_i/m_i$；隐式做就是在节点速度/位置增量上解一个 $\min G(\mathbf x)$ 优化问题（<a href="13-5-implicit-mpm.html">13.5</a>）。</li>
+          <li><b>定边界条件</b>：在规整网格上施加碰撞/边界（地面、墙、固定区）格外干净——直接改对应节点的速度即可，比在散乱粒子上检测碰撞简单得多。这也是「借网格算力」的一大便宜。</li>
+        </ul>
+        <p>这一步是整个循环里物理含量最高的地方：所有的「力」都在这张规整网格上算完。算它需要邻接关系（梯度、stencil），而网格天生有规整邻接——这正是 MPM 把算力外包给网格的根本理由。</p>
+
+        <h2 id="g2p">③ G2P：粒子从网格收回新速度</h2>
+        <p><span class="term">G2P</span>（grid-to-particle，gather）是 P2G 的逆操作：网格上更新好的速度 $\mathbf v_i^{\text{new}}$，按同一套核权重 $w_{ip}$ 插值回每个粒子。最朴素的形式（PIC 式）是：</p>
+        <div class="math-block">$$\mathbf v_p^{\text{new}}=\sum_i w_{ip}\,\mathbf v_i^{\text{new}}.$$</div>
+        <p>读它：粒子的新速度，是它周围那几个节点新速度的加权平均。这一步看似简单，却是 MPM <b>最微妙、最关键</b>的环节——「只插值速度」会丢角动量、会糊（PIC 的耗散），而修复它正是 PIC/FLIP/APIC 这条主线的全部内容。<a href="13-3-transfers-apic.html">13.3</a> 整节就讲这件事；现在你只需记住「G2P = 按权重把网格速度收回粒子」这个骨架。</p>
+
+        <h2 id="advect">④ advect：粒子移动，更新形变梯度</h2>
+        <p>粒子拿回新速度后，最后一步是真正地<b>动起来</b>并更新它的形变历史：</p>
+        <div class="math-block">$$\mathbf x_p\mathrel{+}=\Delta t\,\mathbf v_p^{\text{new}},\qquad \mathbf F_p^{n+1}=(\mathbf I+\Delta t\,\nabla\mathbf v_p)\,\mathbf F_p^{n}.$$</div>
+        <p>位置更新是直白的显式平流：粒子按新速度走一个时间步。形变梯度更新则把「这一步材料被怎么形变了」累乘进 $\mathbf F_p$——速度梯度 $\nabla\mathbf v_p$ 从网格速度插值得到（$\nabla\mathbf v_p=\sum_i\mathbf v_i\,\nabla w_{ip}^\top$），<a href="13-4-F-update-constitutive.html">13.4</a> 会把这条更新和本构连起来细讲。注意：因为 $\mathbf F_p$ 跨步累乘、挂在<b>粒子</b>身上，材料的形变历史被永久地追在物质上——这正是 <a href="13-1-why-mpm.html">13.1</a> 说的「粒子载状态」落到了实处。</p>
+        <p>这一步做完，网格的使命就结束了——下一步的 P2G 会把它整张清零重来。<b>四阶段是一个闭环：粒子（永久）→ 网格（临时）→ 粒子（永久）。</b></p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">MPM 一步循环：四阶段单步走</span></div>
+          <div class="lab-body" data-widget="mpm-cycle"></div>
+          <div class="lab-cap">单步推进 ① P2G → ② grid solve → ③ G2P → ④ advect。看粒子的质量/动量如何按核权重散到网格节点（P2G）、网格速度如何被力更新（solve）、再插回粒子（G2P）、粒子如何移动（advect）。注意每个完整步开头网格被清零——它从不存跨步状态。</div>
+        </div>
+
+        <div class="callout">
+          <div class="c-h">对照 mass-spring 的一步，看清「外包」了什么</div>
+          <p>回想 mass-spring 的一步（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）：直接在顶点上算力、解 $\min G$、更新顶点。MPM 多绕了一圈，是因为它的「顶点」（粒子）是散乱的、没有固定邻接，没法直接在上面算需要 stencil 的力。于是它把算力这一步<b>临时外包</b>给一张规整网格：P2G 把状态搬上去、grid solve 算力、G2P 搬回来。绕这一圈换来的，是粒子之间彻底松绑——可以随便流、碎、合并。这就是 hybrid 的全部代价与全部红利。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) MPM 一步是四阶段闭环——P2G（粒子按核权重把质量 $m_i=\sum_p w_{ip}m_p$、动量 $m_i\mathbf v_i=\sum_p w_{ip}m_p\mathbf v_p$ 散到网格）→ grid solve（在网格上加内/外力、更新节点速度、定边界）→ G2P（按权重把网格速度插回粒子）→ advect（$\mathbf x_p\mathrel{+}=\Delta t\,\mathbf v_p$，并累乘更新 $\mathbf F_p$）。(2) 粒子永久 Lagrangian、是状态真正的家（$m_p,\mathbf x_p,\mathbf v_p,\mathbf F_p$ 跨步保留）；网格是一次性 Eulerian scratch，每步先清零、用完即弃，只借来算需要邻接的力。(3) 绕「上网格—算力—回粒子」这一圈，换来粒子之间彻底松绑（随便流碎合并），代价是 G2P 这步的传输会引入耗散/噪声——那正是下一节的主题。</p>
+        <p>下一节 <a href="13-3-transfers-apic.html">13.3</a>，我们盯住 P2G/G2P 这对「传输」——它是 MPM 的灵魂也是软肋：PIC 为什么糊、FLIP 为什么吵、APIC 怎么两头都修好。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

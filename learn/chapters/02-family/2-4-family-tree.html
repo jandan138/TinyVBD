@@ -111,6 +111,27 @@
           <p>XPBD 解的是<b>对偶</b>变量（约束力 $\lambda$），这让它在高质量比下崩：修正按逆质量分配，重物会压垮轻物。PD、Newton、VBD 解的是<b>原始</b>变量（位置本身）。VBD 正是抓住这条暗线，把自己定位成一个高质量比下不崩的 <span class="term">primal</span> 求解器——这笔账留到 <a href="../05-experiments/5-1-mass-ratio.html">5.1</a> 和 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 细算。</p>
         </div>
 
+        <h3 id="two-axis-grid">把两条暗线交叉成一张定位图</h3>
+        <p>上面那张大表是 8 列信息流水账，胜在全，但「惯性项」和「primal/dual」这两条最有解释力的暗线被埋在列里。把它们抽出来当两条坐标轴，五个方法立刻各就各位——一眼就能定位 VBD：</p>
+        <table>
+          <thead>
+            <tr><th></th><th>primal（解位置）</th><th>dual（解约束力 $\lambda$）</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>保留惯性项</b></td>
+              <td><b>PD · Newton · VBD</b><br>在真正的 $G$ 上解原始变量</td>
+              <td><b>XPBD</b><br>请回惯性项，但走对偶 → <b>高质量比崩</b></td>
+            </tr>
+            <tr>
+              <td><b>丢掉惯性项</b></td>
+              <td><b>PBD</b><br>只掰 $E$、无惯性锚 → 刚度非物理</td>
+              <td>—（无人居此格）</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>读这张 2×2：<b>只有 PBD 落在「丢惯性」那一行</b>（它的病根）；<b>XPBD 独占「保留 + dual」那一格</b>，并因此在高质量比下崩；<b>PD / Newton / VBD 同住「保留 + primal」格</b>——VBD 与最稳健的两个老前辈同列，却用 block descent 换掉了它们的全局组装代价。</p>
+
         <h2 id="tee-up-vbd">VBD 站在哪：在真正的 G 上做逐顶点 block 下降</h2>
         <p>现在 VBD 的位置就清楚了。它<b>不</b>像 PBD/XPBD 那样退到约束/对偶侧，也<b>不</b>像 PD 那样要求能量长成特殊二次型，更<b>不</b>像 Newton 那样每步组装并分解整个全局 Hessian。它做的是一件直白得近乎朴素的事：</p>
         <p><b>在真正的 $G(\mathbf x)$ 上，做逐顶点的 block coordinate descent。</b>一次只动一个顶点的 3 个自由度，对它的局部能量 $G_i$ 做<i>一步</i> 3×3 牛顿（保留完整的局部 Hessian，连惯性项），然后按 Gauss-Seidel 扫过所有顶点。它既拿到了 Newton 式的「最小化真正的 $G$、保留真 Hessian」，又通过「一次只解一个 3×3」避开了全局组装与分解的代价，还能用顶点图着色拿到近 Jacobi 的并行。</p>

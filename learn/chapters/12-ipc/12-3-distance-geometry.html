@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>距离几何：point-triangle / edge-edge 与梯度 ∂d/∂x · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-3</div>
+        <h1>距离几何：point-triangle / edge-edge 与梯度 ∂d/∂x</h1>
+        <p class="lede"><a href="12-2-barrier-energy.html">上一节</a>的 barrier 是一条只认<b>一个数</b>的曲线——它要咬住的，是接触对之间那个无符号距离 $d$。可 barrier 自己并不知道 $d$ 从哪来：是哪两个几何元件、最近点在哪、$d$ 变化时该把力分给谁。这一节我们就把 $d$ 这个数<b>拆开</b>：它怎么由 point-triangle / edge-edge 的几何算出来，它的梯度 $\partial d/\partial \mathbf x$ 怎么按 barycentric 权重落到每个顶点上，以及为什么真正写代码时，最磨人的不是公式而是<b>退化分区</b>。barrier 提供「墙有多硬」，距离几何提供「墙在哪、推谁」——两者合起来才是一个能进 Newton 的接触项。</p>
+
+        <h2 id="why-need-d">barrier 要一个 d 才能咬住</h2>
+        <p>回忆上一节那条 barrier $b(d,\hat d)$：它的输入只有一个标量 $d$。但 Newton 步要的是<b>作用在顶点上的力和 Hessian</b>，而力是对顶点坐标 $\mathbf x$ 求导。链式法则告诉我们</p>
+        <div class="math-block">$$\frac{\partial b}{\partial \mathbf x} = b'(d)\,\frac{\partial d}{\partial \mathbf x},\qquad \frac{\partial^2 b}{\partial \mathbf x^2} = b''(d)\,\frac{\partial d}{\partial \mathbf x}\Big(\frac{\partial d}{\partial \mathbf x}\Big)^{\!\top} + b'(d)\,\frac{\partial^2 d}{\partial \mathbf x^2}$$</div>
+        <p>$b'(d)$、$b''(d)$ 是上一节那条曲线的斜率与曲率——只跟 $d$ 有关。<b>剩下全是几何</b>：$\partial d/\partial \mathbf x$ 把「距离变了」翻译成「每个顶点该往哪挪」。所以接触项能不能进 Newton，一半靠 barrier，一半靠这一节的距离梯度。我们先把 $d$ 本身算清楚，再求它的梯度。</p>
+
+        <h2 id="point-triangle">point-triangle：最近点是一个 barycentric 组合</h2>
+        <p>最常见的接触对是 <span class="term">vertex-triangle</span>：一个顶点 $\mathbf p$ 逼近三角形 $(\mathbf a,\mathbf b,\mathbf c)$。距离的定义朴素得很——$\mathbf p$ 到三角形上<b>最近那个点</b> $\mathbf q$ 的长度：</p>
+        <div class="math-block">$$\mathbf q = \lambda_a \mathbf a + \lambda_b \mathbf b + \lambda_c \mathbf c,\qquad \lambda_a+\lambda_b+\lambda_c = 1,\qquad d = \lVert \mathbf p - \mathbf q\rVert$$</div>
+        <p>$\mathbf q$ 落在三角形所张的平面上，可以写成三个顶点的<span class="term">barycentric</span>（重心）组合：三个权重 $\lambda_a,\lambda_b,\lambda_c$ 加起来等于 1，分别表示「$\mathbf q$ 离哪个顶点更近」。比如 $\lambda_a=1,\lambda_b=\lambda_c=0$ 就是 $\mathbf q=\mathbf a$（最近点正好压在顶点 $\mathbf a$ 上）；$\lambda_a=\lambda_b=0.5,\lambda_c=0$ 就是 $\mathbf q$ 落在边 $ab$ 的中点。这三个数既定位了最近点，又——马上会看到——决定了梯度怎么分。</p>
+        <p>注意这里是<b>无符号距离</b>（unsigned distance）：$d\ge0$，不区分 $\mathbf p$ 在三角形哪一侧。IPC 用无符号距离配合 barrier「$d\to0$ 发散」来挡穿透，靠的是<a href="12-5-ccd-linesearch.html">后面</a> CCD line search 保证迭代始终停在「还没穿过」的那一侧，而不是靠距离的正负号判别方位。</p>
+
+        <h2 id="gradient">梯度方向就是那条单位法向</h2>
+        <p>$d=\lVert\mathbf p-\mathbf q\rVert$ 对 $\mathbf p$ 求导，是一个干净得让人欣慰的结果——<b>梯度方向就是从最近点指向 $\mathbf p$ 的单位向量</b>：</p>
+        <div class="math-block">$$\hat{\mathbf n} = \frac{\mathbf p - \mathbf q}{d},\qquad \frac{\partial d}{\partial \mathbf p} = \hat{\mathbf n}$$</div>
+        <p>直觉很硬核：把 $\mathbf p$ 沿 $\hat{\mathbf n}$ 方向挪一小步，距离<b>等量</b>变大（单位长度对单位长度，所以梯度是单位向量）；沿垂直方向挪，最近点跟着滑、$d$ 一阶不变。这个 $\hat{\mathbf n}$ 也正是接触力的方向——barrier 要把 $\mathbf p$「顶开」，顶的方向就是 $\hat{\mathbf n}$，把它推得离三角形更远。</p>
+
+        <h2 id="weights">梯度落到 4 个顶点：谁近谁分得多</h2>
+        <p>但一个接触对牵动的不止 $\mathbf p$ 一个顶点——三角形的三个顶点 $\mathbf a,\mathbf b,\mathbf c$ 也会动。距离对它们也有梯度。结论极其漂亮：</p>
+        <div class="math-block">$$\frac{\partial d}{\partial \mathbf p} = \hat{\mathbf n},\qquad \frac{\partial d}{\partial \mathbf a} = -\lambda_a\,\hat{\mathbf n},\qquad \frac{\partial d}{\partial \mathbf b} = -\lambda_b\,\hat{\mathbf n},\qquad \frac{\partial d}{\partial \mathbf c} = -\lambda_c\,\hat{\mathbf n}$$</div>
+        <p>四个梯度<b>全沿同一条法向 $\hat{\mathbf n}$</b>，只是大小和方向不同：$\mathbf p$ 拿满整条 $\hat{\mathbf n}$；三角形三个顶点各拿到 $-\lambda\hat{\mathbf n}$，<b>权重就是它们的 barycentric 系数</b>。一句话记牢：<b>谁离最近点 $\mathbf q$ 近，谁分到的梯度大</b>。如果 $\mathbf q$ 几乎压在顶点 $\mathbf a$ 上（$\lambda_a\approx1$），那么接触力几乎全由 $\mathbf a$ 单独承担，$\mathbf b,\mathbf c$ 几乎不受力——这完全符合物理直觉：你顶的是三角形上最近那个位置，力当然主要分给离那儿最近的顶点。</p>
+        <p>还有一个守恒的彩蛋：四个梯度加起来 $\hat{\mathbf n} - (\lambda_a+\lambda_b+\lambda_c)\hat{\mathbf n} = \hat{\mathbf n}-\hat{\mathbf n} = \mathbf 0$。这正是<b>牛顿第三定律</b>落在几何上的样子——接触力对这一对元件不产生净外力，$\mathbf p$ 受多大、三角形那边就分摊回多大。barycentric 权重之和恒为 1，这条守恒自动成立。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 还是「梯度进 f、Hessian 进 H」</div>
+          <p>别被「距离几何」唬住——它的产物和你在 <a href="../04-code/4-3-solve.html">4.3</a> 见过的弹簧没有本质区别。弹簧把 $k\frac{l_0-l}{l}\mathbf d$ 这股力按端点分给 $v_1,v_2$；接触把 $-b'(d)\hat{\mathbf n}$ 这股力按 barycentric 权重分给 $\mathbf p,\mathbf a,\mathbf b,\mathbf c$。形式一模一样：一个标量能量、对每个相关顶点求一次偏导、加进各自的 $\mathbf f_i$，二阶导加进 $\mathbf H_i$。IPC 多出来的只是「相关顶点」从 2 个变成 4 个，且权重来自重心坐标而非 ±号。</p>
+        </div>
+
+        <h2 id="regions">退化分区：最近点不一定落在内部</h2>
+        <p>到这里一切太顺了，顺到该警觉了。上面默认「最近点 $\mathbf q$ 落在三角形<b>内部</b>」——但它经常不落在内部。$\mathbf p$ 在三角形侧面外侧时，最近点会滑到某条<b>边</b>上甚至某个<b>顶点</b>上。这正是把这一节从「直觉」推向「系统」的地方，也是 IPC 距离例程里真正磨人的部分。</p>
+        <p>判据就藏在 barycentric 坐标的<b>符号</b>里。如果按「投影到三角形平面」算出来的某个 $\lambda$ 是<b>负数</b>，就说明最近点越出了那条对边、不在三角形内——必须把它<b>投影到对应的边或顶点</b>上重算：</p>
+        <ul>
+          <li><b>某一个 $\lambda<0$</b>：最近点越过一条边 → 退化成 <span class="term">point-edge</span>，在那条边上重新求最近点（最近点要么落在边内部，要么被进一步夹到边的某个端点）。</li>
+          <li><b>某两个 $\lambda<0$</b>：最近点越过一个角 → 退化成 <span class="term">point-point</span>，距离就是 $\mathbf p$ 到那个顶点的直线长度，$\hat{\mathbf n}$ 直接指向那个顶点。</li>
+        </ul>
+        <p>分到哪个 case，梯度的「落点结构」就跟着变：退化成 point-edge 时，三角形那边只有边的两个端点分梯度（权重是这条边上的两个重心系数，第三个顶点权重为 0）；退化成 point-point 时，整条 $-\hat{\mathbf n}$ 全给那一个顶点。换句话说，<b>哪些顶点参与、各拿多少权重，是由分区先决定的</b>——这就是为什么一个看似简单的「点到三角形距离」，实现里要写成一棵分支树：先试内部，$\lambda$ 出界就降维到边，再出界就降到点。</p>
+
+        <div class="callout warn">
+          <div class="c-h">edge-edge 的退化更刁钻：近平行</div>
+          <p><span class="term">edge-edge</span> 距离是另一类接触对：两条线段 $(\mathbf a_1,\mathbf b_1)$、$(\mathbf a_2,\mathbf b_2)$ 上各取一点求最近距离。它同样有「最近点落在线段<b>内部</b> vs 落在<b>端点</b>」的分区，判据也类似（参数出 $[0,1]$ 就夹回端点，退化成 point-edge 乃至 point-point）。但它多一个独有的坑：当两条边接近<b>平行</b>时，最近点对<b>不唯一</b>——一整段都同样近。此时 $\hat{\mathbf n}$ 的方向变得敏感、梯度<b>病态</b>，Newton 会数值抽风。IPC 的对策是给 edge-edge 接触乘一个 <span class="term">mollifier</span>：一个随「平行程度」衰减的光滑权重，越平行权重越小，把这种退化贡献温柔地压住，让接触力随几何连续变化而不跳变。</p>
+        </div>
+
+        <h2 id="back-to-93">这些对，正是 10.3 那个检测器找出来的</h2>
+        <p>这一整套 point-triangle / edge-edge 几何，你其实<b>已经见过半张脸</b>。回 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a>：Newton cloth 的 <span class="term">TriMeshCollisionDetector</span> 用 <span class="term">BVH</span> 找的，正是这两类邻近——<span class="term">vertex-triangle</span> 和 <span class="term">edge-edge</span>。那时我们只说「找出谁逼近谁、连同最小距离存进清单」，把「距离怎么算、梯度怎么落」一句话带过了。这一节就是把那句话<b>展开</b>：清单里每一对的那个「最小距离」，就是这里的 $d$；要把它喂进 barrier 求力，就得有这里的 $\partial d/\partial\mathbf x$ 和退化分区。</p>
+        <p>差别只在用途：10.3 的 Newton cloth 把这套距离算出来后喂给<b>局部 log-barrier</b>、再靠几何截断兜底；IPC 把同一套距离喂给<b>全局 interior-point barrier</b>、靠 CCD line search 严格保证。<b>同样的几何，两条求解路</b>——这正是 Part 12 反复在做的对照。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">point-segment：最近点、距离与梯度落点</span></div>
+          <div class="lab-body" data-widget="distance-gradient"></div>
+          <div class="lab-cap">拖动点 $\mathbf p$：看最近点 $\mathbf q$ 怎么在线段上滑动、无符号距离 $d$ 与单位法向 $\hat{\mathbf n}$ 怎么变；点上画 $\partial d/\partial\mathbf p=\hat{\mathbf n}$，两端点上画 $-\lambda\hat{\mathbf n}$（箭头长度按 barycentric 权重）。把 $\mathbf p$ 拖到线段一端的外侧，看最近点滑到端点、<b>退化成 point-point</b> 时梯度怎么全归给那个端点——这就是上面说的分区，眼见为实。</div>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三件事：(1) point-triangle 距离 $d=\lVert\mathbf p-\mathbf q\rVert$，最近点 $\mathbf q$ 是三角形顶点的 barycentric 组合；梯度方向是单位法向 $\hat{\mathbf n}=(\mathbf p-\mathbf q)/d$，对 $\mathbf p$ 是 $+\hat{\mathbf n}$、对三个顶点是 $-\lambda\hat{\mathbf n}$——<b>谁离最近点近谁分到的梯度大</b>，四者相加为零正是牛顿第三定律。(2) 真正「系统」的部分是<b>退化分区</b>：barycentric 出现负值就把最近点降维投影到边（point-edge）或顶点（point-point），参与的顶点和权重随之改变；edge-edge 还多一个<b>近平行</b>的病态，IPC 用 mollifier 压住。(3) 这两类接触对，正是 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 那个 BVH 检测器找出来的——同样的几何，这里喂给全局 interior-point barrier。</p>
+        <p>下一节我们把 barrier 和距离梯度<b>串起来求导</b>：链式法则下接触力和 Hessian 各自长什么样，为什么距离的二阶项会让 Hessian 不再保证半正定，以及怎么用 <a href="12-4-barrier-grad-psd.html">11-4（barrier 求导与 PSD）</a> 的 PSD projection 把特征值钳回去——这一步直接接回你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 学过的 SPD 投影。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

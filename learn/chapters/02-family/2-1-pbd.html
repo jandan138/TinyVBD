@@ -35,6 +35,21 @@
         <p><b>第二步，投影约束（constraint projection）。</b>这是 PBD 的灵魂。每条约束写成 $C(\mathbf x)=0$（比如一根弹簧：$C=\lVert\mathbf x_a-\mathbf x_b\rVert-l_0$，违反量就是拉伸量）。PBD 按 <span class="term">Gauss-Seidel</span> 顺序一条条扫过去，每碰到一条违反的约束，就沿它的梯度方向把相关粒子推一把，让 $C$ 朝零走：</p>
         <div class="math-block">$$\Delta\mathbf x_i = -s\,w_i\,\nabla_i C,\qquad s = \frac{C}{\sum_j w_j\lVert\nabla_j C\rVert^2},\qquad w_i = \frac{1}{m_i}$$</div>
         <p>这里 $w_i=1/m_i$ 是逆质量：越重的粒子被推得越少（分母里的 $\sum_j w_j\lVert\nabla_j C\rVert^2$ 把修正量按逆质量分配给约束涉及的所有粒子）。标量 $s$ 是把这条约束<i>一次</i>推到零所需的步长。一遍扫完叫一次迭代；通常一帧要扫好几遍，因为 Gauss-Seidel 改了 A 又会破坏刚改好的 B。</p>
+        <h3 id="pbd-worked">代真数字：一根弹簧、一次投影，直接到位</h3>
+        <p>PBD 的投影到底「推多少」？拿一根弹簧手算一次就透了。设两端点（都取单位质量，$w_a=w_b=1$）</p>
+        <div class="math-block">$$\mathbf x_a=(0,0),\quad \mathbf x_b=(1.5,0),\qquad l_0=1.$$</div>
+        <p>这根弹簧现在被拉到长度 $1.5$，违反量（约束值）就是拉伸量：</p>
+        <div class="math-block">$$C=\lVert\mathbf x_a-\mathbf x_b\rVert-l_0=1.5-1=0.5.$$</div>
+        <p>约束梯度是单位方向：$\nabla_a C=\frac{\mathbf x_a-\mathbf x_b}{\lVert\cdot\rVert}=(-1,0)$，$\nabla_b C=(1,0)$，两个都是单位长度，故 $\lVert\nabla_a C\rVert^2=\lVert\nabla_b C\rVert^2=1$。代进步长公式：</p>
+        <div class="math-block">$$s=\frac{C}{\sum_j w_j\lVert\nabla_j C\rVert^2}=\frac{0.5}{1\cdot1+1\cdot1}=\frac{0.5}{2}=0.25.$$</div>
+        <p>于是两端各挪：$\Delta\mathbf x_a=-s\,w_a\nabla_a C=-0.25\,(-1,0)=(+0.25,0)$，$\Delta\mathbf x_b=-s\,w_b\nabla_b C=-0.25\,(1,0)=(-0.25,0)$。两端相向各走 $0.25$，新位置 $\mathbf x_a=(0.25,0)$、$\mathbf x_b=(1.25,0)$，新长度</p>
+        <div class="math-block">$$l'=1.25-0.25=1.0=l_0.\quad\checkmark$$</div>
+        <p>一次投影、长度精确回到 $l_0$——这就是 PBD「一次推到零」的字面含义：标量 $s$ 是把约束<b>一步打满</b>到 $C=0$ 的步长（因为约束在这步里被当成线性的）。记住这个 $0.25$——下一节 <a href="2-2-xpbd.html">2.2</a> 会对同一根弹簧做 XPBD，看 $\tilde\alpha$ 这脚刹车把它压到多小。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>$\mathbf x_a=(0,0)$、$\mathbf x_b=(1.5,0)$、$l_0=1$、$w=1$ 是为手算专门构造的干净例子，$C=0.5$、$s=0.25$、各端挪 $0.25$、新长 $1.0$ 全部可复算。换成非单位质量或多约束耦合，具体数会变，但「PBD 一次投影把单条约束打满到零」的机制不变。这组参数与 <a href="2-2-xpbd.html">2.2</a> 共享，方便两节直接对照。</p>
+        </div>
+
         <p><b>第三步，回填速度（velocity update）。</b>所有迭代做完、位置定下来后，速度是从位置变化<i>反推</i>出来的：</p>
         <div class="math-block">$$\mathbf v = \frac{\mathbf x - \mathbf x_{old}}{h}$$</div>
         <p>注意这个顺序：PBD 是<b>先改位置、再由位置定速度</b>，而不是像传统积分那样先有力、再有加速度、再有速度。这是 "position based" 这个名字的来历，也是它简单、稳健、好实现的根源。</p>

@@ -41,6 +41,19 @@
         <div class="math-block">$$G_i(\mathbf x)=\frac{m_i}{2h^2}\lVert\mathbf x_i-\mathbf y_i\rVert^2+\sum_{j\in\mathcal F_i}E_j(\mathbf x)$$</div>
         <p>其中 $\mathcal F_i$ 是与顶点 $i$ 相邻的 force elements（在 strand 里就是 <span class="term-i">vertAdjacentEdges[i]</span> 那几条边），$\mathbf y_i$ 是顶点 $i$ 的惯性/预测位置，$m_i$ 是它的质量。注意 $G_i$ 只是 $G$ 中「依赖 $\mathbf x_i$」的那一坨——它仍然是真实 $G$ 的一部分，没有任何近似。优化 $G_i$ 关于 $\mathbf x_i$，就等于在「只许动 $i$」的约束下优化 $G$。</p>
 
+        <div class="callout note">
+          <div class="c-h" id="why-Gi-is-G">坐实一下：G_i 不是近似，是真 G 里依赖 x_i 的那一坨</div>
+          <p>上面说「$G_i$ 仍是真实 $G$ 的一部分，没有任何近似」——别当口号，用一根最小的 3 顶点 strand 算给你看。顶点 $1,2,3$，边 $e_a=(1,2)$、$e_b=(2,3)$，固定 $\mathbf x_1,\mathbf x_3$，只动 $\mathbf x_2$。完整的 $G$ 是：</p>
+          <div class="math-block">$$G=\underbrace{\tfrac{m_1}{2h^2}\lVert\mathbf x_1-\mathbf y_1\rVert^2 + \tfrac{m_2}{2h^2}\lVert\mathbf x_2-\mathbf y_2\rVert^2 + \tfrac{m_3}{2h^2}\lVert\mathbf x_3-\mathbf y_3\rVert^2}_{\text{3 个惯性项}} + \underbrace{E_a(\mathbf x_1,\mathbf x_2) + E_b(\mathbf x_2,\mathbf x_3)}_{\text{2 条边能量}}$$</div>
+          <p>对 $\mathbf x_2$ 求偏导，逐项看谁活下来：</p>
+          <ul>
+            <li><b>$\mathbf x_1,\mathbf x_3$ 的惯性项</b>：不含 $\mathbf x_2$ → 偏导为 $0$，是常数，丢掉。</li>
+            <li><b>不与 2 相邻的边</b>：本例没有（若 strand 更长，比如边 $(3,4)$）→ 不含 $\mathbf x_2$ → 偏导 $0$，丢掉。</li>
+            <li><b>顶点 2 的惯性项 $\tfrac{m_2}{2h^2}\lVert\mathbf x_2-\mathbf y_2\rVert^2$、两条相邻边 $E_a,E_b$</b>：含 $\mathbf x_2$ → 留下。</li>
+          </ul>
+          <p>剩下的恰好是 $G_2=\tfrac{m_2}{2h^2}\lVert\mathbf x_2-\mathbf y_2\rVert^2+E_a+E_b$，与上面 $\sum_{j\in\mathcal F_2}$（$\mathcal F_2=\{e_a,e_b\}$）的定义<b>逐字相同</b>。所以 $\nabla_{\mathbf x_2}G_2=\nabla_{\mathbf x_2}G$——优化 $G_2$ 就是在「只许动 2」下优化 $G$，「trust me」变成了「verified」。</p>
+        </div>
+
         <h2 id="one-newton-step">每个顶点：一步牛顿</h2>
         <p>$G_i$ 只有 3 个自由度，这是一个极小的优化问题。VBD 不去精确求它的最小值，而是对它做<b>一步 Newton</b>：算出局部能量的负梯度（也就是作用在 $i$ 上的合力）$\mathbf f_i=-\nabla_{\mathbf x_i}G_i$ 和局部 Hessian $\mathbf H_i=\nabla^2_{\mathbf x_i}G_i$，解一个 $3\times3$ 系统得到位移，然后挪过去：</p>
         <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i\mathrel{+}=\Delta\mathbf x_i$$</div>

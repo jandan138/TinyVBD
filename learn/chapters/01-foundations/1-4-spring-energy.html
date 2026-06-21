@@ -80,6 +80,19 @@ h += h_1_1;</code></pre></div>
         <div class="math-block">$$\mathbf H_i=\underbrace{\frac{m_i}{h^2}\mathbf I}_{\text{恒正定}}+\sum_{j}\mathbf H_{aa}^{(j)}.$$</div>
         <p>惯性项 $\frac{m_i}{h^2}\mathbf I$ 是各向同性的正定矩阵，它给每个特征值都<b>加上一个正的 $\frac{m_i}{h^2}$ 偏置</b>。于是那个会变负的 $\lambda_\perp=k(1-l_0/l)$，实际进入求解的是 $\frac{m_i}{h^2}+k(1-l_0/l)$——只要质量不太小、时间步不太大，这个偏置足以把它顶回正数，整个 $\mathbf H_i$ 重新正定，牛顿步方向可靠。这就是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那句「惯性项保证问题不病态」的具体兑现。</p>
 
+        <h3 id="eig-worked">代真数字算一遍：偏置救得回软弹簧，救不回硬弹簧</h3>
+        <p>把上面的符号换成数字，「不定」和「偏置非万能」就从一句话变成两行算术。取一根教学用小弹簧 $k=100$、$l_0=1$，把它<b>压缩到</b> $l=0.5$（压成 rest 长度的一半）。先读两个特征值：</p>
+        <div class="math-block">$$\lambda_\parallel=k=100\ (&gt;0),\qquad \lambda_\perp=k\Big(1-\frac{l_0}{l}\Big)=100\Big(1-\frac{1}{0.5}\Big)=100\,(1-2)=-100.$$</div>
+        <p>垂直方向特征值 $\lambda_\perp=-100&lt;0$——孤零零的弹簧 Hessian 确实不定（屈曲方向）。现在加惯性偏置。用共享参数集的轻顶点：$h=1/60$、$m=1$，于是 $\frac{m}{h^2}=3600$。进入求解的有效垂直特征值是</p>
+        <div class="math-block">$$\frac{m}{h^2}+\lambda_\perp=3600+(-100)=3500\ (&gt;0).$$</div>
+        <p>$3500&gt;0$——偏置轻松把负的顶回正，局部 $\mathbf H_i$ 重新凸、牛顿步可靠。<b>软弹簧这关，惯性项一手包办。</b>但把同一根弹簧换成 TinyVBD 默认的硬弹簧 $k=10^8$（同样压到 $l=0.5$），垂直特征值变成</p>
+        <div class="math-block">$$\lambda_\perp=10^8\,(1-2)=-10^8,\qquad \frac{m}{h^2}+\lambda_\perp=3600-10^8\approx-10^8\ (\ll0).$$</div>
+        <p>$3600$ 这点偏置在 $10^8$ 面前微不足道，有效特征值仍是约 $-10^8$——<b>偏置救不回来，局部 Hessian 依旧不定</b>。一个数量级的对照就把「偏置非万能」钉死了：偏置的大小是固定的 $\frac{m}{h^2}=3600$，而负特征值随刚度 $k$ 线性放大，刚度一硬就压过偏置。下面这条 warn 就是这一现象的结论。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>$k=100\to\lambda_\perp=-100$、偏置 $3600\to$ 有效 $3500$、$k=10^8\to$ 有效 $\approx-10^8$ 全部可拿计算器复算；但绝对量级会随单位与条件数 $\kappa$ 缩放，关键是<b>符号与「谁压过谁」的趋势</b>——压缩→负特征值、偏置固定而负值随 $k$ 放大。取值沿用全书共享参数集（$h=1/60$、$m=1$、$k\in\{100,10^8\}$）。</p>
+        </div>
+
         <div class="callout warn">
           <div class="c-h">但偏置不是万能的</div>
           <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 这点正偏置可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。Newton 类方法到这里要么投影、要么 line search 才能保稳。VBD 选了另一条路：它<b>不强制把局部 Hessian 投成 SPD</b>，而是靠一套别的机制（行列式阈值、单调下降保证）照样稳。这条路怎么走，正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 的主题。</p>

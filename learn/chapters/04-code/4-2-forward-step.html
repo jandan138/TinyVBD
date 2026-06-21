@@ -95,6 +95,23 @@ else
         <div class="math-block">$$\mathbf x^{(0)}_i = \mathbf x^{t}_i + h\,\mathbf v^{t-1}_i + h^2\,\hat{\mathbf g}\,\tilde a_i$$</div>
         <p>对照代码：<code>mVertPrevPos</code> 是 $\mathbf x^t$，<code>mVelocitiesPrev</code> 是 $\mathbf v^{t-1}$，<code>gravDir*accelerationComponent</code> 就是 $\hat{\mathbf g}\,\tilde a_i$。换句话说：<b>该落的顶点，初始猜测就带上几乎完整的重力位移（接近 $\mathbf y$）；不该落的顶点，初始猜测几乎停在原地</b>，避免把一摞静止物体初始化成互相穿插的自由下落态。第一帧没有历史，就老老实实回退到 <code>mVertPos = inertia</code>（即 $\mathbf x^{(0)}=\mathbf y$）。</p>
 
+        <h2 id="worked">手算两个顶点：自由下落 vs 被托住</h2>
+        <p>把这个 clamp 算具体。同一帧里取两个顶点，用 $h=\tfrac1{60}$、$g=10$，先备好这一步的重力位移尺度：</p>
+        <div class="math-block">$$h^2 g=\Big(\tfrac1{60}\Big)^2\times10=\frac{10}{3600}\approx 0.00278\ (\text{约 }2.78\,\text{mm})$$</div>
+
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>下面两个 $\tilde a$ 取值（$\approx10$ 与 $\approx0$）和 2.78 mm 是把 clamp 两端算给你看的<b>示意</b>数字，展示「该落的吃满、被托住的归零」这个趋势，不对应某真实帧的精确测量。</p>
+        </div>
+
+        <p><b>顶点 A：自由下落。</b>它上一帧就在加速下坠，前后帧速度差给出 $\tilde{\mathbf a}\approx(0,-10,0)$，投影到 $\hat{\mathbf g}=(0,-1,0)$：$\tilde a=(0,-10,0)\cdot(0,-1,0)=+10$。落进 clamp 上界 $[0,10]$ 的<b>顶</b>，保留为 $10$。于是它的初始猜测带上几乎完整的重力位移：</p>
+        <div class="math-block">$$h^2\,\hat{\mathbf g}\,\tilde a=\tfrac1{3600}\cdot(0,-1,0)\cdot10=(0,-0.00278,0)$$</div>
+        <p>——往下 2.78 mm，和「直接用惯性 $\mathbf y$」给出的位移<b>几乎一样</b>。该落的顶点，热启动就让它落。</p>
+
+        <p><b>顶点 B：被托住</b>（叠在别的物体上、或被硬弹簧拽住，这一步几乎不加速）。前后帧速度差 $\approx0$，投影 $\tilde a=(0,\sim0,0)\cdot(0,-1,0)\approx 0$；落进 clamp 下界判断 <code>&gt; 1e-5 ? : 0</code>，归 $0$。它的重力位移项：</p>
+        <div class="math-block">$$h^2\,\hat{\mathbf g}\,\tilde a=\tfrac1{3600}\cdot(0,-1,0)\cdot0=(0,0,0)$$</div>
+        <p>——<b>零位移</b>，初始猜测就停在 $\mathbf x^t+h\mathbf v^{t-1}$（若它本来静止，就是原地）。对照朴素初始化 $\mathbf x^{(0)}=\mathbf y$ 会把它也往下扔 2.78 mm，逼得后面的迭代再费劲把它从穿插/过拉里拽回来。clamp 到 0 直接省掉了这趟冤枉路。</p>
+
         <div class="callout">
           <div class="c-h">一个细节：这里用的是 vPrev，不是 v</div>
           <p>留意末行积分用的是 <code>mVelocitiesPrev</code>（$\mathbf v^{t-1}$）而非刚加完重力的 <code>mVelocity</code>。直觉上这是把「上一帧的运动趋势」往前推一格，再单独按 $\tilde a$ 补重力——而 $\tilde a$ 本身已经从前后帧速度差里读出了「这个顶点最近到底有没有在加速下落」。两件事合起来，就是「沿用旧动量 + 只给真在下落的顶点补重力」。</p>

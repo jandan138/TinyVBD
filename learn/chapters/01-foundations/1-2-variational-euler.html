@@ -69,6 +69,26 @@
 
         <p>这个「拔河」的直觉极其重要，下一节 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 会专门展开：是谁、在什么时候赢。但现在你已经能体会到——隐式欧拉每一步，本质上就是在惯性和弹性之间找一个能量最低的妥协点。</p>
 
+        <h2 id="check-by-numbers">代数字验一遍：1D 单粒子的 arg min G</h2>
+        <p>「$\arg\min G$ 是惯性 / 弹性的妥协点」「$\nabla G=0$ 等价回 $M(\mathbf x-\mathbf y)=h^2\mathbf f$」——这两句断言上面都用图和推导说过了。但把它落成一个能上计算器复算的<b>数</b>，会比任何图都更让人踏实。我们取最简单的 1D 单粒子，手算一遍。</p>
+
+        <div class="callout note">
+          <div class="c-h">这是为讲解构造的自洽示例</div>
+          <p>下面的数字是为说清原理挑的一组干净参数（与 <a href="1-3-inertia-elastic.html">1.3</a> 拔河、<a href="1-4-spring-energy.html">1.4</a> 偏置自洽），不是某次真实运行的输出。重点是这套代数能上计算器复算、驻点条件自洽。</p>
+        </div>
+
+        <p>设一个质量 $m=1$ 的粒子在一维上，时间步 $h=1/60$，于是 $1/h^2=3600$。它的预测位置 $y=0$（纯惯性会停在原点）。一根弹簧把它往外拉：刚度 $k=100$，rest length $l_0=1$，弹簧另一端固定在原点，所以弹簧能量是 $\tfrac12 k(|x|-l_0)^2$。代入 $G=\frac{1}{2h^2}\lVert x-y\rVert_M^2+E$：</p>
+        <div class="math-block">$$G(x) = \frac{3600}{2}\,x^2 \;+\; \frac{1}{2}\cdot 100\,(|x|-1)^2$$</div>
+        <p>粒子被往正方向拉，取 $x>0$（则 $|x|=x$、$\mathrm{sgn}=+1$）求导令其为零：</p>
+        <div class="math-block">$$G'(x) = 3600\,x + 100\,(x-1) = 0 \;\Longrightarrow\; 3700\,x = 100 \;\Longrightarrow\; x^* = \frac{100}{3700} \approx 0.027$$</div>
+        <p>平衡点 $x^*\approx 0.027$。读这个数：弹簧想把粒子拽到 $x=1$（rest），惯性碗想把它摁在 $y=0$；二者拔河，惯性碗系数 $3600\gg 100$，<b>惯性碗压倒性地赢</b>——粒子只被弹簧拽出原点 $2.7\%$，几乎贴在 $y=0$。这正是 <a href="1-3-inertia-elastic.html">1.3</a> 要展开的「谁赢」，也是 <span class="term">incremental potential</span> 里「短时间步 = 惯性主导」的具体数字。</p>
+        <p>再验「$\nabla G=0$ 等价回 $M(x-y)=h^2 f$」这步：$M(x^*-y)=1\cdot 0.027=0.027$；右边 $h^2 f = h^2\cdot k(l_0-x^*)=\frac{1}{3600}\cdot 100\,(1-0.027)=\frac{97.3}{3600}\approx 0.027$。两边相等——驻点条件和原方程确实是同一件事。</p>
+
+        <div class="callout note">
+          <div class="c-h">两种 1/(2h²) 写法给同一个根</div>
+          <p>若改用上面 callout 里那种「惯性项不除 $h^2$、弹性项乘 $h^2$」的写法：$\tilde G(x)=\tfrac12 x^2 + h^2\cdot\tfrac12\cdot100(|x|-1)^2$。它整体等于把 $G$ 乘了 $h^2$（一个正常数），驻点不挪：$\tilde G'(x)=x + \frac{100}{3600}(x-1)=0\Rightarrow x(1+\tfrac{1}{36})=\tfrac{1}{36}\Rightarrow x^*=\frac{1}{37}\approx0.027$。同一个 $x^*$——「看着不一样其实一样」也成了可验的数。</p>
+        </div>
+
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> PBD 偷偷扔掉了惯性项</div>
           <p>记住这个 $G$，因为它能一句话点破 PBD 的毛病。PBD 把能量换成「约束违反量的平方和」，然后只顾着把约束推到零——也就是只最小化 $E$ 那一项，<b>忽略了惯性项</b> $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$。没有惯性项当锚，迭代越多就越往「纯弹性最优」滑，于是「有效刚度随迭代次数变化」。这正是 <a href="../02-family/2-1-pbd.html">2.1</a> 要算的账。VBD 则老老实实地最小化完整的 $G$，惯性项一项不少。</p>

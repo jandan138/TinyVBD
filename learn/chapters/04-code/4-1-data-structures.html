@@ -145,6 +145,41 @@ for (size_t i = 0; i &lt; lengthes.size(); ++i) {
         <p>主循环每一圈做一条「结构弹簧」：连接相邻顶点 $i$ 与 $i{+}1$，rest 长度就是给定的 <code>lengthes[i]</code>，刚度统一是 <code>stiffness</code>。注意它<b>同时把这条边登记到两个端点</b>的邻接表里（<code>vertAdjacentEdges[i]</code> 和 <code>[i+1]</code>）——这就是为什么后面一个顶点能找到「我连着哪些弹簧」。</p>
         <p>下半段是 <span class="term">skip spring</span>：当 <code>addSkipSpring</code> 为真，额外连一条 $i \to i{+}2$ 的弹簧，刚度用单独的 <code>stiffnessSkipSpring</code>（默认 <code>1e2</code>），rest 长度取 <code>lengthes[i] + lengthes[i+1]</code>（两段之和）。一根纯靠相邻弹簧串起来的 strand 是<b>没有抗弯能力</b>的——它能像面条一样随便对折。跳一格的弹簧给它一个「保持伸直」的倾向，<b>近似了 bending（弯曲）刚度</b>。默认实验 <code>initializeTilted()</code> 就开了它（<code>skipSpringStrength=100</code>），细节见 <a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>。</p>
 
+        <h3 id="trace-from">手跑一遍 from()：5 顶点 + skip 的邻接表</h3>
+        <p>上面的循环抽象地讲了「同时登记到两个端点」，但不亲手跑一遍，很难相信「顶点 2 居然连着 4 条边」。把 <code>from()</code> 在一根 <b>5 顶点（0…4）、开 skip spring</b> 的 strand 上跑到底，列出最终的 <code>edges</code> 与 <code>vertAdjacentEdges</code>。</p>
+        <p>5 顶点 ⇒ <code>lengthes.size()=4</code>（4 段）。给两类边各自连续编号便于指认——<b>结构边</b> $i\!-\!i{+}1$ 与 <b>skip 边</b> $i\!-\!i{+}2$：</p>
+        <table>
+          <thead>
+            <tr><th>类别</th><th>edgeId</th><th>端点</th><th>来自循环</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>结构</td><td>e0</td><td>(0,1)</td><td>i=0 主循环</td></tr>
+            <tr><td>结构</td><td>e1</td><td>(1,2)</td><td>i=1 主循环</td></tr>
+            <tr><td>结构</td><td>e2</td><td>(2,3)</td><td>i=2 主循环</td></tr>
+            <tr><td>结构</td><td>e3</td><td>(3,4)</td><td>i=3 主循环</td></tr>
+            <tr><td>skip</td><td>e4</td><td>(0,2)</td><td>i=0 的 skip 分支</td></tr>
+            <tr><td>skip</td><td>e5</td><td>(1,3)</td><td>i=1 的 skip 分支</td></tr>
+            <tr><td>skip</td><td>e6</td><td>(2,4)</td><td>i=2 的 skip 分支（i=3 不进 skip）</td></tr>
+          </tbody>
+        </table>
+        <p>（真实代码里结构边与 skip 边是<b>穿插</b> push 进 <code>edges</code> 的，实际下标会交错；这里按「结构 / skip 两组各自连续」重新命名 e0…e6，只为指认清楚，不改谁连谁。）每条边登记到它<b>两个端点</b>的邻接表，把所有 push 收集起来：</p>
+        <div class="math-block">$$
+        \begin{aligned}
+        \texttt{vertAdjacentEdges[0]} &= \{e0,\;e4\}\\
+        \texttt{vertAdjacentEdges[1]} &= \{e0,\;e1,\;e5\}\\
+        \texttt{vertAdjacentEdges[2]} &= \{e1,\;e2,\;e4,\;e6\}\\
+        \texttt{vertAdjacentEdges[3]} &= \{e2,\;e3,\;e5\}\\
+        \texttt{vertAdjacentEdges[4]} &= \{e3,\;e6\}
+        \end{aligned}
+        $$</div>
+        <p>盯住 <code>vertAdjacentEdges[2] = {e1, e2, e4, e6}</code>——<b>两条结构边</b>（e1=(1,2)、e2=(2,3)，左右各一）<b>加两条 skip 边</b>（e4=(0,2)、e6=(2,4)，跨左右各一），所以顶点 2 连了 4 条边。这正是 <a href="4-3-solve.html">4.3</a> 在为顶点 2 组装 $\mathbf f_2$、$\mathbf H_2$ 时要遍历的那个 force-elements 集合 $\mathcal F_2$（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）——4-3 是 gold standard，这里给它喂了一个具体的 $\mathcal F_i$。两端顶点 0、4 只各 2 条，是因为没有越过边界的邻居。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">点顶点看它的 vertAdjacentEdges</span></div>
+          <div class="lab-body" data-widget="vert-adjacency"></div>
+          <div class="lab-cap">横排 N 个顶点 + 结构弹簧（下弧）+ skip 弹簧（上弧）。点任一顶点 $i$，高亮它的 <code>vertAdjacentEdges[i]</code>（结构边一色、skip 边另一色），侧栏列出对应 edgeId。调<b>顶点数 N</b>、开关 <b>skip-spring</b>——关掉 skip，邻接表立刻从「最多 4 条 / 顶点」退回「最多 2 条 / 顶点」。这就是「约束图按顶点转置」的可点版本。</div>
+        </div>
+
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 邻接表就是约束图，只不过这里按顶点存</div>
           <p>在 PBD 里你也维护一张「约束清单」，挨个投影。VBD 的 <code>vertAdjacentEdges</code> 是同一张图的<b>另一种切法</b>：不是「对每条约束做点什么」，而是「对每个顶点，找出所有影响它的约束」。这个转置正是 block coordinate descent 的前提——只有先知道「谁影响我」，才能为单个顶点组出局部的 $\mathbf f_i$、$\mathbf H_i$（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）。</p>
@@ -183,6 +218,7 @@ for (size_t i = 0; i &lt; lengthes.size(); ++i) {
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>

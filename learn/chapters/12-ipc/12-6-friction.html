@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>摩擦：lagged、光滑化的 Coulomb · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-6">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-6</div>
+        <h1>摩擦：lagged、光滑化的 Coulomb</h1>
+        <p class="lede">上一节 CCD-filtered line search 把「不穿透」彻底钉死了。但真实接触从来不只是「法向推开」——物体还会<b>沿着接触面互相摩擦</b>：布在斜面上是滑下去还是黏住，箱子推不推得动，全看摩擦。麻烦在于，理想 <span class="term">Coulomb friction</span> 有一处 Newton 最讨厌的<b>不连续阶跃</b>。这一节看 IPC 怎么不另起炉灶，把摩擦<b>塞进同一个优化框架</b>，并把那个阶跃磨成一条可微的曲线。</p>
+
+        <h2 id="coulomb-recall">先回到 10-3 那个 Coulomb friction</h2>
+        <p>摩擦你并不陌生。<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 里 Newton cloth 的接触除了 log-barrier 的法向排斥，还一并算了 <span class="term">Coulomb friction</span>：摩擦力的大小受制于法向力 $f_n$ 和摩擦系数 $\mu$，方向与<b>切向相对滑移</b>相反。理想 Coulomb 的定律可以写成两种状态：</p>
+        <ul>
+          <li><b>静摩擦（stick）</b>：切向相对速度为零时，摩擦力可以取 $[-\mu f_n,\ \mu f_n]$ 区间里<b>任意</b>值，刚好抵消试图让它滑动的外力——它「黏」住不动。</li>
+          <li><b>动摩擦（slip）</b>：一旦开始滑动，摩擦力固定为 $\mu f_n$，方向严格反着滑移方向。</li>
+        </ul>
+        <p>物理上这没问题。但把它画成「摩擦力 vs 切向滑移速度 $v_t$」的曲线，你会看到一个要命的形状：在 $v_t=0$ 处，摩擦力从 $-\mu f_n$ <b>瞬间竖直跳到</b> $+\mu f_n$——一道垂直的阶跃。</p>
+
+        <div class="math-block">$$\mathbf f_t \;=\; -\,\mu f_n \,\frac{\mathbf v_t}{\lVert \mathbf v_t\rVert}\quad(\text{滑动}),\qquad \lVert\mathbf f_t\rVert \le \mu f_n\quad(\text{静止时不定})$$</div>
+
+        <h2 id="newton-hates-jump">为什么这道阶跃让 Newton 头疼</h2>
+        <p>回想整个 IPC 求解的底座：每一步是一个<b>全局 Newton 步</b>，要用到能量的梯度和 Hessian（见 <a href="12-5-ccd-linesearch.html">11.5</a>，下一节 12-9 会把求解器全景补全）。Newton 法的前提是被优化的函数<b>足够光滑</b>——至少梯度连续、Hessian 有定义。而理想 Coulomb 那道阶跃恰恰违反了这一点：</p>
+        <ul>
+          <li>摩擦力（能量的梯度）在 $v_t=0$ 处<b>不连续</b>，跳来跳去；</li>
+          <li>那意味着对应的 Hessian 在那一点<b>无界或没定义</b>；</li>
+          <li>Newton 沿着这种地形迭代会<b>抖动、卡在 stick/slip 之间反复横跳</b>，很难收敛。</li>
+        </ul>
+        <p>更根本的是，「静摩擦力取区间里任意值」这件事本身就不是一个能直接写进 $\min G(\mathbf x)$ 的<b>函数</b>——它是个集值映射。要让摩擦和弹性、惯性、barrier 一样站在同一个能量目标里被一起最小化，IPC 必须先解决两件事：把摩擦变成一个<b>光滑可微的势</b>，并把法向力这个「会动的量」<b>暂时固定住</b>。</p>
+
+        <div class="callout warn">
+          <div class="c-h">阶跃不是细节，是 Newton 的死穴</div>
+          <p>VBD 那种 per-vertex 局部下降对小的不光滑相对宽容——10-3 把 Coulomb friction 直接累加进 $\mathbf f_i$ 也能跑。但 IPC 是<b>全局二阶 Newton</b>，它对梯度/Hessian 的光滑性要求高得多。一道垂直阶跃对全局 Newton 来说不是「精度问题」，而是「方向都算不对」的问题。所以 IPC 不能照搬理想 Coulomb，必须把它改造成 Newton 吃得下的形状。</p>
+        </div>
+
+        <h2 id="lagged">第一步：lagged——把法向力和接触集滞后一步固定</h2>
+        <p>摩擦力大小依赖法向力 $f_n$，而 $f_n$ 来自 barrier，会随着位形在迭代中<b>不停变化</b>。如果摩擦和法向在同一步里互相耦合地一起解，问题会高度非线性、极难收敛。IPC 的招数是 <span class="term">lagged</span>（滞后）：</p>
+        <ul>
+          <li>把每对接触的<b>法向力大小</b> $f_n$、以及当前的<b>接触集</b>（谁和谁在接触、切平面朝哪）从<b>上一步</b>取来，在本步求解中<b>当成固定常量</b>；</li>
+          <li>于是摩擦力的「上限 $\mu f_n$」在本步里是个定值，摩擦项就退化成一个只关于<b>切向位移</b>的、形状固定的<b>光滑势</b>——可以和弹性、barrier 一样写进 $\min G(\mathbf x)$，一起被 Newton 最小化。</li>
+        </ul>
+        <p>这就是「lagged potential」的含义：用滞后一步的法向信息，把原本耦合、集值、难啃的摩擦，<b>冻成</b>一个本步可优化的光滑势函数。</p>
+
+        <div class="callout note">
+          <div class="c-h">lag 一步，再用 alternating updates 找补精度</div>
+          <p>「滞后一步」当然会带来一点几何误差——你用的是上一步的法向力和接触切平面，而本步位形已经动了。IPC 用 <span class="term">alternating updates</span>（交替更新）来收敛这个误差：在固定法向、解一轮摩擦之后，<b>用新位形更新法向力/接触集</b>，再解一轮——法向与切向<b>交替</b>各自精化，几轮下来 lag 引入的偏差被逐步压掉，逼近真正自洽的摩擦解。这是「lagged」换来可优化性、又用「alternating」把精度找回来的组合拳。</p>
+        </div>
+
+        <h2 id="mollified">第二步：mollify——把 stick↔slip 阶跃磨成可微曲线</h2>
+        <p>固定了 $f_n$，还剩那道阶跃要处理。IPC 把静-动摩擦的过渡<b>光滑化（mollified）</b>：不再让摩擦力在 $v_t=0$ 处垂直跳变，而是引入一个很小的<b>滑移容差</b> $\epsilon_v$，在 $|v_t|<\epsilon_v$ 的窄带里用一条<b>光滑曲线</b>把 $-\mu f_n$ 平顺地连到 $+\mu f_n$。直觉上：</p>
+        <ul>
+          <li>滑移速度明显大于 $\epsilon_v$ 时，曲线已经贴合理想动摩擦的水平段（力 $\approx\mu f_n$，方向反着滑），物理几乎不失真；</li>
+          <li>滑移速度落进 $\pm\epsilon_v$ 的窄带（近乎静止）时，曲线<b>连续、可微</b>地穿过零点——摩擦力随 $v_t$ 平滑变化，而不是瞬间翻转。</li>
+        </ul>
+        <p>代价是 $\epsilon_v$ 内的「静摩擦」其实是一段极缓慢的<b>蠕滑</b>（creep）而非绝对不动——但 $\epsilon_v$ 取得足够小，这点蠕滑肉眼和物理上都可忽略。换来的是：摩擦势处处<b>可微</b>，梯度连续、Hessian 有定义，全局 Newton 终于能顺畅地把它和其它能量项一起最小化。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">光滑化摩擦 vs 理想 Coulomb 阶跃</span></div>
+          <div class="lab-body" data-widget="friction-smooth"></div>
+          <div class="lab-cap">对照「摩擦力 vs 切向滑移速度」两条曲线：理想 Coulomb 在 v_t=0 处垂直阶跃，光滑化版本在 ±ε_v 窄带里用可微曲线连过零点——调 ε_v 看曲线怎么从陡变缓。</div>
+        </div>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个 min G(x)，摩擦也只是又一项</div>
+          <p>到这里你应该看出，IPC 处理摩擦的哲学和它处理 barrier 一模一样——<b>不另起炉灶</b>。lagged + mollified 之后，摩擦成了 $\min G(\mathbf x)$ 里一个普通的、光滑可微的能量项，它的梯度进全局 Newton 的 $\mathbf f$、Hessian 进 $\mathbf H$（同样做 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 那种 PSD projection 保证下降方向），和惯性、弹性、barrier 站在同一行加号上一起被最小化。这正是 10-3 那句话的延续：<b>接触和摩擦从来不是「先解动力学再单独处理」，而是当成能量的一部分，一起优化。</b></p>
+        </div>
+
+        <h2 id="same-physics">同一套物理，只是为全局 Newton 改了形</h2>
+        <p>最后把它和 10-3 钉在一起对照，避免误解。IPC 的摩擦和 10-3 的 Coulomb friction 是<b>同一套物理</b>——都是 $\mu$、法向力、切向滑移那一套 Coulomb 定律，没有换模型。区别只在<b>为谁服务、改了什么形</b>：</p>
+        <ul>
+          <li><b>10-3 Newton cloth</b>：per-vertex 局部下降，对小的不光滑宽容，Coulomb friction 可以较直接地累加进 $\mathbf f_i / \mathbf H_i$。</li>
+          <li><b>11 IPC</b>：全局二阶 Newton，对光滑性苛刻，所以同一套 Coulomb 必须先 <b>lagged</b>（固定法向→变成可优化势）+ <b>mollified</b>（磨平 stick/slip 阶跃→处处可微），才能进得了全局求解。</li>
+        </ul>
+        <p>一句话：<b>物理没变，变的是把它打磨成全局 Newton 咽得下的可微形态。</b></p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 理想 <span class="term">Coulomb friction</span> 在切向滑移 $v_t=0$ 处有一道<b>垂直阶跃</b>（静摩擦力不定、动摩擦突然定向），这种梯度不连续是全局 <b>Newton 的死穴</b>；(2) IPC 不另起炉灶，用 <b>lagged</b>——把法向力和接触集<b>滞后一步固定</b>，让摩擦退化成只关于切向位移的<b>光滑势</b>进 $\min G(\mathbf x)$，再用 <b>alternating updates</b> 交替精化法向/切向找回 lag 的精度；(3) 同时把 stick↔slip 过渡<b>光滑化（mollified）</b>成一条可微曲线（窄带内蠕滑、窄带外贴合理想 Coulomb），于是摩擦处处可微、能和 barrier/弹性一起被全局 Newton 最小化——<b>同一套 Coulomb 物理，只为全局 Newton 改了可微的形</b>。</p>
+        <p>不穿透（12-5）和摩擦（12-6）都讲完了，IPC 的物理拼图完整了。但这一切的代价藏在求解器里——每步 CCD、全局稀疏线性解、barrier 收紧带来的恶劣条件数。下一节 <a href="12-9-solver-cost.html">11-9：求解器全景与代价——为什么 IPC 稳但贵</a>，我们把整台机器（PSD projection、CHOLMOD 稀疏分解、并行装配）摊开，老实算清「严格保证」这张账单贵在哪。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

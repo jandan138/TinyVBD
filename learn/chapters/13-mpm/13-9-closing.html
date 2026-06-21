@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MPM 篇收尾：三条现代路线与全书关系 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-9">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-9</div>
+        <h1>MPM 篇收尾：三条现代路线与全书关系</h1>
+        <p class="lede">MPM 篇走到这里：你已经懂了它为什么混合 Lagrangian-Eulerian、一步循环怎么转、传输（PIC/FLIP/APIC）的灵魂与软肋、粒子上的 $F$ 与本构、隐式 MPM 为什么仍是 $\min G(\mathbf x)$，又看了三条把 MPM 推向现代的路线。这一节不引入新东西，只做两件事：把<b>三条现代 MPM 路线</b>并排放进一张对照表，再把 MPM 接回 FEM、VBD、IPC——让整本书在「一个 $\min G(\mathbf x)$」上闭合。这是全书当前的最后一章内容，我们好好收个尾。</p>
+
+        <h2 id="three-routes">三条现代 MPM 路线总对照</h2>
+        <p>经典 MPM（<a href="13-2-mpm-cycle.html">13.2</a>–<a href="13-5-implicit-mpm.html">13.5</a>）通用、强壮，但贵：宽核 stencil、每格多粒子的求积、隐式大方程。三条现代路线各从一个不同的口子去攻这份「贵」——而且攻的口子<b>互不重叠</b>，所以它们正交、甚至可叠加。</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>MPM Lite（去粒子求积）</th>
+              <th>PB-MPM（约束求解）</th>
+              <th>CK-MPM（紧核）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>改动的环节</b></td>
+              <td>求积 / 离散：去掉基于粒子的 quadrature，改用线性核</td>
+              <td><b>求解器</b>：把网格求解换成 position-based 约束投影</td>
+              <td><b>核本身</b>：换成 $C^2$ 连续的紧支撑核</td>
+            </tr>
+            <tr>
+              <td><b>核心想法</b></td>
+              <td>粒子主要作运动状态载体，求解时不在粒子上求积</td>
+              <td>把本构读成约束、像 PBD 那样「掰状态满足约束」</td>
+              <td>既窄又光滑：紧支撑 + $C^2$，破「窄糙/宽贵」两难</td>
+            </tr>
+            <tr>
+              <td><b>主攻的痛点</b></td>
+              <td>隐式开销 ∝ 每格粒子数(PPC) × 宽核 stencil</td>
+              <td>显式 MPM 步长一大就炸 / 隐式每步解大方程</td>
+              <td>宽核（如二次 B-spline 27 节点）的 stencil 开销</td>
+            </tr>
+            <tr>
+              <td><b>接回的旧篇</b></td>
+              <td>隐式仍是 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>）</td>
+              <td><b>PBD/XPBD</b>（<a href="../02-family/2-1-pbd.html">2.1</a>/<a href="../02-family/2-2-xpbd.html">2.2</a>）</td>
+              <td>APIC/MLS（<a href="13-3-transfers-apic.html">13.3</a>）+ FEM 本构</td>
+            </tr>
+            <tr>
+              <td><b>取向</b></td>
+              <td>保通用性，隐式大幅加速、显式也改善</td>
+              <td>实时、稳、面向游戏物理</td>
+              <td>稳定/精度/效率三角的新平衡点</td>
+            </tr>
+            <tr>
+              <td><b>来源</b></td>
+              <td>项目页 <code>mpmlite.github.io</code></td>
+              <td>EA SEED · SIGGRAPH 2024 · Chris Lewin</td>
+              <td>arXiv:2412.10399</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>这张表的脊梁是：三条路<b>动的是 MPM 流水线上三个不同的零件</b>——MPM Lite 动「求积/离散」，PB-MPM 动「求解器」，CK-MPM 动「核」。因为口子不重叠，它们不是互斥的竞品，原则上可以组合（比如紧核 + 去粒子求积、或 position-based + 紧核）。表里这些是<b>机制层面</b>的对照；精确公式、加速比、规模请回各自原文（<a href="13-6-mpm-lite.html">13.6</a>/<a href="13-7-pb-mpm.html">13.7</a>/<a href="13-8-ck-mpm.html">13.8</a> 与 <a href="../appendix/a-9-mpm-references.html">a-9</a>），本书守 DO-NOT-STATE，不臆造数字。</p>
+
+        <div class="callout note">
+          <div class="c-h">这是对照，不是排名</div>
+          <p>和 <a href="../12-ipc/12-10-three-roads.html">12.10</a> 的「penalty/AVBD/IPC 没有银弹」一样：三条现代 MPM 路线是<b>一组取舍与正交改造</b>，不是高下排名。要实时上游戏，PB-MPM 的 position-based 体质最对路；要砍隐式开销又保通用，MPM Lite 的去粒子求积最直接；要在传输基函数上一次性兼顾窄与光滑，CK-MPM 的紧核最优雅。按场景选，甚至混着用。</p>
+        </div>
+
+        <h2 id="mpm-vs-family">MPM 与 FEM / VBD / IPC：同一条主线的不同切面</h2>
+        <p>MPM 是全书第一个真正跳出「网格/mesh」的范式，但它和前面三大块的关系，恰恰能把整本书串成一条线。逐一接回：</p>
+
+        <div class="bridge fem">
+          <div class="c-h"><span class="tag">MPM ↔ FEM</span> 同一个本构 ψ，不同的离散</div>
+          <p>MPM 和 <a href="../09-fem/9-1-why-fem.html">FEM 篇</a>（Part 9）共享<b>完全相同</b>的材料模型：形变梯度 $F$、应变能密度 $\psi(F)$、第一 Piola 应力 $P=\partial\psi/\partial F$（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>、<a href="../09-fem/9-3-strain-energy.html">9.3</a>、<a href="../09-fem/9-4-piola-assembly.html">9.4</a>）。差别<b>只在离散</b>：FEM 在固定的网格<b>单元</b>上、用形函数算 $F$；MPM 不绑单元，而在每个<b>粒子</b>上随它运动更新 $F_p\leftarrow(I+\Delta t\,\nabla v_p)F_p$（<a href="13-4-F-update-constitutive.html">13.4</a>）。同一个 $\psi$，一个钉在网格上，一个跟着物质点跑——这就是 MPM 能扛巨形变/断裂而 FEM 网格会撕裂的根。</p>
+        </div>
+
+        <div class="bridge vbd">
+          <div class="c-h"><span class="tag">MPM ↔ VBD</span> 同一个 min G(x)，不同的 DOF</div>
+          <p>隐式 MPM（<a href="13-5-implicit-mpm.html">13.5</a>）和 <a href="../03-vbd/3-1-block-descent.html">VBD</a>（Part 3）要解的是<b>同一个</b>变分问题——最小化一步的 incremental potential $G(\mathbf x)$，牛顿步、线搜索、SPD 投影全都回来。差别<b>只在 DOF 是谁</b>：VBD 的 DOF 是<b>网格顶点</b>位置，MPM 的 DOF 是<b>背景网格节点</b>的速度/位置增量（本构来自粒子上携带的 $F$）。换了自由度的身份，没换那个要被最小化的 $G$。</p>
+        </div>
+
+        <div class="bridge ipc">
+          <div class="c-h"><span class="tag">MPM ↔ IPC</span> 接触可以叠上来</div>
+          <p><a href="../12-ipc/12-1-why-ipc.html">IPC</a>（Part 12）告诉你接触不过是往 $G(\mathbf x)$ 里加一个 $E_{\text{contact}}$ 项（log-barrier / penalty / AVBD，见 <a href="../12-ipc/12-10-three-roads.html">12.10</a>）。这件事和离散范式正交：隐式 MPM 既然也是在网格 DOF 上 $\min G$，就同样能把接触项<b>叠加</b>进去——MPM 与刚体/边界/自接触的耦合，本质就是在那个 $G$ 上再加一项接触能量，再一起解。接触不是 MPM 的对立面，是它 $\min G$ 里又一个加号。</p>
+        </div>
+
+        <h2 id="the-whole-journey">收线：从 PBD 到 MPM，全程一个 min G(x)</h2>
+        <p>退到最远处看整本书，你会发现它其实自始至终只讲了一件事——<b>把一个时间步的动力学，写成最小化一个 incremental potential $G(\mathbf x)$</b>：</p>
+
+        <div class="math-block">$$\mathbf x^{t+1}=\arg\min_{\mathbf x}\,G(\mathbf x),\qquad G(\mathbf x)=\underbrace{\tfrac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_{\mathbf M}^2}_{\text{惯性}}+\underbrace{E_{\text{elastic}}(\mathbf x)}_{\psi(F)\text{：FEM/MPM 共用}}+\underbrace{E_{\text{contact}}(\mathbf x)}_{\text{接触，可选}}$$</div>
+
+        <p>这条线从 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的变分欧拉起步，一路串起来：</p>
+        <ul>
+          <li><b>PBD / XPBD</b>（Part 2）：在<b>位置/对偶侧</b>近似解这个 $G$——PBD 丢了惯性锚，XPBD 用 compliance 把它塞回来。</li>
+          <li><b>VBD</b>（Part 3）：直接最小化完整的 $G$，per-vertex block descent + 局部 Hessian。</li>
+          <li><b>Newton / cloth</b>（Part 7–8）：把 $\min G$ 做成工业级的牛顿求解。</li>
+          <li><b>FEM</b>（Part 9）：把弹性项 $E_{\text{elastic}}=\sum V\psi(F)$ 讲透——$F$、$\psi$、$P$、装配。</li>
+          <li><b>IPC</b>（Part 12）：给 $G$ 加上严格无穿透的接触项 $E_{\text{contact}}$。</li>
+          <li><b>MPM</b>（Part 13）：把同一个 $G$ 搬到<b>粒子载状态 + 背景网格借力</b>的混合离散上，让它能扛巨形变、断裂、沙雪泥——隐式 MPM 仍是网格 DOF 上的 $\min G$，三条现代路线只是从求积/求解器/核三个口子让它更快更稳。</li>
+        </ul>
+        <p>范式从「掰位置」走到「物质点 + 背景网格」，DOF 从弹簧端点换到网格节点，离散从 mesh 单元换到自由飞行的粒子——但那个被最小化的 $G(\mathbf x)$，从第一根 strand 到最后一团 MPM 沙子，<b>一字未改</b>。这就是这本书想留给你的那把钥匙：不是十几套互不相干的算法，而是<b>一条主线、一个 $\min G(\mathbf x)$</b>，看穿每一种范式只是它的不同切面。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你从一根 strand 出发，走到了这里</div>
+          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触都没有。但正是从它身上，你学会了把动力学读成 $\min G(\mathbf x)$、读成 per-vertex 的 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$。这把钥匙一路开过 XPBD、VBD、Newton、FEM、IPC，开到了 MPM——MPM 再「跳出 mesh」、再现代化，骨子里还是「往 $G$ 里写对项、再把它解出来」。全书到此闭合：一条主线，许多切面，同一个 $\min G(\mathbf x)$。</p>
+        </div>
+
+        <h2 id="further-reading">进一步阅读</h2>
+        <p>MPM 篇是概念/算法篇，刻意没碰那些只有读原文才能落实的细节（精确核解析式、隐式装配的全套公式、三条现代路线的原文数字与证明）。要往下走，从原始论文进——经典 MPM（Sulsky 1994、APIC/Jiang 2015、MLS-MPM/Hu 2018、隐式 MPM）与三条现代路线（MPM Lite、PB-MPM、CK-MPM）都整理在附录 <a href="../appendix/a-9-mpm-references.html">a-9：MPM 参考文献</a>，每条附一句中文告诉你值不值得点进去。术语见 <a href="../appendix/a-1-glossary.html">术语表</a>，公式见 <a href="../appendix/a-2-cheatsheet.html">公式速查</a>。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 三条现代 MPM 路线<b>动的是流水线上三个不同零件</b>——MPM Lite 去粒子求积、PB-MPM 换成 position-based 约束求解（接回 <a href="../02-family/2-1-pbd.html">PBD/XPBD</a>）、CK-MPM 换成 $C^2$ 紧支撑核，口子互不重叠、可正交叠加，是取舍而非排名；(2) MPM 与全书三大块各是同一主线的一个切面——与 <b>FEM</b> 同本构 $\psi$、异离散（粒子 vs 单元），与 <b>VBD</b> 同 $\min G(\mathbf x)$、异 DOF（网格节点 vs 网格顶点），与 <b>IPC</b> 则是接触项可直接叠进 $G$；(3) 从 1.2 变分欧拉到这里，整本书只讲了一件事——把一步动力学写成 $\arg\min_{\mathbf x}G(\mathbf x)$，惯性 + 弹性（$\psi(F)$）+（可选）接触，范式与 DOF 一路在变，<b>那个 $G$ 一字未改</b>。这是全书当前的最后一章；参考文献入口 → <a href="../appendix/a-9-mpm-references.html">a-9</a>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

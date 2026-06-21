@@ -46,6 +46,17 @@
           <p>回忆 <a href="../02-family/2-2-xpbd.html">2.2</a>：XPBD 是 <span class="term">dual</span>（对偶）求解器，它解的是约束力 / Lagrange multiplier。每处理一个约束，它把位置修正<b>按逆质量 $w_i = 1/m_i$ 分配</b>给两端：$\Delta\mathbf x_i = w_i\nabla_i C\,\Delta\lambda$。重锤的 $w = 1/1000$ 小得可怜，轻链的 $w = 1$ 大一千倍——于是同一个 $\Delta\lambda$ 几乎全砸在轻链那一端，重锤纹丝不动。</p>
         </div>
 
+        <h3 id="split-calc">把 1:1000 的位移分配算给你看</h3>
+        <p>上面那句「同一个 $\Delta\lambda$ 几乎全砸在轻链那一端」是能<b>一行算出来</b>的。取那根连着重锤的弹簧，一端是轻链顶点（$m_\text{light}=1$，逆质量 $w_\text{light}=1$），另一端是重锤（$m_\text{heavy}=1000$，逆质量 $w_\text{heavy}=1/1000$）。XPBD 一次约束投影把两端各挪：</p>
+        <div class="math-block">$$\Delta\mathbf x_\text{light} = w_\text{light}\,\nabla_\text{light}C\,\Delta\lambda,\qquad \Delta\mathbf x_\text{heavy} = w_\text{heavy}\,\nabla_\text{heavy}C\,\Delta\lambda$$</div>
+        <p>两端的约束梯度 $\nabla C$ 是同一条弹簧的两个方向，大小相等（$\lVert\nabla_\text{light}C\rVert=\lVert\nabla_\text{heavy}C\rVert$），$\Delta\lambda$ 又是两端共用的同一个标量。所以两端位移大小之比<b>只由逆质量比决定</b>：</p>
+        <div class="math-block">$$\frac{\lVert\Delta\mathbf x_\text{light}\rVert}{\lVert\Delta\mathbf x_\text{heavy}\rVert} = \frac{w_\text{light}}{w_\text{heavy}} = \frac{1}{1/1000} = 1000$$</div>
+        <p>读出来：这一次投影把弹簧的长度误差「修」掉，轻端动了 $1000$ 份、重端只动了 $1$ 份——<b>重锤几乎纹丝不动，修正几乎全压在轻链上</b>。这正是「dual 求解器按逆质量打折」的算术：质量比 $1000\times$，位移分配就是 $1000:1$。要把张力真正传到重端、让重锤跟着走，就得靠极多次 sweep 一点点累积——这就是高质量比下 XPBD 收敛极慢、有限迭代里轻链被拉爆的根。</p>
+        <div class="callout note">
+          <div class="c-h">这组数是为讲解构造的自洽示例</div>
+          <p>$1000:1$ 这个比值用本实验真实的 $m_0=1$、$m_1=1000$ 直接代出来、可复算；它只刻画<b>单次约束投影内两端的瞬时分配</b>，不是整步的最终位移（最终位移要把多条约束、多次 sweep 的累积都算进去）。要记的趋势是：<b>逆质量比 = 位移分配比</b>，质量越悬殊重端越「锁死」。这是 dual 求解器的结构性质，和刚度设多大无关（见下一个 callout）。</p>
+        </div>
+
         <p>这就是病根。把张力写出来看：链节越靠近绳头，它下面挂的总重量越大，需要承受的张力也越大。但 XPBD 的逐约束 Gauss-Seidel 在一次 sweep 里只能把每个约束局部地推一点点，而每一点修正又被逆质量按比例「打折」到轻的那一端。结果是<b>重锤这一侧的修正被严重低估</b>，而轻链被反复抽打、过度拉伸。更要命的是：哪怕你把 compliance 设成 0（无穷硬，退回 PBD），也救不回来——</p>
 
         <div class="callout warn">

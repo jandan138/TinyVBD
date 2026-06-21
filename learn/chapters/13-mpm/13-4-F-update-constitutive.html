@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>粒子上的形变梯度更新 F←(I+∇v·dt)F + 本构 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="13-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 13 · 13-4</div>
+        <h1>粒子上的形变梯度更新 $F\leftarrow(I+\nabla v\,\Delta t)F$ + 本构</h1>
+        <p class="lede">前面三节把 MPM 的「搬运工系统」讲完了——一步循环（<a href="13-2-mpm-cycle.html">13.2</a>）、APIC 传输（<a href="13-3-transfers-apic.html">13.3</a>）。但搬来搬去搬的是动量，<b>力从哪来</b>始终没答。这一节补上这块：力来自材料的弹性，而弹性的全部信息装在每个粒子各自携带的形变梯度 $F_p$ 里。我们要讲三件环环相扣的事：(1) $F_p$ 怎么在粒子上随它运动一步步更新——$F_p^{n+1}=(I+\Delta t\,\nabla v_p)F_p^n$，其中 $\nabla v_p$ 从网格速度梯度插值而来；(2) 拿到 $F_p$ 之后算应力 $P_p=\partial\psi/\partial F_p$ <b>完全复用 FEM 篇</b>（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>/<a href="../09-fem/9-3-strain-energy.html">9.3</a>/<a href="../09-fem/9-4-piola-assembly.html">9.4</a>）；(3) 这个应力怎么在 P2G 阶段散布成网格节点上的内力，那个 $-V_p^0\,P_p\,D_m^{-\top}$ 类项和 FEM 单元力是同一个东西。一句话总线：<b>MPM 不存网格——$F$ 不挂在固定单元上，而是住在每个粒子身上，随粒子一路运动。</b></p>
+
+        <h2 id="no-mesh">F 住在粒子上：MPM 没有 rest 网格</h2>
+        <p>先把和 FEM 最深的那条差别点透。FEM 里（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>），形变梯度是从单元的两个边矩阵算出来的：$F=D_s\,D_m^{-1}$，其中 $D_m$ 是这个三角形/四面体的 <b>rest 形状</b>，预先算好、存一辈子。换句话说，FEM 的 $F$ 永远依附在一张固定连通的网格上——哪三个顶点组一个单元、它们的 rest 形状是什么，开局就定死，整段仿真不变。这正是 mesh 法在巨形变下会撕裂、缠死的根源：rest 连通关系是写死的，材料一旦流动、断裂、翻搅，那张网就跟不上了。</p>
+        <p>MPM 把这件事彻底翻过来：<b>不存 rest 网格，$F$ 直接作为每个粒子的一份状态被携带。</b>每个物质点（material point）$p$ 身上挂着它自己的 $F_p$——它记录的是「从这个粒子周围那一小团材料的 rest 状态，到此刻 world 状态的局部线性映射」，含义和 <a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 的 $F$ 一字不差（rest$\to$world 的雅可比、$F=I$ 表示没形变、$J=\det F$ 是体积比、极分解 $F=RS$ 分离旋转与拉伸全都照搬）。区别只在<b>它存在哪、怎么更新</b>：FEM 的 $F$ 每步从网格重算，MPM 的 $F_p$ 是粒子的随身财产，每步在上一帧的基础上<b>增量更新</b>，跟着粒子在空间里漂。</p>
+        <div class="callout note">
+          <div class="c-h">「永久 Lagrangian 状态」这句话，$F_p$ 是最硬的注脚</div>
+          <p>13.1 反复说的「粒子携带永久 Lagrangian 状态、网格用完即弃」，最实在的体现就是 $F_p$。质量、动量这些每步还要散到网格上再收回来，但 $F_p$ <b>从不上网格</b>——它只在粒子上、靠网格借来的速度场更新一下，然后继续待在粒子身上。背景网格每步清零重建，$F_p$ 却一路累积。所以材料就算被搅成一团、彼此穿插重排，每个粒子也<b>始终记得自己被拉伸/旋转/剪切成了什么样</b>——这是 mesh 法给不了的、MPM 擅长巨形变的底层原因。</p>
+        </div>
+
+        <h2 id="grad-v">∇v_p：从网格速度梯度插回粒子</h2>
+        <p>$F_p$ 要更新，得知道这个粒子周围的速度场怎么在变化——也就是速度梯度 $\nabla v_p$。但 MPM 的速度场是<b>住在网格节点上</b>的（grid solve 之后每个节点 $i$ 有一个新速度 $v_i$）。所以和 G2P 收速度（<a href="13-3-transfers-apic.html">13.3</a>）一样，$\nabla v_p$ 也要从网格<b>插值</b>回粒子——只不过插的不是速度本身，而是速度的空间梯度。用核权重 $w_{ip}$ 的梯度 $\nabla w_{ip}$ 作权，把周围每个节点的速度加权求和：</p>
+        <div class="math-block">$$\nabla v_p=\sum_i v_i\,(\nabla w_{ip})^{\!\top}.$$</div>
+        <p>逐项读：$v_i$ 是节点 $i$ grid solve 后的新速度，$\nabla w_{ip}$ 是核函数对位置的梯度（核选什么——线性、二次 B-spline——决定了它的形状和支撑宽度，这正是 <a href="13-2-mpm-cycle.html">13.2</a>/<a href="13-6-mpm-lite.html">13.6</a> 反复较劲的地方）。求和只跑这个粒子核支撑覆盖到的那几个节点。结果 $\nabla v_p$ 是个矩阵，编码「在粒子 $p$ 这一点，速度场沿各方向怎么变」——它就是连续介质里速度梯度 $\nabla v$ 在粒子处的离散采样。</p>
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> APIC 的 $C_p$ 早就把 $\nabla v_p$ 攒在手里了</div>
+          <p>如果你用的是 APIC（<a href="13-3-transfers-apic.html">13.3</a>），会发现 $\nabla v_p$ 几乎是免费的。APIC 传输时每个粒子本就携带一个仿射速度矩阵 $C_p$——它正是「粒子周围速度场的局部线性部分」，量纲、含义和 $\nabla v_p$ 同源。所以现代 MPM（APIC/MLS-MPM）里，G2P 收速度的同一趟扫描就顺手把 $C_p$（即 $\nabla v_p$）也收了，$F_p$ 更新拿来直接用。这也是 13.3 说「APIC 把仿射场一起传」的实际兑现处之一：<b>那个仿射矩阵不只为了保角动量，它还是 $F_p$ 更新的输入</b>。</p>
+        </div>
+
+        <h2 id="f-update">F_p 更新：一步线性化的乘法增量</h2>
+        <p>有了 $\nabla v_p$，更新公式是连续介质里 $\dot F=(\nabla v)F$ 这条运动学关系的一步显式离散：</p>
+        <div class="math-block">$$\boxed{\ F_p^{n+1}=\bigl(I+\Delta t\,\nabla v_p\bigr)\,F_p^{n}\ }$$</div>
+        <p>怎么读它：$\nabla v_p$ 描述这一小段时间里材料被怎样进一步拉伸/旋转/剪切，$I+\Delta t\,\nabla v_p$ 就是这一步<b>额外</b>叠加的局部线性变换（增量形变梯度），左乘到上一帧的 $F_p^n$ 上，得到新的 $F_p^{n+1}$。这是个<b>乘法累积</b>：每一步都在历史 $F_p$ 的肩膀上再叠一层增量，所以粒子的形变历史一路攒下来——这正好对上前一节那句「$F_p$ 从不清零、一路累积」。$\nabla v_p=0$（这一小团没在变形）时 $F_p$ 原样不动；$\Delta t$ 越小、这步线性化越准。</p>
+        <div class="callout note">
+          <div class="c-h">为什么是「左乘 $(I+\Delta t\nabla v_p)$」而不是别的</div>
+          <p>这来自连续介质的物质时间导数 $\dot F=(\nabla v)\,F$（速度梯度作用在当前 $F$ 上）。一步前向欧拉离散 $\frac{F^{n+1}-F^n}{\Delta t}=(\nabla v_p)F^n$，移项即得 $F^{n+1}=(I+\Delta t\,\nabla v_p)F^n$。和 FEM 不同的是：FEM 每步用当前 world 坐标<b>重算</b> $F=D_sD_m^{-1}$（绝对，不依赖上一帧的 $F$）；MPM 是<b>增量</b>更新（在上一帧 $F_p$ 上乘一个小量）。一个「重测」、一个「累积」——因为 MPM 没有那张固定的 rest 网格可供「重测」，只能靠粒子自己把形变历史攒在身上。弹塑性、断裂这些更复杂的材料，正是在这一步对 $F_p$ 做乘法分解（$F=F_eF_p$）、把塑性流动从弹性里剥出来——MPM 处理它们格外自然，根子就在 $F_p$ 是粒子随身、可任意改写的状态。</p>
+        </div>
+
+        <h2 id="constitutive">本构 ψ(F_p)→P_p：整段复用 FEM 篇</h2>
+        <p>$F_p$ 一更新好，后面「从形变到力」的整条链<b>和 FEM 篇逐字相同</b>，这一节几乎不需要新讲什么，只需指路：</p>
+        <ul>
+          <li><b>应变能密度 $\psi(F_p)$</b>：用哪个材料模型，直接搬 <a href="../09-fem/9-3-strain-energy.html">9.3</a> 那张谱——Neo-Hookean、co-rotational、StVK 全都能用。它们只依赖 $F_p$ 的旋转不变量 $I_C=\operatorname{tr}(F_p^\top F_p)$ 和 $J=\det F_p$（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 备好的两块积木），所以拿来即用，不关心 $F_p$ 是从网格边算的还是粒子上攒的。</li>
+          <li><b>第一 Piola-Kirchhoff 应力 $P_p=\partial\psi/\partial F_p$</b>：<a href="../09-fem/9-4-piola-assembly.html">9.4</a> 的定义原封不动。比如那个 production Neo-Hookean：</li>
+        </ul>
+        <div class="math-block">$$P_p=\frac{\partial\psi}{\partial F_p}=\mu\,(F_p-F_p^{-\top})+\lambda\,(\ln J)\,F_p^{-\top}.$$</div>
+        <p>$F_p=I$（粒子没形变）时 $P_p=0$，没内力；$J\to0$（这团材料被压塌）时 $\ln J\to-\infty$、$P_p$ 爆炸来抗塌缩——和 <a href="../09-fem/9-4-piola-assembly.html">9.4</a> 读到的一模一样。这就是 MPM「多材料通用」卖点的技术兑现：<b>换一种材料，只是换一个 $\psi$、跟着换一个 $P_p$ 闭式，循环主干一行不动</b>——弹性体、雪、沙、泥、可压流体，差别全压在这个 $\psi(F_p)$ 里。MPM 没发明新本构，它把 FEM 那套本构原样接了过来。</p>
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个 $\psi\to P$，两种离散</div>
+          <p>FEM 和 MPM 在「材料力学」这一层<b>完全是同一套东西</b>：同样的 $\psi(F)$、同样的 $P=\partial\psi/\partial F$、同样的旋转不变性要求（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 那条「能量只依赖 $S$ 或 $F^\top F$」的生死线，MPM 一字不改地继承）。它们分道扬镳只在<b>怎么离散、$F$ 存哪</b>：FEM 把 $F$ 钉在固定网格单元上、每步重算；MPM 把 $F$ 挂在自由漂动的粒子上、每步增量更新。<b>同本构、异离散</b>——这是全书反复强调的「力学和离散是两件事」在 MPM 上最干净的一次体现。13.9 收尾会把这句话摆进总对照表。</p>
+        </div>
+
+        <h2 id="p2g-force">P2G 散力：粒子应力 → 网格节点内力</h2>
+        <p>$P_p$ 算在粒子上，但 MPM 的力要作用在<b>网格节点</b>上（grid solve 在网格上更新动量，见 <a href="13-2-mpm-cycle.html">13.2</a>）。所以和质量、动量一样，应力产生的内力也要在 P2G 阶段从粒子<b>散布</b>到周围节点。每个粒子 $p$ 对它核支撑覆盖到的节点 $i$ 贡献一份力：</p>
+        <div class="math-block">$$\mathbf f_i \;\mathrel{+}=\; -\,V_p^0\,P_p\,(\nabla w_{ip})\quad\bigl(\text{形如 }-V_p^0\,P_p\,D_m^{-\top}\text{ 的散布}\bigr),$$</div>
+        <p>其中 $V_p^0$ 是这个粒子代表的那一小团材料的 rest 体积，$\nabla w_{ip}$ 是核梯度（决定力怎么按几何权重摊到各节点）。把它和 <a href="../09-fem/9-4-piola-assembly.html">9.4</a> 的 FEM 单元力 $\mathbf f=-V_0\,P\,D_m^{-\top}$ 并排——<b>结构完全同构</b>：都是「rest 体积 × 应力 × 一个由几何定的分配算子」。差别只在那个分配算子：FEM 用 rest 形状的 $D_m^{-\top}$（固定单元的边矩阵逆），MPM 用核梯度 $\nabla w_{ip}$（粒子到当前邻近网格节点的权重梯度）。一个分给固定的几个单元节点，一个散给当前邻近的几个网格节点，但「应力借一个几何算子摊成节点力」这件事一模一样。</p>
+        <div class="callout note">
+          <div class="c-h">$\nabla w_{ip}$ 就是 MPM 版的 $D_m^{-\top}$</div>
+          <p>9.4 里我们点明：$D_m^{-\top}$ 是「rest 形状一次算好的分配矩阵」，告诉应力 $P$ 怎么按单元原始几何摊到各节点。MPM 里这个角色由核梯度 $\nabla w_{ip}$ 接管——它告诉应力该按「粒子离各网格节点多近、核怎么衰减」摊出去。两者都是纯几何量、都把 $P$ 翻译成节点力。看穿这一层，你就明白 P2G 散力不是什么新机制：它是 FEM 单元装配在「无固定网格、改用核权重」设定下的自然变体。所有节点收齐各粒子散来的力，grid solve 就拿这批 $\mathbf f_i$ 去更新网格动量。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">复用 FEM 装配 widget：看 $P$ 怎么摊成净零的节点力</span></div>
+          <div class="lab-body" data-widget="element-assembly"></div>
+          <div class="lab-cap">这是 <a href="../09-fem/9-4-piola-assembly.html">9.4</a> 的 FEM 装配 widget——拖 world 三角形顶点造形变，实时看 $F\to P=\partial\psi/\partial F\to$ 按几何分配到各节点的力箭头。在 MPM 里把心智模型换一下：三个「单元节点」换成粒子核支撑覆盖的<b>网格节点</b>，分配矩阵 $D_m^{-\top}$ 换成核梯度 $\nabla w_{ip}$——但「$F\to P\to$ 节点力、三股相加为零」这条链原样成立。MPM 的 P2G 散力，就是这张装配台搬到背景网格上。</div>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) MPM <b>不存 rest 网格</b>——形变梯度 $F_p$ 作为<b>每个粒子的永久 Lagrangian 状态</b>被携带，每步增量更新 $F_p^{n+1}=(I+\Delta t\,\nabla v_p)F_p^n$（$\nabla v_p=\sum_i v_i(\nabla w_{ip})^\top$ 从网格速度梯度插回，APIC 的 $C_p$ 顺手就给），是乘法累积、跟着粒子一路漂，这是 MPM 擅长巨形变的底层原因。(2) 拿到 $F_p$ 之后，应变能 $\psi(F_p)$ 与第一 Piola 应力 $P_p=\partial\psi/\partial F_p$ <b>整段复用 FEM 篇</b>（<a href="../09-fem/9-2-deformation-gradient.html">9.2</a>/<a href="../09-fem/9-3-strain-energy.html">9.3</a>/<a href="../09-fem/9-4-piola-assembly.html">9.4</a>）——换材料只换 $\psi$，这是「多材料通用」的技术兑现，<b>同本构、异离散</b>。(3) P2G 散力 $\mathbf f_i\mathrel{+}=-V_p^0\,P_p\,\nabla w_{ip}$ 和 FEM 单元力 $-V_0\,P\,D_m^{-\top}$ 完全同构，核梯度 $\nabla w_{ip}$ 就是 MPM 版的分配矩阵 $D_m^{-\top}$。</p>
+        <p>到这里，MPM 一步循环里「怎么算力」彻底接上 FEM 了。但我们一直默认 grid solve 是<b>显式</b>的（直接拿力更新动量）——显式 MPM 步长小、容易炸。下一节我们把镜头转向另一条路：<b>隐式 MPM</b>，它会让全书主线 $\min G(x)$ 在背景网格上原样回归。去 <a href="13-5-implicit-mpm.html">13.5（显式 vs 隐式 MPM：隐式 = 网格上的 min G(x)）</a>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>
