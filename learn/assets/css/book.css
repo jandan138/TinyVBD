@@ -198,7 +198,7 @@ mark { background: color-mix(in srgb, var(--interactive) 22%, transparent); colo
 .bridge p:last-child { margin-bottom: 0; }
 
 /* ---------- 数学块 ---------- */
-.math-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; margin: 1.3em 0; overflow-x: auto; }
+.math-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; margin: 1.3em 0; overflow-x: auto; contain: paint; }
 .katex-display { margin: .4em 0 !important; }
 .katex { font-size: 1.04em; }
 
@@ -208,7 +208,7 @@ mark { background: color-mix(in srgb, var(--interactive) 22%, transparent); colo
 .code .code-h .fn { font-family: var(--mono); font-size: .76rem; color: #b9bdd6; flex: 1; }
 .code .code-h .cp { cursor: pointer; font-size: .72rem; color: #9aa0bf; background: rgba(255,255,255,.06); border: none; border-radius: 5px; padding: 3px 9px; }
 .code .code-h .cp:hover { color: #fff; }
-.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; }
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; contain: paint; }
 .code code { font-family: var(--mono); font-size: .82rem; line-height: 1.6; color: var(--code-ink); white-space: pre; }
 :not(pre) > code { font-family: var(--mono); font-size: .86em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: .5px 5px; color: var(--ink); }
 /* 极简语法高亮 */
@@ -216,7 +216,7 @@ mark { background: color-mix(in srgb, var(--interactive) 22%, transparent); colo
 .tok-com { color: #6b7394; font-style: italic; } .tok-fn { color: #82aaff; } .tok-builtin { color: #ffcb6b; }
 
 /* ---------- 表格 ---------- */
-.article table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.3em 0; font-size: .88rem; }
+.article table { display: block; width: 100%; max-width: 100%; overflow-x: auto; contain: paint; border-collapse: collapse; margin: 1.3em 0; font-size: .88rem; }
 .article th, .article td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
 .article th { background: var(--surface-2); font-weight: 600; }
 .article td code { font-size: .82em; }
