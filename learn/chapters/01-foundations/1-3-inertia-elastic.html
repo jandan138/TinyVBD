@@ -111,7 +111,15 @@
         <div class="math-block">$$\mathbf x^{t+1}=\mathbf x^t+h\mathbf v^t+h^2 M^{-1}\mathbf f^{\text{总}}(\mathbf x^{t+1}).$$</div>
         <p>把总力拆成<b>外力</b>（重力，已知）和<b>内力</b>（弹力，依赖未知的 $\mathbf x^{t+1}$），并把已知的外力那块挪进 $\mathbf y$，就得到 1.2 那个地基方程：</p>
         <div class="math-block">$$M(\mathbf x^{t+1}-\mathbf y)=h^2\,\mathbf f_{\text{内}}(\mathbf x^{t+1}),\qquad \mathbf y=\mathbf x^t+h\mathbf v^t+h^2 M^{-1}\mathbf f_{ext}.$$</div>
-        <p>看清楚 $\mathbf y$ 里那个 $h^2\mathbf f_{ext}$（即 $h^2\mathbf a$、<b>不带 ½</b>）是从哪来的：它来自位置更新那一步用了<b>帧末速度</b> $\mathbf v^{t+1}$（同上一节「先蹬速度、再走位置」那个动作）。<b>这个不带 ½ 的形式不是谁选的，是把隐式欧拉的两条更新式消元后唯一掉出来的结果。</b>它和惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 是同一套数学的两面——惯性项的圆心<b>必须</b>正好落在这个 $\mathbf y$ 上，$\nabla G=0$ 才会精确等价回上面这个方程（1.2 已经验证过这一步）。</p>
+        <p>看清楚 $\mathbf y$ 里那个 $h^2\mathbf f_{ext}$（即 $h^2\mathbf a$、<b>不带 ½</b>）是从哪来的：它来自位置更新那一步用了<b>帧末速度</b> $\mathbf v^{t+1}$（同上一节「先蹬速度、再走位置」那个动作）。<b>这个不带 ½ 的形式不是谁选的，是把隐式欧拉的两条更新式消元后唯一掉出来的结果。</b></p>
+
+        <p>那它和「最小化能量 $G$」又是怎么连上的？这正是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那座桥，这里用三句话把它接回来：</p>
+        <ul>
+          <li><b>$\mathbf y$ 是惯性碗的「碗底」。</b>惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 画出来是一个抛物面<b>碗</b>（回忆 1.2 的 <span class="term">potential-landscape</span>），它的<b>最低点恰好在 $\mathbf x=\mathbf y$ 处</b>——离 $\mathbf y$ 越远，这一项越大。所以「碗底在哪」就等于「$\mathbf y$ 在哪」，两者是同一个点的两种叫法。</li>
+          <li><b>「最小化 $G$」就是「找让梯度为零的点」。</b>一个碗状函数的最低谷，数学上就是它的梯度 $\nabla G=0$ 的地方（坡度变平的点）。所以「求 $\arg\min G$」和「解 $\nabla G=0$」是同一件事。</li>
+          <li><b>而 $\nabla G=0$ 展开，正好就是上面那个隐式欧拉方程。</b>1.2 已经逐项验证过：把 $G=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$ 求一次梯度令其为零，乘开来<b>一字不差</b>就是 $M(\mathbf x-\mathbf y)=h^2\mathbf f_{\text{内}}(\mathbf x)$。</li>
+        </ul>
+        <p>把这三句串起来，关键结论就出来了：<b>「最小化能量 $G$」和「解隐式欧拉方程」是<span class="term-i">同一件事</span>的两种说法——而这个等号能成立，全靠惯性碗的碗底正好钉在这个特定的 $\mathbf y$ 上。</b>换句话说，$\mathbf y$ 不是一个可以随手调准的参数，它是让「能量最小化」和「物理方程」对得上的那颗<b>螺丝</b>。这也顺势点破了下一条：要是把碗底挪到别处（比如带 ½ 的 $\mathbf y_{\text{准}}$），这个等号立刻就断了——解出来的东西不再是隐式欧拉。</p>
 
         <h3 id="reason-breaks">理由二：换成 ½，解出来的就不再是隐式欧拉了</h3>
         <p>于是关键后果来了：如果你把圆心从 $\mathbf y$ 偷偷换成 $\mathbf y_{\text{准}}$（带 ½），那 $\arg\min G$ 解出来的 $\mathbf x^{t+1}$ 就<b>不再满足</b>上面那个隐式欧拉方程了。你得到的是一个「惯性看着更准、但和动力学不自洽」的<b>四不像</b>——它既不是隐式欧拉、也不是辛欧拉、不对应任何一个有稳定性保证的标准格式。</p>
@@ -127,6 +135,37 @@
         <p>最后一条最接地气。TinyVBD <b>确实</b>会修正 $\mathbf y$——但修的根本不是那个 ½。还记得它的 <span class="term">adaptive initialization</span> 吗（下面 <a href="#good-guess">「好初值该放哪」</a> 会细讲）：它根据「这个顶点是<b>自由下落</b>还是被弹力/接触<b>托住</b>」来决定带多少重力。一个被托住的顶点，实际上根本没往下掉，可 $\mathbf y$ 却假设它自由下落——这里的偏差是<b>整整一个 $h^2\mathbf a$</b>（甚至方向都反了），比那半个 $at^2$ 大得多、也要命得多。引擎把有限的工程精力花在这种「会差一个数量级」的修正上，而不是那个「差半截、还会被求解吃掉」的 ½。<b>分得清「哪种偏差值得修」，正是工程品味。</b></p>
 
         <p>一句话收束这个问题：<b>能算更准的 $\mathbf y$，但不该</b>——因为 $\mathbf y$ 的身份是「隐式欧拉惯性碗的圆心」，由离散方程唯一确定；换成带 ½ 的精确位移，会让解偏离隐式欧拉、丢掉无条件稳定，而换来的精度又会被求解抹平。它那个「差一点的过冲」不是缺陷，是隐式欧拉这台机器要求的<b>正确进料</b>。</p>
+
+        <h3 id="trapezoidal">进阶：认真用 ½ 推一套新格式呢？——你会重新发明 trapezoidal</h3>
+        <p>上面说的是「<b>在隐式欧拉里硬塞 ½</b>」不行。但还有个更聪明的想法值得认真对待：<b>那我干脆不硬塞，而是从头推一套自洽、且真用上 ½ 的新格式，行不行？</b>——<b>行。而且你会独立地重新发明一个真实存在、还更精确的经典格式。</b>这条思路完全成立，值得讲清楚它通向哪、又为什么物理引擎偏不走。</p>
+
+        <p>关键是认出 $\tfrac12at^2$ 的本质：它等于<b>用整段的「平均速度」走一帧</b>。因为</p>
+        <div class="math-block">$$\frac{\mathbf v^t+\mathbf v^{t+1}}{2}=\mathbf v^t+\tfrac12 h\mathbf a\ \Rightarrow\ h\cdot\frac{\mathbf v^t+\mathbf v^{t+1}}{2}=h\mathbf v^t+\tfrac12 h^2\mathbf a,$$</div>
+        <p>那个 ½ 自然就冒出来了。如果你<b>整套</b>都贯彻「取平均」的精神——位置用平均速度走、速度用<b>两端力的平均</b>来更新：</p>
+        <div class="math-block">$$\mathbf v^{t+1}=\mathbf v^t+h\cdot\frac{\mathbf f(\mathbf x^t)+\mathbf f(\mathbf x^{t+1})}{2m},\qquad \mathbf x^{t+1}=\mathbf x^t+h\cdot\frac{\mathbf v^t+\mathbf v^{t+1}}{2},$$</div>
+        <p>就得到一套<b>完全自洽、真实存在、而且二阶精度</b>（比隐式欧拉的一阶更准）的格式——它叫 <span class="term">trapezoidal rule</span>（梯形法则，又名 average constant acceleration）。<b>所以你的直觉是对的：用 ½ 真能推出一套更准的新积分器，你不是在瞎想。</b></p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> trapezoidal 和隐式欧拉，是同一个旋钮 γ 的两端</div>
+          <p>这两套格式不是井水不犯河水，而是同一个家族——<span class="term">Newmark-β</span> 方法——里的两个成员，由一个参数 $\gamma$ 连续地串起来：</p>
+          <div class="math-block">$$\gamma=\tfrac12\ (\beta=\tfrac14):\ \text{trapezoidal（二阶，无阻尼）}\quad\longleftrightarrow\quad \gamma=1\ (\beta=\tfrac12):\ \text{backward Euler（一阶，强阻尼）}.$$</div>
+          <p>把 $\gamma$ 从 $\tfrac12$ 一路调到 $1$，格式就从「精确但守恒」<b>连续地</b>滑向「偏软但耗散」。GAMES103 里你大概率默认用过隐式（backward）欧拉，没意识到它只是这把旋钮拧到头的那一端；trapezoidal 是另一端。中间的每一档，都是精度与阻尼之间的一个折中。下面的 widget 就让你亲手拧这把 $\gamma$ 旋钮。</p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">γ 旋钮：从 trapezoidal 的振铃，到隐式欧拉的阻尼</span></div>
+          <div class="lab-body" data-widget="newmark-ringing"></div>
+          <div class="lab-cap">同一根弹簧，把 γ 从 ½（trapezoidal）拧到 1（backward Euler）：γ=½ 时振幅永不衰减（一直抖 = 振铃），往 1 拧振幅被越压越小。这正是 <a href="../01-foundations/1-1-time-integration.html">1.1</a> 那个「放大倍数 G」的现场——trapezoidal 的 G=1（守恒），backward Euler 的 G&lt;1（压高频）。</div>
+        </div>
+
+        <p id="why-not-trapezoidal" style="margin-top:1.4em"><b>那为什么物理引擎偏不用这个「更准」的 trapezoidal？</b></p>
+        <p>这才是真正值钱的结论：<b>更准 ≠ 更适合做实时仿真。</b>trapezoidal 二阶、能量守恒，听着碾压一阶的隐式欧拉，但它有两处对实时物理（尤其建在变分结构上的 VBD）很要命的代价：</p>
+        <ul>
+          <li><b>没有数值阻尼 → 会「振铃」。</b>隐式欧拉那个被人嫌弃的「偷吃能量」（<a href="../01-foundations/1-1-time-integration.html">1.1</a> 的数值阻尼），在做<b>稳定的实时仿真</b>时反而是<b>优点</b>：它把高频抖动悄悄压下去。trapezoidal 无阻尼（$G=1$），刚度一高，高频模态<b>不衰减</b>——布料/弹簧会持续高频嗡嗡振，数值上还容易因为这些压不住的高频而「看着要炸」。这是 trapezoidal 在刚度差几个数量级的系统里<b>最主要的毛病</b>（上面 widget 把 γ 留在 ½ 就能看到那条永不衰减的振幅）。</li>
+          <li><b>稳定性没那么「皮实」。</b>两者在线性问题上都无条件稳定，但隐式欧拉的稳定是<b>带强耗散</b>的那种「怎么都不炸」；trapezoidal 在<b>非线性 + 大步长 + 接触/碰撞</b>这种真实场景里远不如它宽容——而实时物理恰恰全是这种极端情况。</li>
+          <li><b>（对 VBD 尤其关键）变分锚点的「良态」要重新论证。</b>隐式欧拉对应的 $G$，惯性项 Hessian 是 $\frac{1}{h^2}M$，<b>恒正定</b>（这正是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 末尾那个「惯性项保证问题不病态」、也是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里 VBD 不做 SPD 投影还稳的根基）。trapezoidal 对应的最小化问题，惯性项的系数与结构都变了，它能不能同样干净地撑起 VBD 的局部下降、保住那个恒正定的锚，是要<b>另行论证</b>的——不是白送。</li>
+        </ul>
+        <p>所以一句话：<b>用 ½ 确实能推出一套更准的格式（trapezoidal / Newmark），但「更准」换来的是振铃、稳定性变娇气、变分良态要重新论证。</b>对实时、强非线性、要皮实的物理引擎，隐式欧拉那个「一阶、但无条件稳定、惯性碗恒正定、还自带阻尼压高频」的组合，是个<b>更划算的工程选择</b>。不是 ½ 不能用，是<b>在这个领域，一阶隐式欧拉的稳健性比二阶 trapezoidal 的精度更值钱</b>。</p>
 
 
         <div class="bridge g103">
@@ -238,6 +277,7 @@ strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;</code></pre></d
   <script src="../../assets/js/widgets/chebyshev.js"></script>
   <script src="../../assets/js/widgets/strand-lab.js"></script>
   <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
   <script src="../../assets/js/book.js"></script>
 </body>
 </html>
