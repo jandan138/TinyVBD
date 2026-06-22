@@ -92,6 +92,43 @@
         </table>
         <p>把 $\mathbf y$ 当成「物体真会走到那」，是初学最常见的误读。它更像赛跑的<b>发令枪位置</b>，给求解一个靠谱的起跑点——不是终点线。终点线在哪，得等惯性和弹性这场拔河分出胜负（下一节就量化这场拔河）。</p>
 
+        <h2 id="why-not-half">能不能用更准的 ½ 公式？——能，但不该</h2>
+        <p>读到这儿，一个很聪明的反问会冒出来：<b>既然 $h^2\mathbf a$ 这个预测总是差一点（哪怕 $h$ 再小也差那半个 $at^2$），为什么不干脆把 $\mathbf y$ 算得更准一点？</b>比如直接用高中的精确位移</p>
+        <div class="math-block">$$\mathbf y_{\text{准}}=\mathbf x^t+h\mathbf v^t+\tfrac12 h^2\mathbf a_{ext},$$</div>
+        <p>或者你可能想到的另一种写法——用<b>帧末</b>速度倒着减半个 $at^2$：$\ \mathbf y=\mathbf v^{t+1}h-\tfrac12 h^2\mathbf a$。这个问题问得非常好，值得正面回答。先消掉一个小误会，再讲清「为什么不该」。</p>
+
+        <div class="callout note">
+          <div class="c-h">先点破：你那两个公式其实是同一个</div>
+          <p>「帧末速度减半个 $at^2$」展开就回到「帧初速度加半个 $at^2$」——因为 $\mathbf v^{t+1}=\mathbf v^t+h\mathbf a$，代进去：$\ \mathbf v^{t+1}h-\tfrac12h^2\mathbf a=(\mathbf v^t+h\mathbf a)h-\tfrac12h^2\mathbf a=\mathbf v^t h+\tfrac12h^2\mathbf a$。两者<b>完全相等</b>，都是那个带 ½ 的精确位移。你其实是从两个角度写出了同一件事——本质上就是「用整段的<b>平均</b>速度 $\tfrac{\mathbf v^t+\mathbf v^{t+1}}{2}$ 走一帧」。所以问题收敛成一句：<b>为什么 $\mathbf y$ 偏要用「帧末满速」那个过冲值，而不用更准的平均速度？</b></p>
+        </div>
+
+        <p>答案有四条，从「最根本」到「最实际」：</p>
+
+        <h3 id="reason-derived">理由一：y 不是随便选的，它是隐式欧拉方程「反推」出来的</h3>
+        <p>这是最关键的一条。$\mathbf y$ 不是一个独立的「预测器」让你自由挑公式——它是<b>隐式欧拉离散方程的一部分，形状被方程钉死</b>。把 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的来历快速重走一遍：隐式（后向）欧拉这样推进一步——</p>
+        <div class="math-block">$$\mathbf v^{t+1}=\mathbf v^t+h\,M^{-1}\mathbf f^{\text{总}}(\mathbf x^{t+1}),\qquad \mathbf x^{t+1}=\mathbf x^t+h\,\mathbf v^{t+1}.$$</div>
+        <p>把速度消掉（第一式代进第二式）：</p>
+        <div class="math-block">$$\mathbf x^{t+1}=\mathbf x^t+h\mathbf v^t+h^2 M^{-1}\mathbf f^{\text{总}}(\mathbf x^{t+1}).$$</div>
+        <p>把总力拆成<b>外力</b>（重力，已知）和<b>内力</b>（弹力，依赖未知的 $\mathbf x^{t+1}$），并把已知的外力那块挪进 $\mathbf y$，就得到 1.2 那个地基方程：</p>
+        <div class="math-block">$$M(\mathbf x^{t+1}-\mathbf y)=h^2\,\mathbf f_{\text{内}}(\mathbf x^{t+1}),\qquad \mathbf y=\mathbf x^t+h\mathbf v^t+h^2 M^{-1}\mathbf f_{ext}.$$</div>
+        <p>看清楚 $\mathbf y$ 里那个 $h^2\mathbf f_{ext}$（即 $h^2\mathbf a$、<b>不带 ½</b>）是从哪来的：它来自位置更新那一步用了<b>帧末速度</b> $\mathbf v^{t+1}$（同上一节「先蹬速度、再走位置」那个动作）。<b>这个不带 ½ 的形式不是谁选的，是把隐式欧拉的两条更新式消元后唯一掉出来的结果。</b>它和惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 是同一套数学的两面——惯性项的圆心<b>必须</b>正好落在这个 $\mathbf y$ 上，$\nabla G=0$ 才会精确等价回上面这个方程（1.2 已经验证过这一步）。</p>
+
+        <h3 id="reason-breaks">理由二：换成 ½，解出来的就不再是隐式欧拉了</h3>
+        <p>于是关键后果来了：如果你把圆心从 $\mathbf y$ 偷偷换成 $\mathbf y_{\text{准}}$（带 ½），那 $\arg\min G$ 解出来的 $\mathbf x^{t+1}$ 就<b>不再满足</b>上面那个隐式欧拉方程了。你得到的是一个「惯性看着更准、但和动力学不自洽」的<b>四不像</b>——它既不是隐式欧拉、也不是辛欧拉、不对应任何一个有稳定性保证的标准格式。</p>
+        <div class="callout warn">
+          <div class="c-h">「更准的一帧预测」≠「更准的仿真」</div>
+          <p>这是最反直觉的一点：让 $\mathbf y$ 更贴近「这一帧真实漂到哪」，<b>并不会</b>让整条仿真更准——反而会破坏它。因为决定仿真对不对的，是<b>整个离散格式是否自洽</b>（每一步都严格是隐式欧拉），而不是某个中间量 $\mathbf y$ 单独看准不准。$\mathbf y$ 的职责是「当隐式欧拉那口惯性碗的圆心」，这个位置由方程唯一确定；用一个「物理上更准」的值去顶替它，等于把一台精密机器的某个齿轮换成一个「看起来更圆但尺寸不对」的齿轮——单看那个齿轮漂亮了，整台机器却卡住了。隐式欧拉本身的精度（一阶）和它换来的<b>无条件稳定</b>，是一个打包的整体（见 <a href="../01-foundations/1-1-time-integration.html">1.1</a>），不能靠单独修 $\mathbf y$ 来「升级」。</p>
+        </div>
+
+        <h3 id="reason-washed">理由三：就算修了，那点精度也会被求解抹平</h3>
+        <p>退一步说，哪怕你不在乎格式自洽、硬要那半个 $at^2$ 的精度——它也留不下来。回忆上一节反复强调的：$\mathbf y$ <b>只是优化的发令枪位置</b>，不是终点。真正的 $\mathbf x^{t+1}$ 还要被弹力、接触这场拔河从 $\mathbf y$ 拽开，再由隐式求解（牛顿迭代）把整条轨迹收敛回自洽的位置。$\mathbf y$ 多准 1 毫米，迭代第一步之后就被 $G$ 的梯度接管了——省不下几次迭代，对最终落点的影响小到看不见。<b>为一个「反正会被求解吃掉」的 ½ 去破坏格式自洽，是赔本买卖。</b></p>
+
+        <h3 id="reason-adaptive">理由四：真要修 y，工程上修的是「会差很多」的那部分，不是 ½</h3>
+        <p>最后一条最接地气。TinyVBD <b>确实</b>会修正 $\mathbf y$——但修的根本不是那个 ½。还记得它的 <span class="term">adaptive initialization</span> 吗（下面 <a href="#good-guess">「好初值该放哪」</a> 会细讲）：它根据「这个顶点是<b>自由下落</b>还是被弹力/接触<b>托住</b>」来决定带多少重力。一个被托住的顶点，实际上根本没往下掉，可 $\mathbf y$ 却假设它自由下落——这里的偏差是<b>整整一个 $h^2\mathbf a$</b>（甚至方向都反了），比那半个 $at^2$ 大得多、也要命得多。引擎把有限的工程精力花在这种「会差一个数量级」的修正上，而不是那个「差半截、还会被求解吃掉」的 ½。<b>分得清「哪种偏差值得修」，正是工程品味。</b></p>
+
+        <p>一句话收束这个问题：<b>能算更准的 $\mathbf y$，但不该</b>——因为 $\mathbf y$ 的身份是「隐式欧拉惯性碗的圆心」，由离散方程唯一确定；换成带 ½ 的精确位移，会让解偏离隐式欧拉、丢掉无条件稳定，而换来的精度又会被求解抹平。它那个「差一点的过冲」不是缺陷，是隐式欧拉这台机器要求的<b>正确进料</b>。</p>
+
+
         <div class="bridge g103">
           <div class="c-h"><span class="tag">从 GAMES103 看</span> y 就是你写过的「显式预测步」</div>
           <p>GAMES103 写半隐式/隐式积分时，你十有八九先算过一个 $\mathbf x^*=\mathbf x+h\mathbf v+h^2\mathbf f_{ext}/m$ 当起点，再去修正。那个 $\mathbf x^*$ 和这里的 $\mathbf y$ 是<b>同一个东西</b>。区别只在视角：当年你把它当「迭代的初值」，现在我们认出它其实是惯性项那个抛物面碗的<b>圆心</b>——是被优化目标记在案的「锚点」，不只是一个起跑线。</p>
