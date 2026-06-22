@@ -216,7 +216,7 @@ mark { background: color-mix(in srgb, var(--interactive) 22%, transparent); colo
 .tok-com { color: #6b7394; font-style: italic; } .tok-fn { color: #82aaff; } .tok-builtin { color: #ffcb6b; }
 
 /* ---------- 表格 ---------- */
-.article table { width: 100%; border-collapse: collapse; margin: 1.3em 0; font-size: .88rem; }
+.article table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.3em 0; font-size: .88rem; }
 .article th, .article td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
 .article th { background: var(--surface-2); font-weight: 600; }
 .article td code { font-size: .82em; }

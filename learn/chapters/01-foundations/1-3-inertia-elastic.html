@@ -35,7 +35,62 @@
         <h2 id="what-is-y">惯性项里的 y 到底是什么</h2>
         <p>$\mathbf y$ 叫<span class="term">predicted position</span>（预测/惯性位置）：如果从这一刻起，把弹簧全拆了、只剩外力（重力）作用，质点纯靠惯性会漂到哪里。它的表达式是</p>
         <div class="math-block">$$\mathbf y=\mathbf x^t+h\,\mathbf v^t+h^2\,\mathbf a_{ext},$$</div>
-        <p>三项的意思一目了然：从当前位置 $\mathbf x^t$ 出发，沿当前速度 $\mathbf v^t$ 漂 $h$ 这么久，再加上重力等外部加速度 $\mathbf a_{ext}$ 在这段时间里攒下的位移 $h^2\mathbf a_{ext}$。这正是显式欧拉对「无内力质点」给出的下一步——也是这根头发「如果完全松掉」会去的地方。惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 就是在惩罚「偏离这个自然漂移」，物理上等价于动量守恒的诉求。</p>
+        <p>三项的意思一目了然：从当前位置 $\mathbf x^t$ 出发，沿当前速度 $\mathbf v^t$ 漂 $h$ 这么久，再加上重力等外部加速度 $\mathbf a_{ext}$ 在这段时间里攒下的位移 $h^2\mathbf a_{ext}$。这正是「无内力质点」按一步显式积分给出的预测落点——也是这根头发「如果完全松掉」会去的地方（下面一小节会拆开看这一步具体怎么积、那个 $h^2$ 为什么不带 ½）。惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$ 就是在惩罚「偏离这个自然漂移」，物理上等价于动量守恒的诉求。</p>
+
+        <h2 id="why-no-half">等一下——高中那个 ½ 去哪了？</h2>
+        <p>认真的读者读到这儿一定会皱眉：高中讲匀加速直线运动，位移明明白白写着一个 $\tfrac12$——</p>
+        <div class="math-block">$$s=v_0t+\tfrac{1}{2}at^2.$$</div>
+        <p>可这里的 $\mathbf y=\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}$，加速度那一项是<b>整整一个</b> $h^2\mathbf a$，<b>没有 ½</b>。是教程抄错了吗？没有。这个「凭空多出一倍」的差别，恰恰是从「高中的连续世界」迈进「仿真的离散世界」时，第一道、也是最值得想透的坎。下面我们一步步把它讲穿。</p>
+
+        <h3 id="frame-by-frame">先建立一个画面：仿真是「跳帧」的，不是「连续滑动」的</h3>
+        <p>高中那条 $s=v_0t+\tfrac12at^2$ 描述的是一段<b>连续、平滑</b>的运动：在 $0$ 到 $t$ 这段时间里，速度时时刻刻都在被加速度推着变大，位移是把这条不断变化的速度<b>积分</b>出来的——你可以想成「速度-时间图像下面那块面积」，是一个光滑的三角形+矩形。</p>
+        <p>但电脑做不到「时时刻刻」。它像老式电影胶片，只在 $t,\ t{+}h,\ t{+}2h,\dots$ 这些<b>离散的瞬间</b>拍快照，每两张之间的 $h$（这里 $h=\tfrac1{60}$ 秒）是一片<b>空白</b>。仿真要做的，是只凭<b>当前这一张快照</b>（位置 $\mathbf x^t$、速度 $\mathbf v^t$），猜出<b>下一张</b>大概长什么样。它没法把那段连续的速度变化积分出来——它只能用「当前已知的几个量，乘上 $h$」硬推一步。<b>怎么推、用哪一刻的速度去推，就决定了那个 $\tfrac12$ 出不出现。</b></p>
+
+        <h3 id="two-step">把一步拆成两小动作：先蹬速度，再走位置</h3>
+        <p>TinyVBD（以及绝大多数物理引擎）推一步用的是 <span class="term">symplectic Euler</span>（半隐式欧拉）。它把「走一帧」拆成<b>先后两个动作</b>：</p>
+        <div class="math-block">$$\textcolor{#0d9488}{\text{① 先更新速度：}}\ \mathbf v^{t+1}=\mathbf v^t+h\,\mathbf a_{ext}\qquad\textcolor{#0d9488}{\text{② 再用新速度走位置：}}\ \mathbf x^{t+1}=\mathbf x^t+h\,\mathbf v^{t+1}.$$</div>
+        <p>关键全在第②步用了<b>哪个速度</b>。它用的是<b>第①步刚蹬完、已经加上重力的新速度</b> $\mathbf v^{t+1}$，而不是这一帧开头的旧速度 $\mathbf v^t$。把①代进②展开：</p>
+        <div class="math-block">$$\mathbf x^{t+1}=\mathbf x^t+h\,\underbrace{(\mathbf v^t+h\,\mathbf a_{ext})}_{\mathbf v^{t+1}}=\mathbf x^t+h\mathbf v^t+\underbrace{h\cdot h\,\mathbf a_{ext}}_{=\,h^2\mathbf a_{ext}}.$$</div>
+        <p>看清楚那一项的来历：是 $h$（走位置的时长）乘上「整整一个 $h\mathbf a$」（这一帧速度涨的量），$h\times h\mathbf a=h^2\mathbf a$，<b>一个 ½ 都没掺</b>。所以 $\mathbf y$ 里那个不带 ½ 的 $h^2\mathbf a$，不是谁把 ½ 删了，而是<b>「先把速度一次蹬满、再拿这个满速走整段」这种离散顺序，本来就给不出 ½</b>。它甚至比真实运动多走了一点——相当于「这一帧一开始就假设你已经有了帧末的速度」。</p>
+
+        <div class="callout note">
+          <div class="c-h">一句话记牢这个顺序的差别</div>
+          <p>高中的 $\tfrac12at^2$ 用的是<b>整段时间里速度的「平均值」</b>（从 $v_0$ 匀速涨到 $v_0+at$，平均多走了 $\tfrac12at^2$）。而 symplectic Euler 第②步直接用<b>帧末的「最大速度」</b>走完整帧，自然比用平均值多走——多走的那部分，正好就是被省掉的 $\tfrac12$。<b>用平均速度 → 有 ½（高中、连续真值）；用帧末速度 → 没 ½（离散预测 $\mathbf y$）。</b></p>
+        </div>
+
+        <h3 id="worked-drop">代个真数字：松手让一个球自由下落一帧</h3>
+        <p>别停在符号上。设一个球从静止松手（$\mathbf v^t=0$），只受重力 $a=g\approx9.8\,\mathrm{m/s^2}$，一帧 $h=\tfrac1{60}\,\mathrm{s}$。三种算法各说这一帧球往下掉多少：</p>
+        <table>
+          <thead><tr><th>谁来算</th><th>位移公式</th><th>这一帧掉了多少</th></tr></thead>
+          <tbody>
+            <tr><td>高中（连续精确）</td><td>$\tfrac12 g h^2$</td><td>$\tfrac12\times9.8\times(\tfrac1{60})^2\approx\mathbf{1.36\ mm}$</td></tr>
+            <tr><td>$\mathbf y$ 的预测（离散）</td><td>$g h^2$</td><td>$9.8\times(\tfrac1{60})^2\approx\mathbf{2.72\ mm}$</td></tr>
+            <tr><td>两者之差</td><td>$\tfrac12 g h^2$</td><td>$\approx\mathbf{1.36\ mm}$（预测多掉了，约 2×）</td></tr>
+          </tbody>
+        </table>
+        <p>读出来：单看加速度这一项，$\mathbf y$ 的预测（2.72 mm）几乎是连续真值（1.36 mm）的<b>两倍</b>——因为它用「帧末满速」走完整帧，而真实运动这一帧速度是从 0 慢慢涨上来的。听起来错得离谱？但别忘了量级：这是<b>一帧 1/60 秒</b>里的事，绝对偏差才 1 毫米出头。而且——这正是下一个要点——<b>这点偏差根本不会留在最终结果里</b>。</p>
+
+        <div class="callout note">
+          <div class="c-h">那个 ½ 不是消失了，是变成了一帧的 O(h²) 离散误差——而且会被求解吃掉</div>
+          <p>把连续精确解在一帧内做泰勒展开，$\tfrac12 h^2\mathbf a$ 这块就是离散预测和连续真值之间差的那一截，量级 $O(h^2)$。$h$ 越小它缩得越快（$h$ 减半，误差变 $\tfrac14$），$h=\tfrac1{60}$ 时已小到 1 毫米级。但真正让你可以放心的，是另一件事：<b>$\mathbf y$ 从来不是这一帧的最终答案。</b>它只是惯性碗的圆心、优化的<b>锚点</b>。真正的 $\mathbf x^{t+1}$ 还要被弹性能、接触这场拔河从 $\mathbf y$ 拽开，再由隐式求解把整条轨迹收敛回物理上自洽的位置。$\mathbf y$ 多掉的那 1 毫米，只是给优化一个「大致往哪猜」的起点，不是板上钉钉的落点。<b>拿一个「一步预测的起点」去较真「连续精确的位移公式」，本就是在比两样不同的东西。</b></p>
+        </div>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 「先更新谁」就是 forward / symplectic 的分水岭</div>
+          <p>你也许会追问：凭什么先更新速度？换个顺序行不行？行，而且换了就是<b>另一种积分法</b>——这正是 <a href="../01-foundations/1-1-time-integration.html">1.1</a> 讲的那条分水岭。第②步要是改用<b>帧初的旧速度</b> $\mathbf v^t$ 走位置（位置、速度都只看「这一刻」），就是 <span class="term-i">forward（显式）Euler</span>，它的放大倍数恒大于 1，迟早炸；用<b>帧末新速度</b> $\mathbf v^{t+1}$ 走，就是这里的 <span class="term-i">symplectic Euler</span>，能量守得住、稳得多。所以「那个 ½ 在不在」表面是个代数细节，骨子里是<b>你选了哪种时间积分</b>——而选择的后果（稳定性），1.1 已经用放大倍数算给你看过了。</p>
+        </div>
+
+        <p>最后把三样东西并排，一次分清，省得日后再混：</p>
+        <table>
+          <thead><tr><th></th><th>高中 $\tfrac12at^2$</th><th>预测位置 $\mathbf y$</th></tr></thead>
+          <tbody>
+            <tr><td>描述的对象</td><td>单个自由质点的真实运动</td><td>「如果此刻撒手」会漂去的<b>预测落点</b></td></tr>
+            <tr><td>时间</td><td>连续，整段 $t$ 精确积分</td><td>离散，只往前看<b>一帧</b> $h$</td></tr>
+            <tr><td>有没有内力</td><td>只有那个匀定加速度</td><td>假设弹簧/约束全松掉，只剩外力</td></tr>
+            <tr><td>是不是最终答案</td><td>是（在它的假设下）</td><td><b>不是</b>，只是优化的锚点，还要被拔河拽走</td></tr>
+          </tbody>
+        </table>
+        <p>把 $\mathbf y$ 当成「物体真会走到那」，是初学最常见的误读。它更像赛跑的<b>发令枪位置</b>，给求解一个靠谱的起跑点——不是终点线。终点线在哪，得等惯性和弹性这场拔河分出胜负（下一节就量化这场拔河）。</p>
 
         <div class="bridge g103">
           <div class="c-h"><span class="tag">从 GAMES103 看</span> y 就是你写过的「显式预测步」</div>
@@ -43,11 +98,33 @@
         </div>
 
         <h3 id="forwardstep-code">代码里的 y：forwardStep() 那两行</h3>
-        <p>这不是黑板上的符号，TinyVBD 的 <code>forwardStep()</code> 逐字算了它。先给速度加上重力冲量、把 pin 住的 0 号顶点速度清零，然后：</p>
-        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp</span><button class="cp">复制</button></div><pre><code>strand.mVelocity.colwise() += params.dt * params.gravity;
+        <p>这不是黑板上的符号，TinyVBD 的 <code>forwardStep()</code> 逐字算了它。下面就是那几行。<b>别被 C++ / Eigen 的写法吓到</b>——这一篇还在数学地基，你不需要会写 Eigen，只要能把每一行对回上面的公式即可。我给每行都加了中文注释，紧接着再用一张小表把出现的名字逐个交代清楚。</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · forwardStep()</span><button class="cp">复制</button></div><pre><code>// ① 给每个顶点的速度都加上这一帧的重力冲量：v ← v + h·g
+strand.mVelocity.colwise() += params.dt * params.gravity;
+// ② 把 0 号顶点（被钉住的发根）速度清零，让它不动
 strand.mVelocity.col(0).setZero();
+// ③ 用「刚更新过的速度」走一步，得到预测位置 y，存进 inertia
 strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;</code></pre></div>
-        <p>注意第三行 <code>inertia = mVertPos + mVelocity*dt</code>：因为上一行刚把重力 $h\mathbf a_{ext}$ 加进了 <code>mVelocity</code>，这里乘以 <code>dt</code> 一并展开，正好就是 $\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}=\mathbf y$。代码把它存成成员 <code>strand.inertia</code>，后面 <a href="../04-code/4-3-solve.html">4.3</a> 的 <code>solve()</code> 里那句 <code>f = m*(inertia - x)*dtSqrReciprocal</code> 算的就是惯性项的负梯度。所以 <code>strand.inertia</code> 这个变量，名副其实地装着我们的 $\mathbf y$。</p>
+
+        <div class="callout note">
+          <div class="c-h">先认几个名字（这些就是上面三行里出现的全部「行话」）</div>
+          <table>
+            <thead><tr><th>代码里的名字</th><th>它是什么</th><th>对应数学</th></tr></thead>
+            <tbody>
+              <tr><td><code>strand</code></td><td>「这根头发」整个对象，装着它的全部状态（所有顶点的位置、速度等）。<code>strand.xxx</code> 就是取它的某个字段。</td><td>整根 strand</td></tr>
+              <tr><td><code>strand.mVelocity</code></td><td>所有顶点的<b>速度</b>，是一个 $3\times N$ 矩阵——<b>每一列是一个顶点</b>的速度 $(v_x,v_y,v_z)$。</td><td>$\mathbf v$（全体顶点）</td></tr>
+              <tr><td><code>strand.mVertPos</code></td><td>所有顶点的<b>当前位置</b>，同样 $3\times N$、每列一个顶点。</td><td>$\mathbf x^t$</td></tr>
+              <tr><td><code>strand.inertia</code></td><td>算出来的<b>预测位置</b>存这里。它就是本节的主角 $\mathbf y$。</td><td>$\mathbf y$</td></tr>
+              <tr><td><code>params</code></td><td>一包<b>仿真参数</b>。<code>params.dt</code> 是时间步 $h$，<code>params.gravity</code> 是重力加速度 $\mathbf g$。</td><td>$h$、$\mathbf g$</td></tr>
+              <tr><td><code>.colwise()</code></td><td>Eigen 的写法，意思是「<b>对矩阵的每一列都做同样的事</b>」。这里就是「给每个顶点的速度都加同一个重力冲量」，省掉手写一个 for 循环。</td><td>「逐顶点」</td></tr>
+              <tr><td><code>.col(0)</code></td><td>取矩阵的<b>第 0 列</b>，也就是<b>第 0 个顶点</b>。<code>.col(i)</code> = 第 i 个顶点。</td><td>第 0 个顶点</td></tr>
+              <tr><td><code>.setZero()</code></td><td>把它<b>清成零</b>。<code>mVelocity.col(0).setZero()</code> = 把第 0 个顶点的速度归零。</td><td>$\mathbf v_0\leftarrow 0$</td></tr>
+            </tbody>
+          </table>
+          <p>这些名字来自 TinyVBD 的数据结构 <span class="term">Strand.h</span> / <span class="term">Types.h</span>，<a href="../04-code/4-1-data-structures.html">4.1</a> 会把它们一次讲全。<b>这里你只需记住：每个变量是 $3\times N$ 矩阵、一列一个顶点，<code>strand.</code> 是取字段，<code>.col(i)</code> 是取第 i 个顶点。</b></p>
+        </div>
+
+        <p>把三行对回公式就清楚了：①②先把速度更新好（加重力、钉住发根），③那句 <code>inertia = mVertPos + mVelocity*dt</code> 用的正是<b>刚加完重力的新速度</b>——这恰好就是 <a href="#two-step">上面</a>讲的「先蹬速度、再走位置」的 symplectic Euler 第②步，展开来 $\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}=\mathbf y$（那个不带 ½ 的 $h^2$ 就是这么来的）。算出的 $\mathbf y$ 被存进成员 <code>strand.inertia</code>；后面 <a href="../04-code/4-3-solve.html">4.3</a> 的 <code>solve()</code> 里那句 <code>f = m*(inertia - x)*dtSqrReciprocal</code> 算的就是惯性项的负梯度。所以 <code>strand.inertia</code> 这个变量，名副其实地装着我们的 $\mathbf y$。</p>
 
         <h2 id="coefficient">系数 m/h²：谁把碗压得更陡</h2>
         <p>把惯性项对位置求两次导，它的 Hessian 是 $\frac{m}{h^2}\mathbf I$——一个各向同性、恒正定的碗，陡峭程度由标量 $\frac{m}{h^2}$ 决定。这个系数是整场拔河的胜负手：</p>

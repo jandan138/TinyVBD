@@ -154,17 +154,30 @@
   }
 
   /* ---------- 代码：复制 + 极简高亮 ---------- */
-  const KW = /\b(def|class|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|import|from|as|with|try|except|finally|raise|lambda|yield|async|await|self|export|const|let|var|function|new|struct|void|int|float|bool|auto|size_t|namespace|using|typedef|template|public|private|virtual|inline|switch|case|break|continue)\b/g;
-  const BUILTIN = /\b(np|torch|print|len|range|list|dict|str|enumerate|zip|super|deque|dataclass|std|Eigen|Vec3|Mat3|Vec2I|cout|push_back|assert)\b/g;
+  const KW_SET = new Set("def class return if elif else for while in not and or is None True False import from as with try except finally raise lambda yield async await self export const let var function new struct void int float bool auto size_t namespace using typedef template public private virtual inline switch case break continue".split(" "));
+  const BUILTIN_SET = new Set("np torch print len range list dict str enumerate zip super deque dataclass std Eigen Vec3 Mat3 Vec2I cout push_back assert".split(" "));
   function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  /* 单趟 tokenizer：逐块切出 数字 / 标识符(关键字·builtin) / 普通文本，
+     每块只 escape 一次、只包一次 <span>——绝不在已生成的标记串上再跑正则，
+     从根上杜绝「class 关键字正则扫到 span 属性名」那类自我污染。 */
   function hlPlain(text, lang) {
-    let s = escapeHtml(text);
-    s = s.replace(/\b(\d+\.?\d*[ef]?\d*)\b/g, '<span class="tok-num">$1</span>');
-    if (lang !== "text") {
-      s = s.replace(KW, '<span class="tok-kw">$1</span>');
-      s = s.replace(BUILTIN, '<span class="tok-builtin">$1</span>');
+    // 数字（含 1.f / 2e5 之类）或 标识符词
+    const re = /(\d+\.?\d*[ef]?\d*)|([A-Za-z_]\w*)/g;
+    let out = "", last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      out += escapeHtml(text.slice(last, m.index));
+      if (m[1]) {
+        out += `<span class="tok-num">${m[1]}</span>`;            // 数字：纯 ASCII，无需 escape
+      } else {
+        const w = m[2];
+        if (lang !== "text" && KW_SET.has(w)) out += `<span class="tok-kw">${w}</span>`;
+        else if (lang !== "text" && BUILTIN_SET.has(w)) out += `<span class="tok-builtin">${w}</span>`;
+        else out += escapeHtml(w);
+      }
+      last = re.lastIndex;
     }
-    return s;
+    out += escapeHtml(text.slice(last));
+    return out;
   }
   /* 单遍 tokenizer：先把代码切成 注释 / 字符串 / 普通文本 三类。 */
   function highlight(raw, lang) {

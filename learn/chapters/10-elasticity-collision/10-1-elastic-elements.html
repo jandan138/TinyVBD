@@ -64,6 +64,29 @@ force = -(P_col0 * df0_dx + P_col1 * df1_dx)
 s_clamp = wp.max(0.0, s)
 hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code></pre></div>
 
+        <div class="callout note">
+          <div class="c-h">代码里那些中间变量是什么（别被一堆短名字绊住）</div>
+          <p>上面为了贴近真实 kernel 保留了一些<b>实现用的中间量</b>，它们大多是「把张量公式拆成标量/向量好让 GPU 算」的产物。读的时候不用记住每一个，认得下面这几类就够了：</p>
+          <table>
+            <thead><tr><th>代码里的名字</th><th>它是什么</th><th>对应数学</th></tr></thead>
+            <tbody>
+              <tr><td><code>x01</code>, <code>x02</code></td><td>三角形的两条<b>边向量</b>（顶点1−顶点0、顶点2−顶点0），是当前形状的「世界坐标边」。</td><td>$\mathbf x_1-\mathbf x_0,\ \mathbf x_2-\mathbf x_0$</td></tr>
+              <tr><td><code>DmInv00..11</code></td><td><b>rest 形状边矩阵的逆</b> $D_m^{-1}$ 的四个分量（2×2）。它把「世界边」换算成「相对 rest 的形变」，乘出来就是 $\mathbf F$。</td><td>$D_m^{-1}$ 的元素</td></tr>
+              <tr><td><code>f0</code>, <code>f1</code></td><td>形变梯度 $\mathbf F$ 的<b>两列</b>（各是 3 维向量；膜是 3×2）。</td><td>$\mathbf F=[\mathbf f_0\ \mathbf f_1]$</td></tr>
+              <tr><td><code>f0_dot_f0</code> 等</td><td>这些列之间的<b>点积</b>，用来拼出 $\mathbf F^\top\mathbf F$（进而算 $I_c$、$J_s$）。</td><td>$\mathbf f_i\!\cdot\!\mathbf f_j$</td></tr>
+              <tr><td><code>g0</code>, <code>g1</code></td><td>面积项 $J_s$ 对 $\mathbf F$ 两列的<b>梯度</b>（$\partial J_s/\partial \mathbf f_i$），是组装应力 $P$ 用的辅助向量。</td><td>$\partial J_s/\partial\mathbf f_i$</td></tr>
+              <tr><td><code>df0_dx</code>, <code>df1_dx</code></td><td>$\mathbf F$ 的列对<b>顶点位置</b>的导数（就是 $D_m^{-1}$ 里的常数），把「对 $\mathbf F$ 的力」搬运成「对顶点的力」。</td><td>$\partial\mathbf f_i/\partial\mathbf x$</td></tr>
+              <tr><td><code>dJ_dx</code>, <code>w</code></td><td>$J_s$ 对顶点位置的梯度、以及组装 Hessian 用的辅助向量——它们的<b>外积</b> $\mathbf{vv}^\top$ 拼出 Hessian 的两块。</td><td>$\partial J_s/\partial\mathbf x$ 类</td></tr>
+              <tr><td><code>I_coeff</code>, <code>c1</code>, <code>r</code></td><td>三个<b>标量系数</b>（由 $\mu,\lambda,J_s,s$ 组合而来），分别给 Hessian 的单位块、外积块定权重。</td><td>$\mu,\ \lambda$ 的组合</td></tr>
+              <tr><td><code>I33</code></td><td>3×3 <b>单位矩阵</b>（Hessian 里那个各向同性的底）。</td><td>$\mathbf I_{3\times3}$</td></tr>
+              <tr><td><code>s</code>, <code>s_clamp</code></td><td><code>s</code> $=\lambda_{NH}(J_s-\alpha)$ 是体积项的应力强度；<code>s_clamp</code>$=\max(0,s)$ 是 <b>SPD 投影</b>那一夹（压缩时夹掉负的，保证 Hessian 半正定）——细节见 <a href="10-2-spd-damping.html">10.2</a>。</td><td>$\max(0,\ \lambda_{NH}(J_s-\alpha))$</td></tr>
+              <tr><td><code>lmbd_safe</code></td><td>就是 $\lambda$，加了个防 0 除的小保护（避免 $\lambda=0$ 时 $\mu/\lambda$ 爆掉）。</td><td>$\lambda$</td></tr>
+              <tr><td><code>wp.outer(a,b)</code></td><td>Warp 的<b>外积</b> $\mathbf a\mathbf b^\top$（把两个向量拼成一个矩阵）；<code>wp.sqrt/wp.max</code> 就是逐元素开方/取大。</td><td>$\mathbf a\mathbf b^\top$</td></tr>
+            </tbody>
+          </table>
+          <p>一句话抓住主干：<b>这段代码就是把「$\mathbf F\to$ 应力 $P\to$ 力、再求一次导得 Hessian」这条链，拆成 GPU 能逐标量算的形式</b>。中间那些 <code>g0</code>/<code>dJ_dx</code>/<code>c1</code> 都是这条链上的零件，不必背；<code>wp.</code> 开头的是 Warp（GPU kernel 语言）的内置函数，<a href="../07-newton-foundations/7-2-warp-model.html">7.2</a> 专门讲它。</p>
+        </div>
+
         <h3 id="membrane-numbers">代一遍：一个均匀拉伸 10% 的三角形</h3>
         <p>公式列完了，代个数走一遍 $\mathbf F\to I_c\to J_s\to\alpha\to\psi$ 才踏实。设这块三角形被<b>均匀拉伸 10%</b>——变形梯度的两列各拉长到 $1.1$、互相正交：</p>
         <div class="math-block">$$\mathbf f_0=(1.1,0,0),\quad \mathbf f_1=(0,1.1,0)\ \Rightarrow\ \mathbf F^\top\mathbf F=\begin{pmatrix}1.21&amp;0\\0&amp;1.21\end{pmatrix}$$</div>
