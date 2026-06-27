@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="1-3">
+<body data-root="../../" data-section="1-4">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,9 +23,9 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 1 · The Variational View · 1-3</div>
+        <div class="eyebrow">Part 1 · The Variational View · 1-4</div>
         <h1>惯性项 y 与弹性能：一场拔河</h1>
-        <p class="lede">上一节我们看到 $G(\mathbf x)$ 是惯性碗和弹性碗的拔河。这一节把这场拔河看到底：预测位置 $\mathbf y$ 究竟是什么、它就是代码里 <code>forwardStep()</code> 算的那一行；惯性系数 $m/h^2$ 如何决定碗的陡峭，从而决定谁赢；以及这场拔河的胜负如何牵动后面的高质量比实验和「好初值」。</p>
+        <p class="lede">变分形式（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）告诉我们 $G(\mathbf x)$ 是惯性碗和弹性碗的拔河，<a href="../01-foundations/1-3-mass-matrix.html">1.3</a> 又把那个 $M$ 讲透了——惯性项是<b>按质量加权</b>的偏离代价。这一节就带着这两件准备，把拔河看到底：预测位置 $\mathbf y$ 究竟是什么、它就是代码里 <code>forwardStep()</code> 算的那一行；惯性系数 $m/h^2$（正是 $M$ 落到单顶点的那一格）如何决定碗的陡峭，从而决定谁赢；以及这场拔河的胜负如何牵动后面的高质量比实验和「好初值」。</p>
 
         <h2 id="recall-G">先把那个能量摆回来</h2>
         <p>隐式欧拉一步 $=\arg\min_\mathbf{x} G(\mathbf x)$，而</p>
@@ -253,7 +253,7 @@ strand.inertia = strand.mVertPos + strand.mVelocity * params.dt;</code></pre></d
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) 预测位置 $\mathbf y=\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}$ 是惯性碗的圆心，就是 <code>forwardStep()</code> 里 <code>strand.inertia</code> 那一行；(2) 惯性系数 $\frac{m}{h^2}$ 与刚度 $k$ 较量碗的陡峭——重质量/小步长偏向惯性、大刚度偏向 rest 形状，胜负随质量比剧烈改变；(3) 这场拔河既预告了高质量比实验（5.1），也解释了为什么需要一个好初值（4.2）。</p>
-        <p>下一节 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>，我们把抽象的弹性能 $E(\mathbf x)$ 落到一根真实的 Hookean 弹簧上，亲手算出它的能量、力和 Hessian——并撞见一个关键现象：弹簧被压缩时，Hessian 会变得「不定」。这正是 VBD 局部求解必须直面的硬骨头。</p>
+        <p>下一节 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>，我们把抽象的弹性能 $E(\mathbf x)$ 落到一根真实的 Hookean 弹簧上，亲手算出它的能量、力和 Hessian——并撞见一个关键现象：弹簧被压缩时，Hessian 会变得「不定」。这正是 VBD 局部求解必须直面的硬骨头。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

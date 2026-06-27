@@ -101,12 +101,12 @@ if (edgeId1 != -1)
     FloatingType l = diff.norm();
     FloatingType l0 = strand.orgLengths(edgeId1);
     FloatingType stiffness_ = strand.edgesStiffness[edgeId1];</code></pre></div>
-        <p><code>v1, v2</code> 是这条弹簧的两端，<code>diff</code> $=\mathbf d=\mathbf x_{v1}-\mathbf x_{v2}$ 是弹簧向量，<code>l</code> $=\lVert\mathbf d\rVert$ 是当前长度，<code>l0</code> $=l_0$ 是 rest 长度，<code>stiffness_</code> $=k$ 是这条边的刚度。和 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的记号一一对应。（<code>edgeId1 != -1</code> 是个安全判：邻接表里 -1 代表空槽，本 strand 的 <code>from()</code> 不会塞 -1，但留着保险。）</p>
+        <p><code>v1, v2</code> 是这条弹簧的两端，<code>diff</code> $=\mathbf d=\mathbf x_{v1}-\mathbf x_{v2}$ 是弹簧向量，<code>l</code> $=\lVert\mathbf d\rVert$ 是当前长度，<code>l0</code> $=l_0$ 是 rest 长度，<code>stiffness_</code> $=k$ 是这条边的刚度。和 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的记号一一对应。（<code>edgeId1 != -1</code> 是个安全判：邻接表里 -1 代表空槽，本 strand 的 <code>from()</code> 不会塞 -1，但留着保险。）</p>
 
         <h3 id="spring-h">弹簧 Hessian：h_1_1</h3>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 弹簧 Hessian</span><button class="cp">复制</button></div><pre><code>h_1_1 = stiffness_ * (Mat3::Identity() - (l0 / l) * (Mat3::Identity() - diff * diff.transpose() / (l * l)));
 h += h_1_1;</code></pre></div>
-        <p>这一行是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 推出来的弹簧 Hessian，直接抄进代码：</p>
+        <p>这一行是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 推出来的弹簧 Hessian，直接抄进代码：</p>
         <div class="math-block">$$\mathbf H_{aa} = k\Big[\mathbf I - \frac{l_0}{l}\Big(\mathbf I - \frac{\mathbf d\mathbf d^\top}{l^2}\Big)\Big]$$</div>
         <p>对照：<code>diff * diff.transpose()</code> 是外积 $\mathbf d\mathbf d^\top$，除以 <code>(l*l)</code> 即 $/l^2$。整块乘 <code>stiffness_</code>=$k$。把它的物理读出来：沿弹簧方向的特征值是 $k$（拉伸方向永远硬）；垂直方向的特征值是 $k(1-l_0/l)$——<b>当弹簧被压缩（$l&lt;l_0$）时这个值为负，$\mathbf H_{aa}$ 不定</b>。这正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里那个「弹簧单独看可能不定」的来源。VBD 不对它做 SPD 投影，靠的就是上面那块恒正定的惯性 Hessian 把整个 <code>h</code> 兜回正定附近。注意代码无脑 <code>+=</code> 累加、不做任何 clamp——这是 VBD 的故意设计。</p>
 
@@ -118,7 +118,7 @@ h += h_1_1;</code></pre></div>
 else {
     f -= (stiffness_ * (l0 - l) / l)* diff;
 }</code></pre></div>
-        <p>弹簧对端点 $a$ 的力是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的</p>
+        <p>弹簧对端点 $a$ 的力是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的</p>
         <div class="math-block">$$\mathbf f = k\,\frac{l_0-l}{l}\,\mathbf d,\qquad \mathbf d=\mathbf x_{v1}-\mathbf x_{v2}$$</div>
         <p>系数 <code>stiffness_*(l0-l)/l</code> 就是 $k\frac{l_0-l}{l}$，乘上 <code>diff</code>=$\mathbf d$。<b>± 号取决于当前顶点 <code>iV</code> 是这条弹簧的哪一端</b>：<code>diff</code> 是按 $\mathbf x_{v1}-\mathbf x_{v2}$ 定义的，所以它天然是「对 v1 的力」。若 <code>iV == v1</code>，直接 <code>+=</code>；若 <code>iV</code> 是另一端 v2，力反向，<code>-=</code>。物理含义很直白：弹簧被拉长（$l&gt;l_0$，$l_0-l&lt;0$）时，力把两端往中间拽；被压短时往外推。每条邻接弹簧都把它对 <code>iV</code> 的那一份力加进 <code>f</code>，加完就是完整的 $\mathbf f_i$。</p>
 

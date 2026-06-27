@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ABD：把 IPC 用在近刚体上 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-10">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · 12-10</div>
+        <h1>ABD：把 IPC 用在近刚体上</h1>
+        <p class="lede">上一节我们算清了 IPC 「稳但贵」的账：每一步一个<b>全局稀疏 Newton</b>，顶点越多越贵。那如果物体本身又硬又几乎不形变——一块石头、一个齿轮、一颗螺丝——还有必要给它几千个顶点自由度吗？<span class="term">ABD</span>（Affine Body Dynamics，仿射体动力学）的回答是：不必。它用<b>一整个物体只 12 个自由度</b>替掉那几千个顶点，IPC 的 intersection-free 保证<b>原封不动继承</b>下来，求解却轻快几个数量级。这一节看它怎么做到，以及它如何在「可形变（FEM）↔ 刚体」之间补上一格。</p>
+
+        <h2 id="key-insight">关键洞见：刚体的优势是「紧凑」，不是「刚」</h2>
+        <p>先想一个朴素的问题：仿真一块石头，我们为什么爱用<b>刚体</b>（rigid body）？直觉答案是「因为它确实很硬，当成完全刚性最省事」。<b>ABD 的论文把这个直觉纠正了过来</b>，这也是整套方法的出发点：</p>
+        <div class="callout note">
+          <div class="c-h">刚体真正的好处，是「坐标紧凑」</div>
+          <p>一个刚体，不管它的网格有几千个顶点，描述它的运动只需要<b>6 个数</b>（3D：3 个旋转 + 3 个平移）。这才是刚体方法快的<b>真正原因</b>——求解的系统极小。至于「完全刚性」这个假设本身，论文说得很直白：它<b>既不必要、也不高效、更不准确</b>——因为<b>世界上没有任何材料是完美刚性的</b>。石头也会有微米级的形变。所以「刚」是个为了拿到「紧凑坐标」而强加的、其实不需要的约束。</p>
+        </div>
+        <p>顺着这个洞见，ABD 的策略一句话说清：<b>保留刚体「坐标紧凑」这个真好处，扔掉「完全刚性」这个假约束。</b>具体怎么扔？答案藏在「affine」这个词里。</p>
+
+        <h2 id="affine-dof">仿射自由度：x = A·X + p，6 → 12</h2>
+        <p>刚体的运动是「旋转 + 平移」：$\mathbf x = R\,\mathbf X + \mathbf p$，其中 $R$ 是<b>旋转矩阵</b>（必须正交），$\mathbf X$ 是物体上一点的 rest 坐标，$\mathbf x$ 是它当前的位置。麻烦在于 $R$ 必须正交——这是个<b>非线性</b>约束，求导、求解都别扭。</p>
+        <p>ABD 的一刀切：<b>把 $R$ 换成一个任意的 $3\times3$ 矩阵 $A$</b>，不再强求它正交：</p>
+        <div class="math-block">$$\mathbf x = A\,\mathbf X + \mathbf p.$$</div>
+        <p>这就是<b>仿射变换</b>（affine map）。$A$ 比旋转多了什么？旋转只能转；$A$ 还能<b>拉伸、剪切</b>——也就是允许物体有<b>一点点形变</b>（这正是「affine body」而非「rigid body」的来历）。代价是自由度从 6 涨到 <b>12</b>（3D：$A$ 的 9 个 + $\mathbf p$ 的 3 个；2D 则是 4 + 2 = 6）。</p>
+
+        <div class="callout note">
+          <div class="c-h">多花 6 个自由度，换来一个「线性」的天大好处</div>
+          <p>为什么值得从 6 涨到 12？因为 $\mathbf x = A\mathbf X+\mathbf p$ 对未知量 $A,\mathbf p$ 是<b>线性</b>的——而刚体的 $R\mathbf X$ 里 $R$ 是旋转、<b>非线性</b>。线性带来一个关键性质：<b>位置对自由度的导数（Jacobian）是常数</b>（就是 $\mathbf X$ 本身，不随物体怎么动而变）。这让接触、关节这些约束的求值变得又快又稳——后面会看到，这正是 ABD 能高效喂给 IPC 的根本。<b>用 6 个多余自由度，买来一个「处处线性」的求解结构，这笔账非常划算。</b></p>
+        </div>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">一个物体 = 一个仿射 A + 平移：调刚度看它从可形变到近刚体</span></div>
+          <div class="lab-body" data-widget="abd-affine"></div>
+          <div class="lab-cap">整块物体只用一个 $A$（2D 是 4 个数）+ 平移描述。把「外加形变」调大想把它掰出剪切，把「正交刚度」调大看 $A$ 被拉回纯旋转（正交误差→0、≈近刚体），调小则容许可见形变——这就是下一节那个「正交能量」的现场。</div>
+        </div>
+
+        <h2 id="orthogonality">怎么让它「近似刚」？——一个正交能量</h2>
+        <p>放开 $R$ 变成任意 $A$ 之后，物体就能随便形变了——可我们要的是<b>近刚体</b>，不是软泥。怎么把「刚性」请回来，又不重新引入那个讨厌的硬约束？ABD 的办法漂亮：<b>不用约束，用一个能量</b>。</p>
+        <p>注意到：$A$ 是<b>纯旋转</b>当且仅当它<b>正交</b>，即 $A^\top A = I$。于是 ABD 加一项 <span class="term">orthogonality potential</span>（正交能量），惩罚 $A$ 偏离正交的程度：</p>
+        <div class="math-block">$$E_{\text{ortho}}(A) = \tfrac{\kappa}{2}\,\big\lVert A^\top A - I \big\rVert_F^2.$$</div>
+        <p>读出它的意思：当 $A$ 正好是旋转（$A^\top A=I$），这项为 $0$；$A$ 越偏离正交（拉伸/剪切越多），这项越大。前面的<b>刚度系数 $\kappa$ 就是材料的「硬度」旋钮</b>：</p>
+        <ul>
+          <li><b>$\kappa$ 很大</b>：偏离正交的代价极高，$A$ 被牢牢摁在旋转附近——物体<b>近乎刚体</b>，只允许微米级形变。这就是仿真石头、金属时的设定。</li>
+          <li><b>$\kappa$ 适中/小</b>：允许可见的拉伸剪切——物体是个<b>软一点的仿射体</b>。</li>
+        </ul>
+        <p>对照上面的 widget：「正交刚度」滑杆就是这个 $\kappa$，「正交误差」读数就是 $\lVert A^\top A - I\rVert$。把 $\kappa$ 拉满，误差趋零，物体贴回纯旋转——你就亲手把一个仿射体「调」成了近刚体。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 这又是一次「软性能量代替硬约束」</div>
+          <p>这个套路你其实见过两回了。<a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 的 AVBD 用 penalty + 拉格朗日乘子把约束「软化成能量再逼硬」；<a href="12-2-barrier-energy.html">12.2</a> 的 IPC 用 log-barrier 把「不穿透」写成能量项。ABD 是同一思想的第三次现身：<b>把「保持刚性」从一个非线性硬约束，改写成一个可加进 $G(\mathbf x)$ 的软能量项</b>，硬度由刚度 $\kappa$ 控制。整本书的接触/约束处理，几乎都在反复用这一招——能写成能量，就能塞进最小化，就能用我们已有的那套 Newton/下降去解。</p>
+        </div>
+
+        <h2 id="still-minG">还是 min G(x)：只是未知量换成了 12 个仿射参数</h2>
+        <p>到这里，ABD 已经完全落在<b>本书的主线</b>上了。它仿真一步，求解的还是那个熟悉的最小化</p>
+        <div class="math-block">$$\min\ G = \underbrace{\text{惯性项}}_{\text{动量}} + \underbrace{E_{\text{ortho}}(A)}_{\text{近似刚性}} + \underbrace{E_{\text{contact}}}_{\text{IPC barrier}}\ +\ \cdots$$</div>
+        <p>唯一变的是<b>未知量</b>：不再是「所有顶点的位置 $\mathbf x$」（FEM 那样几千维），而是<b>每个物体的 12 个仿射参数 $(A,\mathbf p)$</b>。变分骨架一个字没改，惯性、能量、接触全部照旧——只是把它们都用 $(A,\mathbf p)$ 重新参数化了一遍。</p>
+        <div class="callout note">
+          <div class="c-h">这正是 13-5「隐式 MPM = 网格上的 min G(x)」的同一手法</div>
+          <p>还记得 <a href="../13-mpm/13-5-implicit-mpm.html">13.5</a> 说隐式 MPM 是「在网格自由度上最小化同一个 $G$」吗？ABD 是一模一样的招式——<b>换一套自由度（DOF），主线不变</b>。MPM 把 DOF 换成网格节点，ABD 把 DOF 换成仿射参数。这就是「$\min G(x)$」这条脊梁的威力：它不在乎你用什么坐标，只要你能把惯性、弹性、接触都写成能量，它就一视同仁地最小化。FEM、MPM、ABD，是同一个变分框架的三套坐标。</p>
+        </div>
+
+        <h2 id="inherits-ipc">继承 IPC 的全部保证（以及它的代价）</h2>
+        <p>现在回答标题那半句：「把 IPC 用在近刚体上」。因为 $E_{\text{contact}}$ 用的就是 <a href="12-2-barrier-energy.html">12.2</a>～<a href="12-5-ccd-linesearch.html">12.5</a> 那套 IPC 机制——<b>log-barrier 接触能量 + CCD-filtered line search</b>——ABD <b>原样继承了 IPC 的全部保证</b>：解的收敛性、严格 <span class="term">intersection-free</span>（永不穿透）、以及精确的摩擦。12 个仿射自由度恰好能「存住」接触的弹性能，正好对上 IPC 这种基于能量的接触框架。</p>
+        <p>所以一句话概括 ABD 的卖点：<b>它把 IPC 那台「贵但有严格保证」的机器，套在一个只有 12 维的小系统上</b>。Newton 系统从「几千维顶点」缩成「每物体 12 维」，每步的稀疏求解瞬间变小，而 intersection-free 这个 IPC 最值钱的保证，<b>白白继承、一分没丢</b>。这对「场景里有大量近刚体、又要绝对不穿模」的场合（机器人、机械装配、堆叠）是量身定做。</p>
+        <div class="callout warn">
+          <div class="c-h">天下没有白拿的：代价在哪</div>
+          <p>诚实地说两条代价。其一，那个正交能量 $E_{\text{ortho}}$ 是<b>非线性</b>的（$A^\top A$ 里 $A$ 是二次的），所以每次 Newton 迭代<b>都要重新装配并分解</b>系统矩阵——不能像纯线性问题那样一次分解반复用。其二，12 个自由度终究比刚体的 6 个多，单看「每物体的开销」ABD 比传统刚体法（RBD）更重。它的净胜，靠的是<b>整体系统变小</b>带来的稀疏求解收益，以及 IPC 保证省下的「事后处理穿透」的麻烦——而不是每个物体单独更便宜。<b>具体快多少属于性能数字，本教程不写死</b>（见下方诚实声明），但机制上的取舍就是这样：用「每物体略重」换「整体系统极小 + 保证不穿」。</p>
+        </div>
+
+        <h2 id="spectrum">刚柔光谱：ABD 补上了 FEM 和刚体之间的那一格</h2>
+        <p>把 ABD 放回全书，它最漂亮的位置是<b>填补了一条之前没明说的过渡线</b>。我们一路学下来的「物体怎么动」，其实是一条按<b>自由度多少 / 能形变多少</b>排开的光谱：</p>
+        <table>
+          <thead><tr><th>方法</th><th>自由度（每物体，3D）</th><th>能形变吗</th><th>典型对象</th><th>本书位置</th></tr></thead>
+          <tbody>
+            <tr><td><b>FEM</b></td><td>每顶点 3 个（几千～几万维）</td><td>完全可形变</td><td>布料、软体、肉</td><td><a href="../09-fem/9-1-why-fem.html">Part 9</a> / <a href="../10-elasticity-collision/10-1-elastic-elements.html">10</a></td></tr>
+            <tr><td><b>ABD</b></td><td><b>12 个仿射参数</b></td><td><b>近刚体（一点点）</b></td><td>石头、齿轮、近刚体堆叠</td><td><b>本节</b></td></tr>
+            <tr><td><b>刚体 + AVBD</b></td><td>6 个（旋转 3 + 平移 3）</td><td>完全刚性</td><td>关节、机械、纯刚体接触</td><td><a href="../11-avbd/11-2-rigid-and-further.html">Part 11</a></td></tr>
+          </tbody>
+        </table>
+        <p>读这张表的方法：<b>从上到下，自由度越来越少、越来越「刚」</b>。FEM 最准最贵（每顶点都能动）；刚体最省最硬（整体只 6 维、一点不形变）；<b>ABD 正好卡在中间</b>——比刚体多一点形变弹性、又比 FEM 省几个数量级的自由度。而且这三格<b>用的是同一个 $\min G(x)$ 框架、同一套 IPC 接触</b>，区别只在「用哪套坐标参数化物体」。ABD 不是一个孤立的新算法，而是这条光谱上本来就该有、之前却空着的一格。</p>
+
+        <div class="bridge pbd">
+          <div class="c-h"><span class="tag">从谱系看</span> 「换一套坐标」是这本书反复的主题</div>
+          <p>退一步看，整本书讲的解法差异，很大程度上就是「<b>拿什么当未知量</b>」的差异：VBD 用顶点位置、逐顶点下降；MPM 用网格节点；ABD 用仿射参数；刚体用 6 维位姿。<b>能量 $G$ 不变，变的是坐标</b>。认出这一点，你就有了一把万能钥匙：以后再遇到一个新方法，先问「它把未知量换成了什么、为什么这套坐标对它的场景更划算」，十有八九就抓住了它的核心。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) ABD 的出发点是一个洞见——<b>刚体的好处是「坐标紧凑」而非「刚性」</b>，于是它保留紧凑、放开刚性，用仿射变换 $\mathbf x=A\mathbf X+\mathbf p$ 把每物体描述成 <b>12 个自由度</b>，并用一个 <b>orthogonality 正交能量</b> $\tfrac\kappa2\lVert A^\top A-I\rVert^2$ 软性地把它拉回近刚体（$\kappa$ 控制硬度）；(2) 它<b>仍是 $\min G(x)$</b>，只是未知量从顶点位置换成仿射参数——和 <a href="../13-mpm/13-5-implicit-mpm.html">13.5</a> 隐式 MPM「换 DOF」是同一手法；接触直接用 IPC 的 barrier + CCD，<b>原样继承 intersection-free 保证</b>，代价是每迭代重装配、12 维比刚体的 6 维略重；(3) 它在全书补上了 <b>FEM（可形变）↔ ABD（近刚体）↔ 刚体（完全刚性）</b> 这条刚柔光谱里中间那一格——同一个变分框架、同一套 IPC 接触，区别只在用哪套坐标。</p>
+        <p>下一节 <a href="12-11-three-roads.html">12.11：三条路总对照</a>，我们把 penalty / AVBD / IPC 三条处理接触的路并排成一张大表，给整本书的接触主线画上句号。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

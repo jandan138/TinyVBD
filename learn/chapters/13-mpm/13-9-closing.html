@@ -83,7 +83,7 @@
 
         <div class="callout note">
           <div class="c-h">这是对照，不是排名</div>
-          <p>和 <a href="../12-ipc/12-10-three-roads.html">12.10</a> 的「penalty/AVBD/IPC 没有银弹」一样：三条现代 MPM 路线是<b>一组取舍与正交改造</b>，不是高下排名。要实时上游戏，PB-MPM 的 position-based 体质最对路；要砍隐式开销又保通用，MPM Lite 的去粒子求积最直接；要在传输基函数上一次性兼顾窄与光滑，CK-MPM 的紧核最优雅。按场景选，甚至混着用。</p>
+          <p>和 <a href="../12-ipc/12-11-three-roads.html">12.11</a> 的「penalty/AVBD/IPC 没有银弹」一样：三条现代 MPM 路线是<b>一组取舍与正交改造</b>，不是高下排名。要实时上游戏，PB-MPM 的 position-based 体质最对路；要砍隐式开销又保通用，MPM Lite 的去粒子求积最直接；要在传输基函数上一次性兼顾窄与光滑，CK-MPM 的紧核最优雅。按场景选，甚至混着用。</p>
         </div>
 
         <h2 id="mpm-vs-family">MPM 与 FEM / VBD / IPC：同一条主线的不同切面</h2>
@@ -101,7 +101,7 @@
 
         <div class="bridge ipc">
           <div class="c-h"><span class="tag">MPM ↔ IPC</span> 接触可以叠上来</div>
-          <p><a href="../12-ipc/12-1-why-ipc.html">IPC</a>（Part 12）告诉你接触不过是往 $G(\mathbf x)$ 里加一个 $E_{\text{contact}}$ 项（log-barrier / penalty / AVBD，见 <a href="../12-ipc/12-10-three-roads.html">12.10</a>）。这件事和离散范式正交：隐式 MPM 既然也是在网格 DOF 上 $\min G$，就同样能把接触项<b>叠加</b>进去——MPM 与刚体/边界/自接触的耦合，本质就是在那个 $G$ 上再加一项接触能量，再一起解。接触不是 MPM 的对立面，是它 $\min G$ 里又一个加号。</p>
+          <p><a href="../12-ipc/12-1-why-ipc.html">IPC</a>（Part 12）告诉你接触不过是往 $G(\mathbf x)$ 里加一个 $E_{\text{contact}}$ 项（log-barrier / penalty / AVBD，见 <a href="../12-ipc/12-11-three-roads.html">12.11</a>）。这件事和离散范式正交：隐式 MPM 既然也是在网格 DOF 上 $\min G$，就同样能把接触项<b>叠加</b>进去——MPM 与刚体/边界/自接触的耦合，本质就是在那个 $G$ 上再加一项接触能量，再一起解。接触不是 MPM 的对立面，是它 $\min G$ 里又一个加号。</p>
         </div>
 
         <h2 id="the-whole-journey">收线：从 PBD 到 MPM，全程一个 min G(x)</h2>

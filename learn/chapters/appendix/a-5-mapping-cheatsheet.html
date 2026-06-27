@@ -100,7 +100,7 @@
           <tbody>
             <tr>
               <td><b>弹性</b></td>
-              <td>弹簧 only（线段 $E=\tfrac12k(l-l_0)^2$）<br><a href="../01-foundations/1-4-spring-energy.html">1.4</a></td>
+              <td>弹簧 only（线段 $E=\tfrac12k(l-l_0)^2$）<br><a href="../01-foundations/1-5-spring-energy.html">1.5</a></td>
               <td>membrane / volumetric <span class="term">Neo-Hookean</span> + dihedral bending + spring（spring 力/Hessian 同 TinyVBD）<br><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
               <td>对应 USD 物理材质（<span class="term">PhysicsMaterial</span> / 形变体属性）声明的本构</td>
             </tr>
@@ -127,7 +127,7 @@
         </div>
 
         <h2 id="contact-three-roads">接触的三条路线（penalty / AVBD / IPC）</h2>
-        <p>把「碰撞」这一格再拆细：本书一路走过三种接触哲学，软硬与保证强度递增（对照 <a href="../12-ipc/12-10-three-roads.html">12.10</a>）。</p>
+        <p>把「碰撞」这一格再拆细：本书一路走过三种接触哲学，软硬与保证强度递增（对照 <a href="../12-ipc/12-11-three-roads.html">12.11</a>）。</p>
         <table>
           <thead><tr><th>路线</th><th>机制</th><th>零穿透保证</th><th>代价 / 出处</th></tr></thead>
           <tbody>
@@ -147,7 +147,7 @@
               <td><b>IPC</b>（interior-point barrier）</td>
               <td>log-barrier + CCD-filtered line search</td>
               <td><b>保证</b>每步 intersection-free（几何严格）</td>
-              <td>代价高：全局稀疏 Newton + CCD；概念篇 · <a href="../12-ipc/12-1-why-ipc.html">12.1</a> · <a href="../12-ipc/12-10-three-roads.html">12.10</a></td>
+              <td>代价高：全局稀疏 Newton + CCD；概念篇 · <a href="../12-ipc/12-1-why-ipc.html">12.1</a> · <a href="../12-ipc/12-11-three-roads.html">12.11</a></td>
             </tr>
           </tbody>
         </table>

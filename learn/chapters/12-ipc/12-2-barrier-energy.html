@@ -92,7 +92,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) IPC 的灵魂是接触 barrier $b(d,\hat d)$——它有<b>激活阈值 $\hat d$</b>（$d<\hat d$ 才发力）、在 <b>$d\to0$ 时发散到无穷</b>（产生任意大接触力，使距离永远跨不过 0）、并被设计成 <b>$C^2$</b> 以便进 Newton。(2) 论文常用的解析式 $b=-(d-\hat d)^2\ln(d/\hat d)$ 把这三条装进两个因子：$\ln(d/\hat d)$ 配负号驱动 $d\to0$ 的发散，$(d-\hat d)^2$ 让值/一阶/二阶在 $\hat d$ 处全部光滑接零（$C^2$）；但关键是这三条性质，不是这一个式子，精确形式以论文为准。(3) 它<b>不是新子系统</b>，只是加进 $\min G(\mathbf x)$ 的又一个能量项，且和 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 是<b>同一个对象</b>，区别在「局部 + 截断兜底」vs「全局 interior-point + line search 保证」。</p>
-        <p>下一节 <a href="12-3-distance-geometry.html">11-3（距离几何）</a>，我们把 barrier 咬住的那个 $d$ 讲透：point-triangle / edge-edge 的<b>无符号距离</b>怎么定义、它的梯度 $\partial d/\partial\mathbf x$ 怎么按 barycentric 权重落到各顶点上，以及最近点滑到边/顶点时的退化分区。把 $d$ 和 $\partial d/\partial\mathbf x$ 备好，12-4 才能接着把 barrier 沿 $d$ 求导、连同 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 <span class="term">PSD projection</span> 一起送进 Newton。</p>
+        <p>下一节 <a href="12-3-distance-geometry.html">12-3（距离几何）</a>，我们把 barrier 咬住的那个 $d$ 讲透：point-triangle / edge-edge 的<b>无符号距离</b>怎么定义、它的梯度 $\partial d/\partial\mathbf x$ 怎么按 barycentric 权重落到各顶点上，以及最近点滑到边/顶点时的退化分区。把 $d$ 和 $\partial d/\partial\mathbf x$ 备好，12-4 才能接着把 barrier 沿 $d$ 求导、连同 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 <span class="term">PSD projection</span> 一起送进 Newton。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

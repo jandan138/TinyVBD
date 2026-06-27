@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>质量矩阵 M：仿真里的质量长什么样 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="1-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 1 · The Variational View · 1-3</div>
+        <h1>质量矩阵 M：仿真里的质量长什么样</h1>
+        <p class="lede">从 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 起，那个 $M$ 就一直躲在公式里：惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$、方程 $M(\mathbf x-\mathbf y)=h^2\mathbf f$。我们一直把它当成「质量」一笔带过，可你心里多半有几个没问出口的问题：高中物理的质量明明是<b>一个数 $m$</b>，这里怎么成了一个<b>矩阵 $M$</b>？那个写在范数下标上的 $M$（$\lVert\cdot\rVert_M$）又是什么意思？这一节把这块地基正面补平——补完你会发现，$M$ 其实简单到让人安心。</p>
+
+        <h2 id="why-matrix">为什么质量从「一个数」变成「一个矩阵」</h2>
+        <p>高中只有一个质点，质量就是一个数 $m$，牛顿第二定律 $f=ma$ 里 $m$ 就站那儿。但仿真里我们一次要动<b>一大把</b>顶点——一根 strand 几十个、一块布上万个。把所有顶点的位置摞成一个超长的列向量 $\mathbf x$（$N$ 个顶点就是 $3N$ 个坐标），那「质量」自然也得是一个能乘进这个长向量的<b>矩阵</b> $M$。</p>
+        <p>但别被「矩阵」吓到。它长得非常老实：</p>
+        <div class="math-block">$$M=\begin{pmatrix} m_1 &amp; &amp; &amp; \\ &amp; m_1 &amp; &amp; \\ &amp; &amp; m_2 &amp; \\ &amp; &amp; &amp; \ddots \end{pmatrix}\quad(\text{3D 时每个 }m_i\text{ 重复 3 次，对应 }x,y,z).$$</div>
+        <p>它是一个<b>对角矩阵</b>：对角线上放每个顶点的质量，其余全是 0。所以 $M\mathbf x$ 这个矩阵乘法，<b>逐坐标看就是「拿对应顶点的质量去乘」</b>——第 $i$ 个顶点的三个坐标都乘上 $m_i$。没有任何耦合，没有非对角的捣乱项。一句话：<b>$M$ 就是「把每个顶点的质量摆在对角线上」的那张清单。</b></p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 你写过的 <code>diag(m)</code> 就是它</div>
+          <p>GAMES103 里你大概率见过把质量存成一个数组 <code>mass[i]</code>，然后更新位置时按 <code>mass[i]</code> 逐个除。那个数组，正是这里 $M$ 的对角线。把它「摆成对角矩阵」只是为了能写成 $M\mathbf x$ 这种紧凑的矩阵记号，方便推导；真到代码里，没人会去存那一大片 0——存的就是你熟的那个 <code>mass[i]</code> 数组。<b>记号上是矩阵，实现上是数组，是同一个东西的两副面孔。</b></p>
+        </div>
+
+        <h2 id="lumped">集中质量：为什么质量「摊」在顶点上</h2>
+        <p>这里藏着一个容易滑过去、却很关键的物理选择。一块真实的布是<b>连续</b>的，质量是<b>铺满整个面</b>的；可我们的 $\mathbf x$ 只有那几个顶点。连续分布的质量，怎么塞进离散的几个点？</p>
+        <p>办法叫 <span class="term">lumped mass</span>（集中质量）：<b>把每一小片材料的质量，集中（lump）到离它最近的那个顶点上。</b>想象布被网格切成许多小块，每个小块的质量就记到它的顶点账上——顶点 $i$ 周围的材料越多、越重，它的 $m_i$ 就越大。整块布的质量，就这样被「摊」成了一串顶点质量 $m_1,m_2,\dots$。</p>
+        <div class="callout note">
+          <div class="c-h">为什么图形仿真爱用集中质量</div>
+          <p>严格来说，FEM 还有一种「一致质量矩阵」（consistent mass），它<b>不是</b>对角的——相邻顶点的质量会互相耦合，$M$ 里出现非对角项。它更精确，但代价是 $M$ 不再是简单的对角阵，每次用到 $M^{-1}$ 都得解一个方程组。<b>图形/实时仿真几乎一律选 lumped（集中）质量</b>，就为了换那个无价的好处：$M$ 对角 $\Rightarrow$ $M^{-1}$ 也对角（每个对角元取倒数即可）$\Rightarrow$ 「除以质量」变成逐顶点的标量除法，又快又能并行。后面 VBD 每个顶点各算各的（<a href="../03-vbd/3-1-block-descent.html">3.1</a>），正是建立在「$M$ 对角、顶点之间不被质量耦合」这块地基上。精度上的一点让步，换来结构上的巨大便利——这是个典型的图形仿真取舍。</p>
+        </div>
+
+        <h2 id="m-norm">那个下标 M 的范数：其实是动能</h2>
+        <p>现在回答你最可能卡住的那个符号：$\lVert\mathbf v\rVert_M^2$ 是什么意思？普通的「长度平方」是 $\lVert\mathbf v\rVert^2=\mathbf v^\top\mathbf v=\sum v_i^2$。带下标 $M$ 的版本，只是中间夹了个 $M$：</p>
+        <div class="math-block">$$\lVert\mathbf v\rVert_M^2 \;=\; \mathbf v^\top M\,\mathbf v \;=\; \sum_i m_i\,\lVert\mathbf v_i\rVert^2.$$</div>
+        <p>展开右边那一步是关键：因为 $M$ 对角，$\mathbf v^\top M\mathbf v$ 就是<b>「每个顶点的速度平方，乘上它自己的质量，再加起来」</b>。如果 $\mathbf v$ 是速度，这个量你在高中见过无数次——它正比于<b>动能</b> $\sum\frac12 m_i v_i^2$！</p>
+        <div class="callout note">
+          <div class="c-h">$M$-范数 = 「按质量加权的长度」= 动能的语言</div>
+          <p>所以「$M$-范数」不是什么高深的新东西，它就是<b>把「长度」按质量加权</b>：重的顶点动一下，贡献的「$M$-长度」比轻的顶点动同样多要大。回头看 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的惯性项 $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$——它惩罚的是「偏离惯性预测 $\mathbf y$ 的量」，但<b>按质量加权</b>：让一个重顶点偏离 $\mathbf y$，比让轻顶点偏离同样的距离，代价大得多。这正是为什么重的东西「难被弹簧拽离自然轨迹」——下一节那场拔河的胜负手，根子就在这个加权里。把 $\lVert\cdot\rVert_M^2$ 读成「按质量算的偏离代价」，整个惯性项就通了。</p>
+        </div>
+
+        <h2 id="single-vertex">从全局 M 到单顶点的 m/h²·I</h2>
+        <p>你可能注意到一个对不上的地方：<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 写的是大矩阵 $M$，可后面 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a>、<a href="../03-vbd/3-3-newton-step.html">3.3</a> 一到具体顶点，惯性项又变成了 $\frac{m_i}{h^2}\mathbf I$。这两者怎么对上？</p>
+        <p>正因为 $M$ 对角、顶点之间不耦合，所以当 VBD <b>一次只看一个顶点 $i$</b> 时（<a href="../03-vbd/3-1-block-descent.html">3.1</a> 的 block descent），那个大 $M$ 里<b>只有第 $i$ 个顶点的那一格</b>跟它有关——就是 $m_i$ 乘以一个 $3\times3$ 单位阵 $\mathbf I$。惯性项对顶点 $i$ 的 Hessian，于是就是 $\frac{m_i}{h^2}\mathbf I$。</p>
+        <div class="math-block">$$\underbrace{\frac{1}{h^2}M}_{\text{全局，}3N\times3N\text{ 对角}}\quad\xrightarrow{\ \text{只看顶点 }i\ }\quad \underbrace{\frac{m_i}{h^2}\mathbf I}_{\text{单顶点，}3\times3}.$$</div>
+        <p>所以那两个看着不一样的写法，是<b>同一个 $M$ 的两种视角</b>：全局看是一张 $3N\times3N$ 的对角大表，落到单个顶点就是表里那一格 $\frac{m_i}{h^2}\mathbf I$。<b>「$M$ 对角」这一个性质，是这个无缝切换得以成立的全部原因</b>——要是 $M$ 有非对角耦合（consistent mass），顶点就没法各看各的，VBD 那套逐顶点下降也就立不住了。</p>
+
+        <h2 id="pinned">钉住的顶点：无穷大质量 vs 直接清零</h2>
+        <p>最后补一个实战里绕不开的小角色：<b>被钉住（pinned）的顶点</b>——比如 strand 的发根 0 号顶点，它该一动不动。怎么让 $M$ 体现「这个点不许动」？</p>
+        <p>有两种等价的想法。一种是把它的质量设成<b>无穷大</b>：质量无穷大 $\Rightarrow$ 任何有限的力都推不动它 $\Rightarrow$ 它纹丝不动。另一种更直接，也是 TinyVBD 用的：在更新时<b>直接把它的速度/位移清零</b>（你在后面 <code>forwardStep()</code> 里会看到 <code>mVelocity.col(0).setZero()</code> 这一行）。两条路殊途同归——都是让那个顶点退出「被力摆布」的游戏。理解了「$M$ 的对角元就是每个顶点的质量、质量越大越难动」，pinned 顶点为什么这么处理就一目了然了。</p>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) $M$ 是<b>对角质量矩阵</b>——对角线放每个顶点的质量，$M\mathbf x$ 就是逐顶点乘质量；图形仿真用 <span class="term">lumped mass</span>（把连续质量集中到顶点）正是为了让 $M$ 对角、$M^{-1}$ 好算、顶点能各算各的。(2) 下标范数 $\lVert\mathbf v\rVert_M^2=\mathbf v^\top M\mathbf v=\sum m_i\lVert\mathbf v_i\rVert^2$ 是<b>按质量加权的长度</b>，本质是<b>动能</b>的语言——惯性项 $\lVert\mathbf x-\mathbf y\rVert_M^2$ 因此惩罚「按质量加权的偏离」，重顶点偏离更贵。(3) 因为 $M$ 对角，全局的 $\frac{1}{h^2}M$ 落到单顶点就是 $\frac{m_i}{h^2}\mathbf I$，两种写法是同一个东西的两种视角；pinned 顶点 = 无穷大质量 = 直接清零。</p>
+        <p>地基补平了。下一节 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a>，我们带着「$M$ 是按质量加权」这个理解，回到那场拔河：惯性项里的预测位置 $\mathbf y$ 到底是什么，质量 $m_i$ 和时间步 $h$ 如何通过 $\frac{m_i}{h^2}$ 决定「惯性碗」的深浅、从而决定谁赢。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

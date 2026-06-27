@@ -29,7 +29,7 @@
 
         <h2 id="the-worry">先说清楚担心的是什么</h2>
         <p>经典 Newton（以及 Projective Dynamics）通常会把 Hessian 做 <span class="term">SPD projection</span>——强行把负特征值掀到正、或加阻尼，确保 $\mathbf H$ 正定，这样 $\mathbf H^{-1}\mathbf f$ 才保证是个下降方向；再配上 line search 控制步长，免得冲过头让能量反升。这两道保险是 Newton 类方法的标配。</p>
-        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l<l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
+        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l<l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
 
         <h2 id="reason-1">理由一：惯性项是永远正定的压舱石</h2>
         <p>$\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$ 的第一块——惯性项 $\frac{m_i}{h^2}\mathbf I$——是<b>恒正定</b>的各向同性块，三个特征值都等于 $\frac{m_i}{h^2}$。对合理的时间步 $h$，这个值并不小（$h$ 在分母上、还平方），它给整个 $\mathbf H_i$ 的谱<b>抬了一个正的底</b>。</p>
@@ -48,7 +48,7 @@
         <p>前两条理由都是定性的——「惯性够大就兜得住」「真退化就跳过」。用共享参数把它们算成两个具体的数，「兜得住 / 兜不住」立刻有了边界。取一根被压缩到一半的弹簧：$l_0=1$、当前 $l=0.5$（$l&lt;l_0$，垂直特征值为负），惯性底 $m/h^2=3600$（$m=1$、$1/h^2=3600$）。</p>
         <div class="callout note">
           <div class="c-h">这是为讲解构造的自洽示例</div>
-          <p>下面两组数字是为说清「理由一何时成立、何时失效」挑的共享参数（与 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>、<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 自洽），可上计算器复算，不是某次真实运行的输出。</p>
+          <p>下面两组数字是为说清「理由一何时成立、何时失效」挑的共享参数（与 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>、<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 自洽），可上计算器复算，不是某次真实运行的输出。</p>
         </div>
         <p><b>软弹簧 $k=100$（理由一成立）。</b>垂直方向特征值：</p>
         <div class="math-block">$$\lambda_\perp = k\Big(1-\frac{l_0}{l}\Big) = 100\,(1-\tfrac{1}{0.5}) = 100\times(-1) = -100$$</div>

@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 11 · 11-2</div>
         <h1>rigid AVBD 一瞥与进一步阅读</h1>
-        <p class="lede">上一节（<a href="11-1-avbd-idea.html">10.1</a>）我们看清了 augmented Lagrangian 怎么把硬约束和高刚度比塞进 VBD 的下降骨架。这一节是全书最后一站：先到 Newton 的 rigid 一侧瞄一眼——同一套 AVBD 思想是怎么去管刚体的 joint 和 contact 的；然后摊开一份进一步阅读清单，最后合上这本书。我们不深挖 rigid kernel，只看它和你已经吃透的那根 strand 是怎么一脉相承的。</p>
+        <p class="lede">上一节（<a href="11-1-avbd-idea.html">11.1</a>）我们看清了 augmented Lagrangian 怎么把硬约束和高刚度比塞进 VBD 的下降骨架。这一节是全书最后一站：先到 Newton 的 rigid 一侧瞄一眼——同一套 AVBD 思想是怎么去管刚体的 joint 和 contact 的；然后摊开一份进一步阅读清单，最后合上这本书。我们不深挖 rigid kernel，只看它和你已经吃透的那根 strand 是怎么一脉相承的。</p>
 
         <h2 id="rigid-side">SolverVBD 的另一半：rigid 用 AVBD</h2>
         <p>从第一节 Newton 篇起，我们一直只看 <span class="term">SolverVBD</span> 的 particle 那一半——粒子、布料、软体，全是 per-vertex 的 VBD。但这个求解器的类 docstring 早就写明了它的双重身份：<b>对 particle 用 VBD，对 rigid body 用 AVBD</b>。换句话说，上一节那套 augmented Lagrangian 不是停在纸面上的理论，它就是 Newton 用来积分刚体的引擎。</p>

@@ -38,7 +38,7 @@
         <div class="math-block">$$\mathbf f_t \;=\; -\,\mu f_n \,\frac{\mathbf v_t}{\lVert \mathbf v_t\rVert}\quad(\text{滑动}),\qquad \lVert\mathbf f_t\rVert \le \mu f_n\quad(\text{静止时不定})$$</div>
 
         <h2 id="newton-hates-jump">为什么这道阶跃让 Newton 头疼</h2>
-        <p>回想整个 IPC 求解的底座：每一步是一个<b>全局 Newton 步</b>，要用到能量的梯度和 Hessian（见 <a href="12-5-ccd-linesearch.html">11.5</a>，下一节 12-9 会把求解器全景补全）。Newton 法的前提是被优化的函数<b>足够光滑</b>——至少梯度连续、Hessian 有定义。而理想 Coulomb 那道阶跃恰恰违反了这一点：</p>
+        <p>回想整个 IPC 求解的底座：每一步是一个<b>全局 Newton 步</b>，要用到能量的梯度和 Hessian（见 <a href="12-5-ccd-linesearch.html">12.5</a>，下一节 12-9 会把求解器全景补全）。Newton 法的前提是被优化的函数<b>足够光滑</b>——至少梯度连续、Hessian 有定义。而理想 Coulomb 那道阶跃恰恰违反了这一点：</p>
         <ul>
           <li>摩擦力（能量的梯度）在 $v_t=0$ 处<b>不连续</b>，跳来跳去；</li>
           <li>那意味着对应的 Hessian 在那一点<b>无界或没定义</b>；</li>
@@ -93,7 +93,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) 理想 <span class="term">Coulomb friction</span> 在切向滑移 $v_t=0$ 处有一道<b>垂直阶跃</b>（静摩擦力不定、动摩擦突然定向），这种梯度不连续是全局 <b>Newton 的死穴</b>；(2) IPC 不另起炉灶，用 <b>lagged</b>——把法向力和接触集<b>滞后一步固定</b>，让摩擦退化成只关于切向位移的<b>光滑势</b>进 $\min G(\mathbf x)$，再用 <b>alternating updates</b> 交替精化法向/切向找回 lag 的精度；(3) 同时把 stick↔slip 过渡<b>光滑化（mollified）</b>成一条可微曲线（窄带内蠕滑、窄带外贴合理想 Coulomb），于是摩擦处处可微、能和 barrier/弹性一起被全局 Newton 最小化——<b>同一套 Coulomb 物理，只为全局 Newton 改了可微的形</b>。</p>
-        <p>不穿透（12-5）和摩擦（12-6）都讲完了，IPC 的物理拼图完整了。但这一切的代价藏在求解器里——每步 CCD、全局稀疏线性解、barrier 收紧带来的恶劣条件数。下一节 <a href="12-9-solver-cost.html">11-9：求解器全景与代价——为什么 IPC 稳但贵</a>，我们把整台机器（PSD projection、CHOLMOD 稀疏分解、并行装配）摊开，老实算清「严格保证」这张账单贵在哪。</p>
+        <p>不穿透（12-5）和摩擦（12-6）都讲完了，IPC 的物理拼图完整了。但这一切的代价藏在求解器里——每步 CCD、全局稀疏线性解、barrier 收紧带来的恶劣条件数。下一节 <a href="12-9-solver-cost.html">12-9：求解器全景与代价——为什么 IPC 稳但贵</a>，我们把整台机器（PSD projection、CHOLMOD 稀疏分解、并行装配）摊开，老实算清「严格保证」这张账单贵在哪。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

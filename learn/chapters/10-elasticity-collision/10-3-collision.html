@@ -83,7 +83,7 @@
 
         <h2 id="recap">这一节你要带走的</h2>
         <p>三件事：(1) TinyVBD 那根 strand <b>完全没有碰撞</b>——这一整套机器是 Newton cloth 凭空多出来的，别去 strand 里找对应。(2) 碰撞分两问：<span class="term">TriMeshCollisionDetector</span> 用 <span class="term">BVH</span> 做 vertex-triangle + edge-edge 检测回答「谁撞谁」；<span class="term">accumulate_self_contact_force_and_hessian</span>（log-barrier + Coulomb friction）把接触<b>折进同一个 $\mathbf f_i$ / $\mathbf H_i$</b>，body-particle 接触也走这个口子——本质上还是<b>同一个 $\min G(\mathbf x)$，只是多了几项</b>。(3) 在能量防线之外，<b>penetration-free 截断</b>（DAT，每个 color sweep 后保守砍位移）提供几何上的硬保证。</p>
-        <p>到这里，我们已经把 Newton 的 cloth VBD 从弹性、稳定性到碰撞拼完整了。它强大、稳定、能并行，但仍有一处软肋——<b>高刚度比、硬约束</b>这种场景，纯 VBD 的局部下降会力不从心。下一篇 <b>Part 11</b>，我们就从这块软肋出发，看 <a href="../11-avbd/11-1-avbd-idea.html">10-1：VBD 的软肋 → AVBD</a> 怎么用 augmented Lagrangian 把这最后一块补上。</p>
+        <p>到这里，我们已经把 Newton 的 cloth VBD 从弹性、稳定性到碰撞拼完整了。它强大、稳定、能并行，但仍有一处软肋——<b>高刚度比、硬约束</b>这种场景，纯 VBD 的局部下降会力不从心。下一篇 <b>Part 11</b>，我们就从这块软肋出发，看 <a href="../11-avbd/11-1-avbd-idea.html">11-1：VBD 的软肋 → AVBD</a> 怎么用 augmented Lagrangian 把这最后一块补上。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

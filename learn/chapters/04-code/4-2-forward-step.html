@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 4 · Code Walkthrough · 4-2</div>
         <h1>forwardStep()：惯性与自适应初始化</h1>
-        <p class="lede">每个 substep 的第一件事就是 <code>forwardStep()</code>。它做两件事：算出惯性预测位置 $\mathbf y$（<a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 拔河里那个「锚」），再为接下来的迭代<b>挑一个聪明的初始猜测</b> $\mathbf x^{(0)}$。第二件事正是论文里的<span class="term">adaptive initialization</span>——VBD 才有的自由。</p>
+        <p class="lede">每个 substep 的第一件事就是 <code>forwardStep()</code>。它做两件事：算出惯性预测位置 $\mathbf y$（<a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 拔河里那个「锚」），再为接下来的迭代<b>挑一个聪明的初始猜测</b> $\mathbf x^{(0)}$。第二件事正是论文里的<span class="term">adaptive initialization</span>——VBD 才有的自由。</p>
 
         <h2 id="gravity-inertia">重力、pin、惯性 y</h2>
         <p>函数开头三行就把惯性这一项备齐了：</p>
@@ -122,11 +122,11 @@ else
           <p>XPBD 的初始化是被钉死的：必须 predict $\mathbf x^*=\mathbf x+h\mathbf v+h^2\mathbf f_{ext}/m$，因为它的 Lagrange multiplier $\lambda$ 推导依赖这个特定起点。VBD 不一样——它只是在<b>最小化 $G(\mathbf x)$</b>，从哪个 $\mathbf x^{(0)}$ 起步都行，只要每步让 $G$ 下降就保证收敛（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>、<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>）。<b>「不强制某种初始化」正是 VBD 能做自适应初始化的前提</b>。给优化器一个更好的起点，就少迭代几次、也更不容易在第一步就穿插——这是把「最小化视角」换成实打实性能的又一处兑现。</p>
         </div>
 
-        <p>把它接回 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 那场拔河：惯性碗的碗底是 $\mathbf y$。自适应初始化做的，是<b>不把所有顶点都先扔到碗底</b>，而是按「它最近是不是真在被重力主导」决定起点离碗底多近。被弹力/接触拉着的顶点（拔河里弹性那头赢的顶点），干脆先别动——这正是优化器最想要的热启动。</p>
+        <p>把它接回 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 那场拔河：惯性碗的碗底是 $\mathbf y$。自适应初始化做的，是<b>不把所有顶点都先扔到碗底</b>，而是按「它最近是不是真在被重力主导」决定起点离碗底多近。被弹力/接触拉着的顶点（拔河里弹性那头赢的顶点），干脆先别动——这正是优化器最想要的热启动。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三件事：(1) <code>forwardStep()</code> 先把重力积进速度、pin 住 0 号顶点、算出惯性 $\mathbf y=\mathbf x^t+h\mathbf v^t+h^2\mathbf g$（存进 <code>inertia</code>，整步不变）；(2) 它不止步于 $\mathbf x^{(0)}=\mathbf y$，而是逐顶点算一个钳在 $[0,10]$ 的 $\tilde a$——自由下落的取满重力、被托住的取 0——给出更聪明的初始猜测（论文 Eq.17）；(3) 这种自由来自 VBD「只需让 $G$ 下降、不强制初始化」的本性，是 XPBD 给不了的。</p>
-        <p>初始猜测就位。下一节是全书的中心：把 <code>solve()</code> 这一次 Gauss-Seidel sweep 逐行拆开，让每一行都对上 <a href="../03-vbd/3-3-newton-step.html">3.3</a> / <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 的公式。</p>
+        <p>初始猜测就位。下一节是全书的中心：把 <code>solve()</code> 这一次 Gauss-Seidel sweep 逐行拆开，让每一行都对上 <a href="../03-vbd/3-3-newton-step.html">3.3</a> / <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的公式。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

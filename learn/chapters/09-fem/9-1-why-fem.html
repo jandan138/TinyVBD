@@ -25,10 +25,10 @@
       <article class="article">
         <div class="eyebrow">Part 9 · 9-1</div>
         <h1>为什么需要 FEM：从弹簧到连续介质</h1>
-        <p class="lede">你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过 Neo-Hookean 元件用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力——它们从哪来？这一篇补上地基。先回答一个更朴素的问题：<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧，能量 $\tfrac12k(l-l_0)^2$ 干净利落，为什么还要请出 <span class="term">FEM</span>（finite element method）这套重家伙？答案是：弹簧只有<b>一个自由度</b>——长度。可一块真实的布、一团软体，要管的远不止「长短」。这一节讲清楚弹簧抓不住什么，以及连续介质如何把那个 $\tfrac12k(l-l_0)^2$ 升级成 $\int\psi(\mathbf F)\,dV$。</p>
+        <p class="lede">你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过 Neo-Hookean 元件用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力——它们从哪来？这一篇补上地基。先回答一个更朴素的问题：<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧，能量 $\tfrac12k(l-l_0)^2$ 干净利落，为什么还要请出 <span class="term">FEM</span>（finite element method）这套重家伙？答案是：弹簧只有<b>一个自由度</b>——长度。可一块真实的布、一团软体，要管的远不止「长短」。这一节讲清楚弹簧抓不住什么，以及连续介质如何把那个 $\tfrac12k(l-l_0)^2$ 升级成 $\int\psi(\mathbf F)\,dV$。</p>
 
         <h2 id="spring-one-dof">弹簧的世界只有一根数轴：长度</h2>
-        <p>把 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧的能量再抄一遍：</p>
+        <p>把 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧的能量再抄一遍：</p>
         <div class="math-block">$$E=\tfrac12 k\,(l-l_0)^2,\qquad l=\lVert\mathbf x_a-\mathbf x_b\rVert.$$</div>
         <p>注意它只依赖一个标量——当前长度 $l$。整根弹簧的「形变状态」被压缩成<b>一个数</b>：长度比 $l/l_0$。这是它的全部信息，也是它的全部局限。两个端点在三维里怎么摆、弹簧绕着自己的轴转多少、它周围的材料是被斜着剪了还是被压扁了——弹簧统统不知道，因为它只会量两端之间那段直线有多长。</p>
         <p>对一根头发丝、一段绳子，这够用：它们本来就是一维的，「长短」几乎就是全部物理。可一旦材料有了<b>宽度、面积、体积</b>，麻烦就来了。</p>
@@ -71,7 +71,7 @@
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 弹簧就是一维的 FEM 单元</div>
-          <p>别把 FEM 当成另起炉灶的新东西——它就是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根弹簧的连续介质推广。弹簧是<b>一维的 FEM 单元</b>：它的「形变」就是长度比 $l/l_0$（$\mathbf F$ 退化成一个数），它的能量密度就是 $\tfrac12k(l-l_0)^2$，它把这份能量对两个端点求导、装配出力与 Hessian。FEM 做的事一字不差，只是把「长度比」升级成形变梯度 $\mathbf F$（一个矩阵，能看见剪切和体积），把标量能量升级成 $\psi(\mathbf F)$，把两端点升级成三角形/四面体的几个顶点。<b>$\min G(x)$ 没变、装配口没变、下降原理没变——变的只是单元内部那个能量长什么样。</b>你吃透了一根弹簧，就已经吃透了 FEM 的骨架。</p>
+          <p>别把 FEM 当成另起炉灶的新东西——它就是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧的连续介质推广。弹簧是<b>一维的 FEM 单元</b>：它的「形变」就是长度比 $l/l_0$（$\mathbf F$ 退化成一个数），它的能量密度就是 $\tfrac12k(l-l_0)^2$，它把这份能量对两个端点求导、装配出力与 Hessian。FEM 做的事一字不差，只是把「长度比」升级成形变梯度 $\mathbf F$（一个矩阵，能看见剪切和体积），把标量能量升级成 $\psi(\mathbf F)$，把两端点升级成三角形/四面体的几个顶点。<b>$\min G(x)$ 没变、装配口没变、下降原理没变——变的只是单元内部那个能量长什么样。</b>你吃透了一根弹簧，就已经吃透了 FEM 的骨架。</p>
         </div>
 
         <h2 id="preview-1001">这套地基落在哪：10-1 的 Neo-Hookean</h2>
@@ -79,7 +79,7 @@
         <ul>
           <li><b>Neo-Hookean membrane</b>（布的面内能量，$\mathbf F$ 是 $3\times2$）——它的 $\psi$、$I_c$、$J_s$，正是这一篇要从头讲清的应变能密度（<a href="9-3-strain-energy.html">9.3</a>）。</li>
           <li><b>volumetric Neo-Hookean</b>（软体的体积能量，$\mathbf F$ 是 $3\times3$）——那个抗翻面的 $\ln J$ 项，下一篇你会看到它从哪来。</li>
-          <li><b>SPD projection</b>（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）——正是为 FEM 单元 Hessian 在压缩时不定而设的修复，和 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 压缩弹簧那个变负的 $\lambda_\perp$ 同源（<a href="9-4-piola-assembly.html">9.4</a> 会接回）。</li>
+          <li><b>SPD projection</b>（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）——正是为 FEM 单元 Hessian 在压缩时不定而设的修复，和 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 压缩弹簧那个变负的 $\lambda_\perp$ 同源（<a href="9-4-piola-assembly.html">9.4</a> 会接回）。</li>
         </ul>
         <p>换句话说，10.1 是「应用 FEM」——它已经在用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力，但从没讲它们的来历。这一篇 FEM 篇就是给它补地基。读完 9.1–9.6，再回头看 10.1 的每个公式，你都能说出它从哪一步长出来。</p>
 

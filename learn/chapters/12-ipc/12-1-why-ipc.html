@@ -60,7 +60,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) 接触有三难，对应你已学的三条路——<b>penalty 软、不保证零穿透</b>；<b>AVBD ramp 逼近硬约束</b>；<b>IPC 用 interior-point barrier + CCD line search 严格保证 intersection-free</b>。(2) IPC（Li et al. 2020）的定位是「primal 内点法做接触」，接触能量是<b>同一个 log-barrier</b>，只是从 10.3 的局部 + 几何截断，升级成全局 + CCD 的严格保证形态——主线仍是 $\min G(\mathbf x)$。(3) 没有银弹：IPC 的保证以「贵」（全局解 + CCD）为代价，penalty/AVBD 便宜可并行，按场景选。</p>
-        <p>下一节 <a href="12-2-barrier-energy.html">11-2：log-barrier 接触能量</a>，我们就钻进 IPC 的灵魂——那个 barrier 函数 $b(d,\hat d)$：它怎么在距离小于阈值时激活、怎么在距离趋零时发散，又为什么必须设计成 $C^2$ 才能进 Newton。之后 12-3 讲它怎么算梯度、Hessian、做 PSD 投影；12-4 讲 CCD line search 这把真正的锁；12-5 讲摩擦；12-6 讲求解器全景与代价；12-7 把三条路并排做最后总对照。</p>
+        <p>下一节 <a href="12-2-barrier-energy.html">12-2：log-barrier 接触能量</a>，我们就钻进 IPC 的灵魂——那个 barrier 函数 $b(d,\hat d)$：它怎么在距离小于阈值时激活、怎么在距离趋零时发散，又为什么必须设计成 $C^2$ 才能进 Newton。之后 12-3 讲它怎么算梯度、Hessian、做 PSD 投影；12-4 讲 CCD line search 这把真正的锁；12-5 讲摩擦；12-6 讲求解器全景与代价；12-7 把三条路并排做最后总对照。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

@@ -52,7 +52,7 @@
 
         <h2 id="condition-number">把「条件数 ∝ 刚度比」算给你看：一个 2×2 toy-Hessian</h2>
         <p>上面说「刚度比越悬殊、条件数越糟」，这是个能<b>手算</b>的论断，不必只当口号。我们摆一个最小的自洽例子：一个被两条共线弹簧夹住的中间顶点，一条软、一条硬。只看这个顶点的局部 Hessian——为了能写在一行里，把它约化成沿弹簧方向的 <b>1 自由度</b>，再叠回惯性，就得到一个 2×2（或退化成标量比）的曲率对照。</p>
-        <p>回忆 <a href="../04-code/4-3-solve.html">4.3</a>/<a href="../01-foundations/1-4-spring-energy.html">1.4</a>：弹簧 Hessian 沿弹簧方向的特征值是 $k$（拉伸方向永远是「硬」的那一支）。设软弹簧 $k_\text{soft}=10^4$、硬弹簧 $k_\text{hard}=10^8$，再叠上惯性 $m/h^2$（用共享参数集 $m=0.1,\ h=1/60$ → $m/h^2 = 0.1\times3600 = 360$）。那么这个中间顶点在「软方向」与「硬方向」上的有效曲率分别是：</p>
+        <p>回忆 <a href="../04-code/4-3-solve.html">4.3</a>/<a href="../01-foundations/1-5-spring-energy.html">1.5</a>：弹簧 Hessian 沿弹簧方向的特征值是 $k$（拉伸方向永远是「硬」的那一支）。设软弹簧 $k_\text{soft}=10^4$、硬弹簧 $k_\text{hard}=10^8$，再叠上惯性 $m/h^2$（用共享参数集 $m=0.1,\ h=1/60$ → $m/h^2 = 0.1\times3600 = 360$）。那么这个中间顶点在「软方向」与「硬方向」上的有效曲率分别是：</p>
         <div class="math-block">$$\mu_\text{soft} = \frac{m}{h^2} + k_\text{soft} = 360 + 10^4 \approx 1.04\times10^4,\qquad \mu_\text{hard} = \frac{m}{h^2} + k_\text{hard} = 360 + 10^8 \approx 1.0\times10^8$$</div>
         <p>把这两支当成一个对角 2×2 Hessian $\mathbf H=\mathrm{diag}(\mu_\text{soft},\mu_\text{hard})$，它的<span class="term">条件数</span>就是大小特征值之比：</p>
         <div class="math-block">$$\kappa(\mathbf H) = \frac{\lambda_\max}{\lambda_\min} = \frac{\mu_\text{hard}}{\mu_\text{soft}} = \frac{1.0\times10^8}{1.04\times10^4} \approx 9.6\times10^3 \;\approx\; \frac{k_\text{hard}}{k_\text{soft}} = 10^4$$</div>

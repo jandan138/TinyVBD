@@ -62,7 +62,7 @@ if (addSkipSpring &amp;&amp; i &lt; lengthes.size() - 1)
         <p>上面说「链直时 skip spring 不出力、链弯时它产生撑直的回复力」，这两句都能<b>代数字算出来</b>。仿照 <a href="../04-code/4-3-solve.html">4.3</a>/<a href="../12-ipc/12-7-worked-example.html">12-7</a> 的节奏，用本实验的真实间距 <code>dis = 0.05</code>，取顶点 $i,\ i{+}1,\ i{+}2$ 三点，看跨节点那根 skip spring 的当前长度 $l$ 与它的 rest length $l_0$。</p>
         <p><b>情形一：链是直的。</b>三点共线，$i$ 到 $i{+}2$ 的直线距离正好是两段相加：</p>
         <div class="math-block">$$l = \mathtt{dis} + \mathtt{dis} = 0.05 + 0.05 = 0.10 = l_0\quad\Longrightarrow\quad l - l_0 = 0$$</div>
-        <p>skip spring 的力是 $\mathbf f = k\frac{l_0-l}{l}\mathbf d$（<a href="../01-foundations/1-4-spring-energy.html">1.4</a>）。$l=l_0$ 时 $l_0-l=0$，<b>力恒为 0</b>——直链时这根弹簧完全不出力，正合源码把 rest 取成 <code>lengthes[i]+lengthes[i+1]</code> 的用意：直就是它的自然态。</p>
+        <p>skip spring 的力是 $\mathbf f = k\frac{l_0-l}{l}\mathbf d$（<a href="../01-foundations/1-5-spring-energy.html">1.5</a>）。$l=l_0$ 时 $l_0-l=0$，<b>力恒为 0</b>——直链时这根弹簧完全不出力，正合源码把 rest 取成 <code>lengthes[i]+lengthes[i+1]</code> 的用意：直就是它的自然态。</p>
         <p><b>情形二：在 $i{+}1$ 处折成直角（90°）。</b>两段仍各长 <code>dis</code>，但夹角从 180° 变成 90°，$i$ 到 $i{+}2$ 的直线距离由勾股定理给出：</p>
         <div class="math-block">$$l = \sqrt{\mathtt{dis}^2 + \mathtt{dis}^2} = \mathtt{dis}\sqrt{2} = 0.05 \times 1.41421 \approx 0.07071$$</div>
         <div class="math-block">$$l_0 - l = 0.10 - 0.07071 \approx 0.02929$$</div>

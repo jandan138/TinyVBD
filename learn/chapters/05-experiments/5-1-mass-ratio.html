@@ -65,7 +65,7 @@
         </div>
 
         <h2 id="why-vbd-holds">VBD 为什么稳如老狗：primal 直接平衡力</h2>
-        <p>VBD 是 <span class="term">primal</span> 求解器——它不解约束力，而是直接对每个顶点求位置。回忆 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 和 Part 3：在每个顶点上，VBD 做一步局部牛顿，平衡的是<b>完整</b>的局部力，其中包含那一项惯性力：</p>
+        <p>VBD 是 <span class="term">primal</span> 求解器——它不解约束力，而是直接对每个顶点求位置。回忆 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 和 Part 3：在每个顶点上，VBD 做一步局部牛顿，平衡的是<b>完整</b>的局部力，其中包含那一项惯性力：</p>
         <div class="math-block">$$\mathbf f_i = -\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i)\;-\;\sum_{j\in\mathcal F_i}\frac{\partial E_j}{\partial\mathbf x_i},\qquad \mathbf H_i = \frac{m_i}{h^2}\mathbf I + \sum_{j\in\mathcal F_i}\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$$</div>
         <p>关键在惯性项里的系数 $m_i/h^2$。对那个 1000× 的重锤，这一项<b>同样被放大 1000 倍</b>：它的 Hessian 对角线很大、它对偏离预测位置 $\mathbf y_i$ 的「抵抗」也很大。换句话说，重锤的质量不是被当成「逆质量权重去打折修正」，而是<b>实打实地进了它自己那个 $3\times3$ 牛顿系统</b>。重的顶点解出来该往哪走，就稳稳地往哪走；轻链顶点解它自己的小系统，把张力直接、对称地平衡掉。质量比在这里不是病态来源，只是各个顶点 Hessian 上不同大小的数字而已。</p>
 

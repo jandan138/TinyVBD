@@ -50,7 +50,7 @@
             arXiv：<a href="https://arxiv.org/abs/2307.15908" target="_blank" rel="noopener">arXiv:2307.15908</a>。
           </li>
           <li>
-            <b>Affine Body Dynamics（ABD）.</b>（2022）在 IPC 框架上做<b>刚硬材料</b>的快速无穿透仿真：把近刚体用仿射自由度表达，既保留 IPC 的 intersection-free，又大幅压低硬材料的求解负担。想在 IPC 的保证下高效跑大量近刚体，读它。
+            <b>Affine Body Dynamics（ABD）.</b> Lei Lan, Danny M. Kaufman, Minchen Li, Chenfanfu Jiang, Yin Yang；ACM <span class="term">TOG</span> 41(4)（SIGGRAPH 2022）。在 IPC 框架上做<b>刚硬材料</b>的快速无穿透仿真：洞见是「刚体的好处是<b>坐标紧凑</b>而非刚性」，于是用仿射变换 $\mathbf x=A\mathbf X+\mathbf p$ 把每物体表达成 12 个自由度、再用一个 orthogonality 正交能量软性近似刚性，既<b>原样继承 IPC 的 intersection-free 保证</b>，又把求解系统压到极小。本书 <a href="../12-ipc/12-10-abd.html">12.10</a> 专门讲它，并放进「FEM ↔ ABD ↔ 刚体」的刚柔光谱。想在 IPC 的保证下高效跑大量近刚体，读它。
             arXiv：<a href="https://arxiv.org/abs/2201.10022" target="_blank" rel="noopener">arXiv:2201.10022</a>。
           </li>
         </ul>

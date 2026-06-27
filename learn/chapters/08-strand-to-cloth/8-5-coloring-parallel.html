@@ -94,7 +94,7 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) GPU 上相邻顶点同时更新会有 <span class="term">data race</span>，<span class="term">builder.color()</span> 给顶点图着色、把互不相邻的顶点凑成同色组，结果存进 <code>model.particle_color_groups</code>（对 particle 必需）；(2) 一遍 sweep = <code>for color in color_groups</code>，同色内部 Jacobi 并行（一次 launch）、跨色 Gauss-Seidel 顺序，颜色数 = 顺序阶段数 = 同步次数，而<b>顶点(primal)着色比约束(dual)着色省颜色</b>，因为顶点图比约束图稀疏；(3) Newton 把 TinyVBD 的串行 <code>for iV</code> 重排成「按 color launch」，<span class="term">min G(x)</span> 与算法本身没变，变的只是扫描次序与并行粒度（且这里没有 Chebyshev）。</p>
-        <p>到这里，Part 8 把一根串行 strand 完整地搬成了一块 GPU 上的并行 cloth——惯性、牛顿步、装配、着色并行，全齐了。下一节进入 <b>Part 10</b>：<a href="../10-elasticity-collision/10-1-elastic-elements.html">9-1 弹性元件谱</a>，我们去看 cloth 真正用到的那几种 force element——<span class="term">membrane</span> / <span class="term">volumetric</span> / <span class="term">bending</span> / <span class="term">spring</span>——它们各自的能量、力与 Hessian 长什么样，又怎么接回你已经吃透的那根弹簧。</p>
+        <p>到这里，Part 8 把一根串行 strand 完整地搬成了一块 GPU 上的并行 cloth——惯性、牛顿步、装配、着色并行，全齐了。下一节进入 <b>Part 10</b>：<a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1 弹性元件谱</a>，我们去看 cloth 真正用到的那几种 force element——<span class="term">membrane</span> / <span class="term">volumetric</span> / <span class="term">bending</span> / <span class="term">spring</span>——它们各自的能量、力与 Hessian 长什么样，又怎么接回你已经吃透的那根弹簧。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 10 · 10-1</div>
         <h1>弹性元件谱</h1>
-        <p class="lede">在 TinyVBD 里，<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那根 strand 只认识一种 force element：弹簧。可一块真实的布、一团软体，要的远不止这个。这一节把 Newton particle VBD 支持的整套弹性元件铺开来看——<span class="term">Neo-Hookean membrane</span>、<span class="term">volumetric Neo-Hookean</span>、<span class="term">dihedral bending</span>、<span class="term">spring</span>——并点破一件事：它们各自只是往 <a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 那个 per-vertex 装配里，多塞一个 $\mathbf f$ 块和一个 $\mathbf H$ 块而已。讲完，我们把一块真在跑 VBD 的布请上台。</p>
+        <p class="lede">在 TinyVBD 里，<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根 strand 只认识一种 force element：弹簧。可一块真实的布、一团软体，要的远不止这个。这一节把 Newton particle VBD 支持的整套弹性元件铺开来看——<span class="term">Neo-Hookean membrane</span>、<span class="term">volumetric Neo-Hookean</span>、<span class="term">dihedral bending</span>、<span class="term">spring</span>——并点破一件事：它们各自只是往 <a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 那个 per-vertex 装配里，多塞一个 $\mathbf f$ 块和一个 $\mathbf H$ 块而已。讲完，我们把一块真在跑 VBD 的布请上台。</p>
 
         <h2 id="same-assembly">同一个装配口，多种元件往里叠</h2>
         <p>先把 <a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 的结论钉死：每个顶点 $i$ 解的还是那一步牛顿</p>
@@ -39,7 +39,7 @@
         <p>直觉拆开看：$I_c$ 是两列的长度平方之和，惩罚「整体被拉伸」；$J_s$ 是当前三角形与 rest 三角形的<b>面积比</b>，$(J_s-\alpha)^2$ 惩罚「面积变化」。那个 $\alpha=1+\mu/\lambda$ 不是随手写的——它让 rest 状态（$\mathbf F$ 是等距映射）恰好应力为零，省掉「松弛后还有残余张力」的毛病。代码里还要做一道 Lamé 参数转换 $\mu_{NH}=\mu$、$\lambda_{NH}=\lambda+\mu$（Smith 2018 §3.4），这是 stable NH 的标准约定。</p>
         <div class="callout note">
           <div class="c-h">为什么 Hessian 要 SPD 投影</div>
-          <p>和压缩弹簧一样（<a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个变负的 $\lambda_\perp$），膜在被压缩时局部 Hessian 也会出现负特征值。Newton 在这里做 <span class="term">SPD projection</span>：用 <code>s_clamp = max(0, s)</code> 把惹事的那一项的系数夹到非负，保证喂给牛顿步的 $\mathbf H_i$ 正定、$\Delta\mathbf x_i$ 方向可靠。注意这正是 TinyVBD <b>没</b>做的——strand 靠惯性偏置和行列式阈值兜底，cloth 维度更高、更刚，索性把投影做实。下一节 <a href="10-2-spd-damping.html">9.2</a> 专讲它。</p>
+          <p>和压缩弹簧一样（<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个变负的 $\lambda_\perp$），膜在被压缩时局部 Hessian 也会出现负特征值。Newton 在这里做 <span class="term">SPD projection</span>：用 <code>s_clamp = max(0, s)</code> 把惹事的那一项的系数夹到非负，保证喂给牛顿步的 $\mathbf H_i$ 正定、$\Delta\mathbf x_i$ 方向可靠。注意这正是 TinyVBD <b>没</b>做的——strand 靠惯性偏置和行列式阈值兜底，cloth 维度更高、更刚，索性把投影做实。下一节 <a href="10-2-spd-damping.html">10.2</a> 专讲它。</p>
         </div>
         <p>下面是这块膜元件的核心几行（已删去 damping 与组装样板），看它如何从 $\mathbf F$ 一路算到力与 Hessian：</p>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># Deformation gradient F = [f0, f1]  (3x2，两列向量)
@@ -95,7 +95,7 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
         <p>$J_s=1.21$ 就是当前三角形比 rest 大了 $21\%$ 的<b>面积比</b>（$1.1\times1.1$）。取一组示意 Lamé 参数 $\mu=1,\ \lambda=10$，则 $\alpha=1+\mu/\lambda=1.1$，代进能量：</p>
         <div class="math-block">$$\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2=\frac{1}{2}(2.42-2)+\frac{10}{2}(1.21-1.1)^2$$</div>
         <div class="math-block">$$=0.5\times0.42+5\times(0.11)^2=0.21+0.0605\approx0.27$$</div>
-        <p>读出来：两项都为正、都在「储能」——拉伸项 $\frac{\mu}{2}(I_c-2)=0.21$ 罚「两列被拉长」，面积项 $\frac{\lambda}{2}(J_s-\alpha)^2=0.06$ 罚「面积偏离 $\alpha$」。把三角形松回 rest（$\mathbf F$ 为等距、$I_c=2$、$J_s=1$），第一项归零；面积项因为 $\alpha=1.1\neq1$ 不会同时归零，但梯度在 rest 处恰好为零（这正是 $\alpha=1+\mu/\lambda$ 的作用——rest 无应力）。压缩时（$J_s&lt;\alpha$）面积项的系数 $s=\lambda(J_s-\alpha)$ 翻负、Hessian 趋于不定，于是代码里那道 <code>s_clamp = max(0, s)</code> 上场——下一节 <a href="10-2-spd-damping.html">9.2</a> 专讲。</p>
+        <p>读出来：两项都为正、都在「储能」——拉伸项 $\frac{\mu}{2}(I_c-2)=0.21$ 罚「两列被拉长」，面积项 $\frac{\lambda}{2}(J_s-\alpha)^2=0.06$ 罚「面积偏离 $\alpha$」。把三角形松回 rest（$\mathbf F$ 为等距、$I_c=2$、$J_s=1$），第一项归零；面积项因为 $\alpha=1.1\neq1$ 不会同时归零，但梯度在 rest 处恰好为零（这正是 $\alpha=1+\mu/\lambda$ 的作用——rest 无应力）。压缩时（$J_s&lt;\alpha$）面积项的系数 $s=\lambda(J_s-\alpha)$ 翻负、Hessian 趋于不定，于是代码里那道 <code>s_clamp = max(0, s)</code> 上场——下一节 <a href="10-2-spd-damping.html">10.2</a> 专讲。</p>
 
         <div class="callout note">
           <div class="c-h">这些数是自洽示例，量级随材料/单位变</div>
@@ -138,7 +138,7 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) Newton particle VBD 是一<b>谱</b>弹性元件——membrane（布，$\mathbf F$ 为 $3\times2$）、volumetric NH（软体，$\mathbf F$ 为 $3\times3$）、dihedral bending（抗折）、spring（与 TinyVBD 同形）；(2) 每种元件只贡献一个力块与 Hessian 块，<b>叠进 8.4 那个统一的 per-vertex 装配</b>，主循环不变；(3) 高维更刚的膜/体积能量在压缩下 Hessian 会不定，于是 Newton 在这里做实了 <span class="term">SPD projection</span>——这是 strand 没做、cloth 必须做的一步。</p>
-        <p>那道 SPD 投影到底怎么把负特征值拍正、又怎么不破坏物理，还有让布「甩两下就停」的 <span class="term">Rayleigh damping</span> 是怎么挂进力与 Hessian 的——下一节 <a href="10-2-spd-damping.html">9.2</a> 把这两件事讲透。</p>
+        <p>那道 SPD 投影到底怎么把负特征值拍正、又怎么不破坏物理，还有让布「甩两下就停」的 <span class="term">Rayleigh damping</span> 是怎么挂进力与 Hessian 的——下一节 <a href="10-2-spd-damping.html">10.2</a> 把这两件事讲透。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

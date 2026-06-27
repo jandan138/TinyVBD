@@ -60,7 +60,7 @@
             <tr>
               <td><b>每步 CCD</b></td>
               <td>全局<span class="term">continuous collision detection</span>：在 line search 里对全场所有可能接触的 primitive 求最大不穿透步长。</td>
-              <td>这一步的位移<b>几何上绝不越界</b>——intersection-free 的硬锁（见 <a href="12-5-ccd-linesearch.html">11.5</a>）。</td>
+              <td>这一步的位移<b>几何上绝不越界</b>——intersection-free 的硬锁（见 <a href="12-5-ccd-linesearch.html">12.5</a>）。</td>
             </tr>
             <tr>
               <td><b>全局稀疏解</b></td>
@@ -75,7 +75,7 @@
           </tbody>
         </table>
 
-        <p>第三处尤其值得多说一句。<a href="12-2-barrier-energy.html">11.2</a> 讲过 barrier 在 $d\to 0$ 时发散、能产生任意大的接触力——这正是它「禁止穿透」的力量来源。但代价是：当接触非常紧、或者你把激活阈值 $\hat d$ 调小让 barrier 更陡，$\mathbf H_{\text{barrier}}$ 的某些方向刚度会变得极大，整个 $\mathbf H$ 的<b>条件数</b>急剧恶化。条件数一坏，线性系统难解、Newton 步的有效性下降，于是<b>同一个 time step 里要跑很多次 Newton 迭代</b>才收敛。barrier 给你的保证越严，你为它付的迭代账单越长——这是 interior-point 法逃不掉的结构性代价。</p>
+        <p>第三处尤其值得多说一句。<a href="12-2-barrier-energy.html">12.2</a> 讲过 barrier 在 $d\to 0$ 时发散、能产生任意大的接触力——这正是它「禁止穿透」的力量来源。但代价是：当接触非常紧、或者你把激活阈值 $\hat d$ 调小让 barrier 更陡，$\mathbf H_{\text{barrier}}$ 的某些方向刚度会变得极大，整个 $\mathbf H$ 的<b>条件数</b>急剧恶化。条件数一坏，线性系统难解、Newton 步的有效性下降，于是<b>同一个 time step 里要跑很多次 Newton 迭代</b>才收敛。barrier 给你的保证越严，你为它付的迭代账单越长——这是 interior-point 法逃不掉的结构性代价。</p>
 
         <h2 id="vs-vbd">对照：VBD 的便宜局部下降</h2>
         <p>把镜头切回你最熟的那台机器。VBD 处理接触（<a href="../10-elasticity-collision/10-3-collision.html">10.3</a>）是怎么个便宜法？它把 log-barrier 接触力和弹性力一样<b>累加进每个顶点自己的 $\mathbf f_i$、$\mathbf H_i$</b>，然后每个顶点解一个 3×3 的小牛顿步，按图着色做并行的 Gauss-Seidel sweep。没有全局矩阵、没有全局分解、没有每步 CCD——它靠的是 <a href="../10-elasticity-collision/10-3-collision.html">penetration-free 截断</a>这道<b>几何兜底</b>来防穿，而不是 CCD line search 的<b>严格保证</b>。</p>
@@ -89,7 +89,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) IPC 的每一次迭代是一个<b>全局稀疏 Newton 步</b>——弹性与 barrier 的 Hessian 都先做 <span class="term">PSD projection</span>，并行装配进稀疏 <span class="term">CSR</span>，用 <span class="term">CHOLMOD</span>（挂 MKL LAPACK/BLAS）做符号+并行数值分解，也试过 <span class="term">AMGCL</span> 多重网格预条件求解器。(2) 它「贵」在三处具体开销：<b>每步全局 CCD</b>、<b>全局稀疏线性解</b>（不是 VBD 那种 per-vertex 3×3）、以及 <b>$\hat d$ 收紧 / barrier 刚度极大导致条件数坏、Newton 迭代多</b>；换来的是严格 intersection-free 与极端接触下的鲁棒。(3) 对照 VBD/AVBD 的便宜可并行局部下降（累加进 $\mathbf f_i/\mathbf H_i$、color sweep、靠截断或 ramp 防穿），IPC 是用「贵」买「保证」——成本只是花在了不同地方。</p>
-        <p>下一节 <a href="12-10-three-roads.html">11-10：三条路总对照</a>，我们把 penalty / AVBD / IPC 三条路并排成一张大表，沿着接触能量、求解范围、无穿透保证、摩擦、Hessian 处理、代价六个维度逐项对照，给整本书的接触主线画上句号——并诚实地说一句「没有银弹」。</p>
+        <p>下一节 <a href="12-10-abd.html">12.10：ABD——把 IPC 用在近刚体上</a>，我们看 IPC 这套「贵但有保证」的机器怎么被聪明地复用：当物体是<b>近刚体</b>时，用 12 个仿射自由度代替几千个顶点，IPC 的 intersection-free 保证白白继承下来，求解却快上几个数量级。之后 <a href="12-11-three-roads.html">12.11：三条路总对照</a> 再把 penalty / AVBD / IPC 三条路并排成一张大表，给整本书的接触主线画上句号——并诚实地说一句「没有银弹」。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

@@ -30,7 +30,7 @@
         <h2 id="potential">增量势能 G(x) 与惯性</h2>
         <p>一步隐式欧拉 = 最小化增量势能（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）：</p>
         <div class="math-block">$$\mathbf x^{t+1}=\arg\min_{\mathbf x}G(\mathbf x),\qquad G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$$</div>
-        <p>质量加权范数 $\lVert\mathbf a\rVert_M^2=\mathbf a^\top M\,\mathbf a$。预测位置（惯性 / inertia，<a href="../01-foundations/1-3-inertia-elastic.html">1.3</a>）：</p>
+        <p>质量加权范数 $\lVert\mathbf a\rVert_M^2=\mathbf a^\top M\,\mathbf a$。预测位置（惯性 / inertia，<a href="../01-foundations/1-4-inertia-elastic.html">1.4</a>）：</p>
         <div class="math-block">$$\mathbf y=\mathbf x^t+h\,\mathbf v^t+h^2\,\mathbf a_{ext}$$</div>
         <p>其中 $\mathbf a_{ext}$ 是重力等外部加速度。$\nabla G=0$ 等价于隐式欧拉方程 $M(\mathbf x-\mathbf y)=h^2\mathbf f(\mathbf x)$。</p>
 
@@ -43,7 +43,7 @@
         <p>第一项 $\frac{m_i}{h^2}\mathbf I$ 是恒正定的惯性项。$\mathcal F_i$ 是与 $i$ 邻接的 force elements（弹簧）。</p>
 
         <h2 id="spring">弹簧的 E / f / H 与特征值</h2>
-        <p>记 $\mathbf d=\mathbf x_a-\mathbf x_b$，$l=\lVert\mathbf d\rVert$，rest length $l_0$，stiffness $k$（<a href="../01-foundations/1-4-spring-energy.html">1.4</a>）：</p>
+        <p>记 $\mathbf d=\mathbf x_a-\mathbf x_b$，$l=\lVert\mathbf d\rVert$，rest length $l_0$，stiffness $k$（<a href="../01-foundations/1-5-spring-energy.html">1.5</a>）：</p>
         <div class="math-block">$$E=\tfrac12 k\,(l-l_0)^2$$</div>
         <p>对端点 $a$ 的力（对 $b$ 取负号）：</p>
         <div class="math-block">$$\mathbf f=k\,\frac{l_0-l}{l}\,\mathbf d$$</div>

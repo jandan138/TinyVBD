@@ -67,21 +67,21 @@
           <div class="lab-cap">黄点是惯性目标 $\mathbf y$，虚线环是弹簧的 rest length。把 <b>w_I</b>（=$m/2h^2$，惯性权重）调大，最小值被拉向 $\mathbf y$；把 <b>k</b> 调大，最小值被拽回 rest 环。鼠标在图上移动看任意点的 $G$ 值——你会感到它确实是个有唯一谷底的碗。</div>
         </div>
 
-        <p>这个「拔河」的直觉极其重要，下一节 <a href="../01-foundations/1-3-inertia-elastic.html">1.3</a> 会专门展开：是谁、在什么时候赢。但现在你已经能体会到——隐式欧拉每一步，本质上就是在惯性和弹性之间找一个能量最低的妥协点。</p>
+        <p>这个「拔河」的直觉极其重要，下一节 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 会专门展开：是谁、在什么时候赢。但现在你已经能体会到——隐式欧拉每一步，本质上就是在惯性和弹性之间找一个能量最低的妥协点。</p>
 
         <h2 id="check-by-numbers">代数字验一遍：1D 单粒子的 arg min G</h2>
         <p>「$\arg\min G$ 是惯性 / 弹性的妥协点」「$\nabla G=0$ 等价回 $M(\mathbf x-\mathbf y)=h^2\mathbf f$」——这两句断言上面都用图和推导说过了。但把它落成一个能上计算器复算的<b>数</b>，会比任何图都更让人踏实。我们取最简单的 1D 单粒子，手算一遍。</p>
 
         <div class="callout note">
           <div class="c-h">这是为讲解构造的自洽示例</div>
-          <p>下面的数字是为说清原理挑的一组干净参数（与 <a href="1-3-inertia-elastic.html">1.3</a> 拔河、<a href="1-4-spring-energy.html">1.4</a> 偏置自洽），不是某次真实运行的输出。重点是这套代数能上计算器复算、驻点条件自洽。</p>
+          <p>下面的数字是为说清原理挑的一组干净参数（与 <a href="1-4-inertia-elastic.html">1.4</a> 拔河、<a href="1-5-spring-energy.html">1.5</a> 偏置自洽），不是某次真实运行的输出。重点是这套代数能上计算器复算、驻点条件自洽。</p>
         </div>
 
         <p>设一个质量 $m=1$ 的粒子在一维上，时间步 $h=1/60$，于是 $1/h^2=3600$。它的预测位置 $y=0$（纯惯性会停在原点）。一根弹簧把它往外拉：刚度 $k=100$，rest length $l_0=1$，弹簧另一端固定在原点，所以弹簧能量是 $\tfrac12 k(|x|-l_0)^2$。代入 $G=\frac{1}{2h^2}\lVert x-y\rVert_M^2+E$：</p>
         <div class="math-block">$$G(x) = \frac{3600}{2}\,x^2 \;+\; \frac{1}{2}\cdot 100\,(|x|-1)^2$$</div>
         <p>粒子被往正方向拉，取 $x>0$（则 $|x|=x$、$\mathrm{sgn}=+1$）求导令其为零：</p>
         <div class="math-block">$$G'(x) = 3600\,x + 100\,(x-1) = 0 \;\Longrightarrow\; 3700\,x = 100 \;\Longrightarrow\; x^* = \frac{100}{3700} \approx 0.027$$</div>
-        <p>平衡点 $x^*\approx 0.027$。读这个数：弹簧想把粒子拽到 $x=1$（rest），惯性碗想把它摁在 $y=0$；二者拔河，惯性碗系数 $3600\gg 100$，<b>惯性碗压倒性地赢</b>——粒子只被弹簧拽出原点 $2.7\%$，几乎贴在 $y=0$。这正是 <a href="1-3-inertia-elastic.html">1.3</a> 要展开的「谁赢」，也是 <span class="term">incremental potential</span> 里「短时间步 = 惯性主导」的具体数字。</p>
+        <p>平衡点 $x^*\approx 0.027$。读这个数：弹簧想把粒子拽到 $x=1$（rest），惯性碗想把它摁在 $y=0$；二者拔河，惯性碗系数 $3600\gg 100$，<b>惯性碗压倒性地赢</b>——粒子只被弹簧拽出原点 $2.7\%$，几乎贴在 $y=0$。这正是 <a href="1-4-inertia-elastic.html">1.4</a> 要展开的「谁赢」，也是 <span class="term">incremental potential</span> 里「短时间步 = 惯性主导」的具体数字。</p>
         <p>再验「$\nabla G=0$ 等价回 $M(x-y)=h^2 f$」这步：$M(x^*-y)=1\cdot 0.027=0.027$；右边 $h^2 f = h^2\cdot k(l_0-x^*)=\frac{1}{3600}\cdot 100\,(1-0.027)=\frac{97.3}{3600}\approx 0.027$。两边相等——驻点条件和原方程确实是同一件事。</p>
 
         <div class="callout note">
@@ -104,12 +104,12 @@
 
         <div class="callout note">
           <div class="c-h">惯性项保证了问题不病态</div>
-          <p>注意惯性项的 Hessian 是 $\frac{1}{h^2}M$，恒为<b>正定</b>。即使弹性能 $E$ 在某些方向上是「不定」的（比如弹簧被压缩时，见 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>），只要 $h$ 不太大，惯性项就能把整个 $G$ 的 Hessian 拉回正定附近。这是 VBD 不需要对 Hessian 做 SPD 投影也能稳的关键之一（<a href="../03-vbd/3-5-stability.html">3.5</a> 详谈）。</p>
+          <p>注意惯性项的 Hessian 是 $\frac{1}{h^2}M$，恒为<b>正定</b>。即使弹性能 $E$ 在某些方向上是「不定」的（比如弹簧被压缩时，见 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>），只要 $h$ 不太大，惯性项就能把整个 $G$ 的 Hessian 拉回正定附近。这是 VBD 不需要对 Hessian 做 SPD 投影也能稳的关键之一（<a href="../03-vbd/3-5-stability.html">3.5</a> 详谈）。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>一个公式，三句话：(1) 一步隐式欧拉 $=\arg\min_\mathbf{x} G(\mathbf x)$，其中 $G=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$；(2) $G$ 是惯性碗和弹性碗的拔河，最小值是二者的妥协；(3) 把问题看成最小化，给了我们「下降」这把尺子，让局部、增量、可证稳定的解法成为可能。</p>
-        <p>下一节，我们把这场拔河看得更细——惯性项里的 $\mathbf y$ 到底是什么，质量和时间步如何决定谁赢——为读懂 <code>forwardStep()</code> 做准备。</p>
+        <p>不过在展开这场拔河之前，有个一直被我们写进公式、却还没正面交代的符号该补课了：那个 $\lVert\mathbf x-\mathbf y\rVert_M^2$ 里的 <b>$M$</b>——质量矩阵。它到底长什么样、那个下标 $M$ 的范数是什么意思？下一节 <a href="../01-foundations/1-3-mass-matrix.html">1.3</a> 先把这块地基补平，再回到 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 的拔河：惯性项里的 $\mathbf y$ 到底是什么、质量和时间步如何决定谁赢——为读懂 <code>forwardStep()</code> 做准备。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

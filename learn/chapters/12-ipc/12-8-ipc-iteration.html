@@ -77,18 +77,18 @@ def ipc_outer_iteration(x, y):
           <li><b>弹性项</b>：每个 force element（弹簧 / 三角形 / 四面体）按它的能量贡献力与 Hessian，落到相关顶点的块上——就是 4-3 内层循环累加 <code>h_1_1</code> 和带 ± 号的力那件事，只不过现在写进全局矩阵的对应位置。</li>
           <li><b>barrier 项</b>：这是 IPC 独有、也是这一段最关键的部分。遍历当前所有<b>逼近的接触对</b>（point-triangle / edge-edge），对每一对算出 barrier 的力与 Hessian。</li>
         </ul>
-        <p>barrier 那一份正是 <a href="12-4-barrier-grad-psd.html">11-4</a> 推的链式法则：barrier 是距离 $d$ 的函数，距离又是顶点位置的函数，所以</p>
+        <p>barrier 那一份正是 <a href="12-4-barrier-grad-psd.html">12-4</a> 推的链式法则：barrier 是距离 $d$ 的函数，距离又是顶点位置的函数，所以</p>
         <div class="math-block">$$\frac{\partial b}{\partial \mathbf x} = b'(d)\,\frac{\partial d}{\partial \mathbf x},\qquad \frac{\partial^2 b}{\partial \mathbf x^2} = b''(d)\,\frac{\partial d}{\partial \mathbf x}\frac{\partial d}{\partial \mathbf x}^{\!\top} + b'(d)\,\frac{\partial^2 d}{\partial \mathbf x^2}$$</div>
-        <p>其中 $b'$、$b''$ 来自 <a href="12-2-barrier-energy.html">11-2</a> 的 barrier 解析式，距离梯度 $\partial d/\partial \mathbf x$ 来自 <a href="12-3-distance-geometry.html">11-3</a>——还记得吗？它按 <span class="term">barycentric</span> 权重落到那对元件涉及的几个顶点上（point 端拿 $\hat n$，三角形三个顶点各拿 $-\lambda\hat n$）。装配就是把这每一对接触的小贡献，加到全局 $\mathbf H$、$\mathbf f$ 里属于这几个顶点的行列上。</p>
+        <p>其中 $b'$、$b''$ 来自 <a href="12-2-barrier-energy.html">12-2</a> 的 barrier 解析式，距离梯度 $\partial d/\partial \mathbf x$ 来自 <a href="12-3-distance-geometry.html">12-3</a>——还记得吗？它按 <span class="term">barycentric</span> 权重落到那对元件涉及的几个顶点上（point 端拿 $\hat n$，三角形三个顶点各拿 $-\lambda\hat n$）。装配就是把这每一对接触的小贡献，加到全局 $\mathbf H$、$\mathbf f$ 里属于这几个顶点的行列上。</p>
         <div class="callout note">
           <div class="c-h">谁参与装配，由「逼近」决定</div>
-          <p>不是所有元件对都进 barrier 装配——只有距离 $d &lt; \hat d$（落进激活阈值）的接触对才有非零贡献，正是 <a href="12-2-barrier-energy.html">11-2</a> 那条「$d\ge\hat d$ 时 $b=0$」。所以每轮迭代前要先用空间加速结构找出这批逼近的对（和 12-5 里 filtered CCD 的「过滤」是同一套加速思想）。这份「当前活跃接触集」会随着 $\mathbf x$ 变化而变。</p>
+          <p>不是所有元件对都进 barrier 装配——只有距离 $d &lt; \hat d$（落进激活阈值）的接触对才有非零贡献，正是 <a href="12-2-barrier-energy.html">12-2</a> 那条「$d\ge\hat d$ 时 $b=0$」。所以每轮迭代前要先用空间加速结构找出这批逼近的对（和 12-5 里 filtered CCD 的「过滤」是同一套加速思想）。这份「当前活跃接触集」会随着 $\mathbf x$ 变化而变。</p>
         </div>
 
         <h2 id="psd">第 2 段：PSD 投影每个局部块</h2>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">② psd_project_blocks</span><button class="cp">复制</button></div><pre><code>H = psd_project_blocks(H)   # 负特征值钳到 0，保证下降方向</code></pre></div>
         <p>这一段在 4-3 的 VBD <code>solve()</code> 里<b>是没有的</b>——VBD 故意不投影，靠那块恒正定的惯性 Hessian 把整体兜回正定附近（见 <a href="../03-vbd/3-5-stability.html">3.5</a>）。IPC 走全局 Newton，就必须更讲究：要让 $\mathbf H\,\mathbf p=\mathbf f$ 解出来的 $\mathbf p$ <b>确实是一个下降方向</b>，$\mathbf H$ 得是（半）正定的。</p>
-        <p>问题出在哪？弹性 Hessian 在压缩时可能不定（4-3 里那个 $k(1-l_0/l)$ 负特征值），barrier Hessian 里那个 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 项（距离的二阶项）<b>也不保证半正定</b>——这正是 <a href="12-4-barrier-grad-psd.html">11-4</a> 重点讲的。办法和 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影同源：对每个<b>局部</b> Hessian 块做特征分解，把负特征值<b>钳到零</b>，再把投影后的块装进全局 $\mathbf H$。</p>
+        <p>问题出在哪？弹性 Hessian 在压缩时可能不定（4-3 里那个 $k(1-l_0/l)$ 负特征值），barrier Hessian 里那个 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 项（距离的二阶项）<b>也不保证半正定</b>——这正是 <a href="12-4-barrier-grad-psd.html">12-4</a> 重点讲的。办法和 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影同源：对每个<b>局部</b> Hessian 块做特征分解，把负特征值<b>钳到零</b>，再把投影后的块装进全局 $\mathbf H$。</p>
         <div class="math-block">$$\mathbf H_{\text{local}} = \mathbf Q\,\mathrm{diag}(\lambda_1,\dots,\lambda_n)\,\mathbf Q^\top \;\longrightarrow\; \mathbf Q\,\mathrm{diag}(\max(\lambda_1,0),\dots,\max(\lambda_n,0))\,\mathbf Q^\top$$</div>
         <p>「逐块投影再装配」是关键细节：投影发生在每个小块（一个 force element、一对接触）<b>本地</b>，而不是对整个全局大矩阵做（那太贵）。每个本地块半正定，累加成的全局 $\mathbf H$ 也半正定——于是下一步的解必为下降方向。</p>
 
@@ -99,26 +99,26 @@ def ipc_outer_iteration(x, y):
         <p>$\mathbf H$ 是 $3N\times 3N$（$N$ 个顶点）的稀疏矩阵，解它要用稀疏直接法。IPC 用 <span class="term">CHOLMOD</span> 做 Cholesky 分解：先按 $\mathbf H$ 的稀疏结构做一次<b>符号分解</b>（算出非零位置、可在结构不变时复用），再做<b>并行数值分解</b>得到 $\mathbf p$。因为第 2 段已把 $\mathbf H$ 投成半正定，Cholesky 才用得上（它要求矩阵正定）。</p>
         <div class="callout note">
           <div class="c-h">这一步贵在哪，下一节专门算账</div>
-          <p>「解一个全局稀疏系统」正是 IPC 比 VBD 的 per-vertex 3×3 贵的核心来源之一——它不能像 VBD 那样天然 per-vertex 并行，而要做一次有数据依赖的稀疏分解。这笔账连同 CCD 的开销，<a href="12-9-solver-cost.html">11-9</a> 会把 IPC「稳但贵」的全景摊开。这里先记住：<b>解出的 $\mathbf p$ 是「往 $G$ 更低处去」的方向，但还不是最终位移</b>——步长由下面两段决定。</p>
+          <p>「解一个全局稀疏系统」正是 IPC 比 VBD 的 per-vertex 3×3 贵的核心来源之一——它不能像 VBD 那样天然 per-vertex 并行，而要做一次有数据依赖的稀疏分解。这笔账连同 CCD 的开销，<a href="12-9-solver-cost.html">12-9</a> 会把 IPC「稳但贵」的全景摊开。这里先记住：<b>解出的 $\mathbf p$ 是「往 $G$ 更低处去」的方向，但还不是最终位移</b>——步长由下面两段决定。</p>
         </div>
 
         <h2 id="ccd-ls">第 4、5 段：CCD 求安全步长 + line search 定步长</h2>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">④⑤ filtered_CCD + line_search</span><button class="cp">复制</button></div><pre><code>t_star = filtered_CCD(x, p)        # 整段扫掠里第一次接触的比例
 alpha  = line_search(x, p, t_star) # = min(alpha_newton, c*t_star, alpha_cfl)</code></pre></div>
-        <p>有了方向 $\mathbf p$，要决定沿它走多远。这正是 <a href="12-5-ccd-linesearch.html">11-5</a> 整节讲的那台机器，这里把它接进迭代：</p>
+        <p>有了方向 $\mathbf p$，要决定沿它走多远。这正是 <a href="12-5-ccd-linesearch.html">12-5</a> 整节讲的那台机器，这里把它接进迭代：</p>
         <ul>
           <li><code>filtered_CCD(x, p)</code>：沿方向 $\mathbf p$ 把每个顶点的运动想成一段直线扫掠，用 filtered <span class="term">CCD</span> 求出<b>最大不穿透步长</b> $t^\star\in(0,1]$——整段运动里第一次发生接触（距离归零）的比例。只要走的步长 $\le t^\star$，这一步就<b>没有任何一对元件穿过对方</b>。</li>
           <li><code>line_search(x, p, t_star)</code>：在不穿透的前提下，再挑一个<b>真能让 $G$ 下降</b>的步长。最终步长是三者取最小：</li>
         </ul>
         <div class="math-block">$$\alpha = \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0<c<1$$</div>
-        <p>其中 $\alpha_{\text{Newton}}$ 是普通 line search（Armijo 之类，保证能量真的降）想要的步长；$c\cdot t^\star$ 是 CCD 给的不穿透上限，乘 $c$ 是为了不贴死在 $d=0$（barrier 在那里发散）；$\alpha_{\text{CFL}}$ 是 <a href="12-5-ccd-linesearch.html">11-5</a> 那道 CFL 式保守接触界，留一条正的安全缝。<b>谁最保守听谁的。</b></p>
+        <p>其中 $\alpha_{\text{Newton}}$ 是普通 line search（Armijo 之类，保证能量真的降）想要的步长；$c\cdot t^\star$ 是 CCD 给的不穿透上限，乘 $c$ 是为了不贴死在 $d=0$（barrier 在那里发散）；$\alpha_{\text{CFL}}$ 是 <a href="12-5-ccd-linesearch.html">12-5</a> 那道 CFL 式保守接触界，留一条正的安全缝。<b>谁最保守听谁的。</b></p>
 
         <h2 id="accept">第 6 段：接受这一步 + 收敛判据</h2>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">⑥ accept &amp; converge</span><button class="cp">复制</button></div><pre><code>x = x + alpha * p
 converged = norm(grad_G(x)) &lt; tol   # 梯度足够小 → 已到极小附近</code></pre></div>
         <p>对应 4-3 的 <code>strand.vertex(iV) += dx</code>——只是这里是<b>整批</b>顶点一起按同一个 $\alpha$ 沿 $\mathbf p$ 挪：</p>
         <div class="math-block">$$\mathbf x \;\leftarrow\; \mathbf x + \alpha\,\mathbf p$$</div>
-        <p>因为 $\alpha$ 被 CCD + 保守界压在可行域内，这一步走完 $\mathbf x$ <b>仍然无交叉</b>——而且我们是从一个无交叉的 $\mathbf x$ 出发的。于是「无交叉」是一个贯穿每次迭代的<b>不变量</b>：进来是可行的，出去还是可行的。这正是 <a href="12-5-ccd-linesearch.html">11-5</a> 反复强调的、IPC「保证」二字的来源。</p>
+        <p>因为 $\alpha$ 被 CCD + 保守界压在可行域内，这一步走完 $\mathbf x$ <b>仍然无交叉</b>——而且我们是从一个无交叉的 $\mathbf x$ 出发的。于是「无交叉」是一个贯穿每次迭代的<b>不变量</b>：进来是可行的，出去还是可行的。这正是 <a href="12-5-ccd-linesearch.html">12-5</a> 反复强调的、IPC「保证」二字的来源。</p>
         <p>最后判收敛：当梯度 $\lVert\nabla G(\mathbf x)\rVert$ 已经足够小（小于阈值 <code>tol</code>），说明 $\mathbf x$ 落到了 $G$ 的极小附近，这个 time step 的非线性求解就结束；否则带着<b>新的</b> $\mathbf x$ 回到第 1 段，重新装配、再来一轮。</p>
         <div class="callout note">
           <div class="c-h">「一次迭代」和「一个 time step」的关系</div>
@@ -135,7 +135,7 @@ converged = norm(grad_G(x)) &lt; tol   # 梯度足够小 → 已到极小附近<
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) IPC 一次外迭代的骨架是 <b>装配全局稀疏 $\mathbf H,\mathbf f$（惯性+弹性+barrier）→ 逐块 PSD 投影 → 全局稀疏 Cholesky 解出方向 $\mathbf p$ → CCD 求 $t^\star$ → line search 定 $\alpha=\min(\alpha_{\text{Newton}},c\,t^\star,\alpha_{\text{CFL}})$ → $\mathbf x\!\leftarrow\!\mathbf x+\alpha\mathbf p$ 并判收敛</b>，每一段都接得回 12-2/12-3/12-4/12-5；(2) 它和 4-3 的 VBD <code>solve()</code> <b>目标相同</b>（都是 $\min G(\mathbf x)$）但<b>机器不同</b>——VBD 是 per-vertex Gauss-Seidel sweep，IPC 是<b>一次全局求解</b>；(3) 因为 $\alpha$ 被 CCD 与保守界焊在可行域内，<b>每一次外迭代结束都无交叉</b>，于是 intersection-free 是贯穿整个 time step 的不变量。</p>
-        <p>这台机器转起来了，但还没算账：那个全局稀疏求解、那次 CCD，到底贵在哪、和 VBD 的 per-vertex 3×3 差多少？下一节 <a href="12-9-solver-cost.html">11-9（求解器全景与代价）</a>，我们把 IPC「稳但贵」的全景摊开来看。</p>
+        <p>这台机器转起来了，但还没算账：那个全局稀疏求解、那次 CCD，到底贵在哪、和 VBD 的 per-vertex 3×3 差多少？下一节 <a href="12-9-solver-cost.html">12-9（求解器全景与代价）</a>，我们把 IPC「稳但贵」的全景摊开来看。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

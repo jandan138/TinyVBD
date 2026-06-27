@@ -80,7 +80,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三件事：(1) point-triangle 距离 $d=\lVert\mathbf p-\mathbf q\rVert$，最近点 $\mathbf q$ 是三角形顶点的 barycentric 组合；梯度方向是单位法向 $\hat{\mathbf n}=(\mathbf p-\mathbf q)/d$，对 $\mathbf p$ 是 $+\hat{\mathbf n}$、对三个顶点是 $-\lambda\hat{\mathbf n}$——<b>谁离最近点近谁分到的梯度大</b>，四者相加为零正是牛顿第三定律。(2) 真正「系统」的部分是<b>退化分区</b>：barycentric 出现负值就把最近点降维投影到边（point-edge）或顶点（point-point），参与的顶点和权重随之改变；edge-edge 还多一个<b>近平行</b>的病态，IPC 用 mollifier 压住。(3) 这两类接触对，正是 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 那个 BVH 检测器找出来的——同样的几何，这里喂给全局 interior-point barrier。</p>
-        <p>下一节我们把 barrier 和距离梯度<b>串起来求导</b>：链式法则下接触力和 Hessian 各自长什么样，为什么距离的二阶项会让 Hessian 不再保证半正定，以及怎么用 <a href="12-4-barrier-grad-psd.html">11-4（barrier 求导与 PSD）</a> 的 PSD projection 把特征值钳回去——这一步直接接回你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 学过的 SPD 投影。</p>
+        <p>下一节我们把 barrier 和距离梯度<b>串起来求导</b>：链式法则下接触力和 Hessian 各自长什么样，为什么距离的二阶项会让 Hessian 不再保证半正定，以及怎么用 <a href="12-4-barrier-grad-psd.html">12-4（barrier 求导与 PSD）</a> 的 PSD projection 把特征值钳回去——这一步直接接回你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 学过的 SPD 投影。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

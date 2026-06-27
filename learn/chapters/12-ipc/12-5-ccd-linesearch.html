@@ -79,7 +79,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) barrier 在连续意义上挡穿透，但<b>离散的一步可能跨过能量墙</b>——10-3 和 IPC 都有这个风险，区别全在解法；(2) IPC 的解法是 <b>CCD-filtered line search</b>：用连续碰撞检测求出最大不穿透步长 $t^\star$，再叠一道 <span class="term">CFL</span> 式保守接触界把步长进一步收紧，最终 $\alpha=\min(\alpha_{\text{Newton}},\,c\,t^\star,\,\alpha_{\text{CFL}})$，<b>永远停在可行域内部</b>；(3) 因为这道保证<b>烤进了每一次非线性迭代</b>（而非像 10-3 那样在求解步之外做事后截断），所以整个 time step 严格 <span class="term">intersection-free</span>，与压缩程度无关——这就是 IPC「保证」二字的真正来源。</p>
-        <p>到这里 IPC 的「不穿透」这条主线讲完了。但真实接触从不只有「推开」，还有<b>沿着接触面相互摩擦</b>。理想 Coulomb 摩擦有一处 Newton 最讨厌的不连续阶跃——下一节 <a href="12-6-friction.html">11-6：摩擦——lagged、光滑化的 Coulomb</a>，我们看 IPC 怎么把摩擦也<b>塞进同一个优化框架</b>，并把那个阶跃磨成可微的曲线。</p>
+        <p>到这里 IPC 的「不穿透」这条主线讲完了。但真实接触从不只有「推开」，还有<b>沿着接触面相互摩擦</b>。理想 Coulomb 摩擦有一处 Newton 最讨厌的不连续阶跃——下一节 <a href="12-6-friction.html">12-6：摩擦——lagged、光滑化的 Coulomb</a>，我们看 IPC 怎么把摩擦也<b>塞进同一个优化框架</b>，并把那个阶跃磨成可微的曲线。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

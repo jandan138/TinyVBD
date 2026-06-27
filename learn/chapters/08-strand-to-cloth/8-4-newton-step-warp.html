@@ -103,13 +103,13 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         <div class="math-block">$$\mathbf H_{\text{inertia}}=\frac{m}{h^2}\mathbf I_3=3600\,\mathbf I_3=\begin{pmatrix}3600&amp;0&amp;0\\0&amp;3600&amp;0\\0&amp;0&amp;3600\end{pmatrix}$$</div>
         <p>这就是 kernel 开头那两行 <code>f = mass*(inertia-pos)/dt²</code>、<code>h = mass/dt²·I₃</code> 的数值版：力 $(0,-72,0)$ 竖直向下、把顶点往惯性碗底 $\mathbf y_i$ 拽；Hessian 是干干净净的 $3600\,\mathbf I_3$，三个方向各向同性、恒正定。</p>
 
-        <p>现在加<b>一条具体弹簧</b>。它把 $i$ 连到一个被钉住的邻居 $\mathbf x_{nb}=(1.2,0,0)$，刚度 $k=100$、rest 长度 $l_0=1.0$。算几何量（记号同 <a href="../01-foundations/1-4-spring-energy.html">1.4</a>，$\mathbf d=\mathbf x_i-\mathbf x_{nb}$）：</p>
+        <p>现在加<b>一条具体弹簧</b>。它把 $i$ 连到一个被钉住的邻居 $\mathbf x_{nb}=(1.2,0,0)$，刚度 $k=100$、rest 长度 $l_0=1.0$。算几何量（记号同 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>，$\mathbf d=\mathbf x_i-\mathbf x_{nb}$）：</p>
         <div class="math-block">$$\mathbf d=\mathbf x_i-\mathbf x_{nb}=(-1.2,\,0,\,0),\qquad l=\lVert\mathbf d\rVert=1.2,\qquad \frac{l_0}{l}=\frac{1.0}{1.2}\approx0.833$$</div>
         <p>弹簧被<b>拉长</b>了（$l=1.2&gt;l_0=1.0$）。先算它对 $i$ 的力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$：</p>
         <div class="math-block">$$k\frac{l_0-l}{l}=100\times\frac{1.0-1.2}{1.2}=100\times(-0.1667)=-16.67,\qquad \mathbf f_{\text{spring}}=-16.67\times(-1.2,0,0)=(20,\,0,\,0)$$</div>
         <p>力沿 $+x$、大小 $20$——被拉长的弹簧把 $i$ 往邻居方向拽回去，方向和符号都对。再算弹簧 Hessian $\mathbf H_{aa}=k\big[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})\big]$。因为 $\mathbf d$ 只有 $x$ 分量，外积 $\mathbf d\mathbf d^\top/l^2$ 只有 $xx$ 项为 $1$，于是 $\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2}=\operatorname{diag}(0,1,1)$，整块是对角的：</p>
         <div class="math-block">$$\mathbf H_{\text{spring}}=100\Big[\mathbf I-0.833\,\operatorname{diag}(0,1,1)\Big]=100\,\operatorname{diag}(1,\,0.1667,\,0.1667)=\operatorname{diag}(100,\,16.67,\,16.67)$$</div>
-        <p>读它的物理：沿弹簧方向（$x$）特征值是 $k=100$（拉伸方向永远硬）；垂直方向是 $k(1-l_0/l)=100\times0.1667=16.67$，<b>因为被拉长所以为正</b>。（若改成压缩 $l&lt;l_0$，这个垂直特征值就翻负——正是 <a href="../01-foundations/1-4-spring-energy.html">1.4</a> 那个不定来源，下一章 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 要处理的。）</p>
+        <p>读它的物理：沿弹簧方向（$x$）特征值是 $k=100$（拉伸方向永远硬）；垂直方向是 $k(1-l_0/l)=100\times0.1667=16.67$，<b>因为被拉长所以为正</b>。（若改成压缩 $l&lt;l_0$，这个垂直特征值就翻负——正是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个不定来源，下一章 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 要处理的。）</p>
 
         <p>惯性块 + 弹簧块累加，拼出完整的 $\mathbf f_i$、$\mathbf H_i$。两块 Hessian 都是对角的，加起来还是对角，$3\times3$ 解一眼就出：</p>
         <div class="math-block">$$\mathbf f_i=(0,-72,0)+(20,0,0)=(20,\,-72,\,0),\qquad \mathbf H_i=\operatorname{diag}(3700,\,3616.67,\,3616.67)$$</div>

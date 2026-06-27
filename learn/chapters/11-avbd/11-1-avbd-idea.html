@@ -92,7 +92,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) VBD 的真软肋是<b>高刚度比</b>收敛、<b>硬约束</b>、<b>惩罚碰撞不保证无穿透</b>——其中高<b>质量</b>比反而是它的强项，别混淆；(2) <b>AVBD</b> 在 VBD 的 block coordinate descent 上加 <b>augmented Lagrangian + 自适应 primal-dual</b>，用一个跨迭代维护的 $\lambda$ 把约束顶到满足，从而能强制硬约束、改善高刚度比，撑起 rigid 接触/堆叠/摩擦/关节；(3) 核心机制是 <b>penalty ramping</b>：跨帧 warm-start 衰减（带记忆地继承上一帧），帧内对仍违反的约束按 $\beta$ ramp up，<b>soft 封顶在材料刚度、hard 冲向无穷</b>，默认 $\alpha=0.95,\ \beta=10,\ \gamma=0.99$ + 每约束 $k_{\text{start}}$。</p>
-        <p>下一节 <a href="11-2-rigid-and-further.html">10-2（Newton rigid AVBD 一瞥）</a>，我们落回工程：看 Newton 里 <code>SolverVBD</code> 怎么「particle 用 VBD、rigid 用 AVBD」，那几个 <code>rigid_avbd_gamma</code> / <code>rigid_contact_k_start</code> / <code>rigid_avbd_beta</code> 参数正是这一节机制的代码出口，再给你指几条继续往下读的路。</p>
+        <p>下一节 <a href="11-2-rigid-and-further.html">11-2（Newton rigid AVBD 一瞥）</a>，我们落回工程：看 Newton 里 <code>SolverVBD</code> 怎么「particle 用 VBD、rigid 用 AVBD」，那几个 <code>rigid_avbd_gamma</code> / <code>rigid_contact_k_start</code> / <code>rigid_avbd_beta</code> 参数正是这一节机制的代码出口，再给你指几条继续往下读的路。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>
