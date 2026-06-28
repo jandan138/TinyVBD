@@ -110,7 +110,7 @@ alpha  = line_search(x, p, t_star) # = min(alpha_newton, c*t_star, alpha_cfl)</c
           <li><code>filtered_CCD(x, p)</code>：沿方向 $\mathbf p$ 把每个顶点的运动想成一段直线扫掠，用 filtered <span class="term">CCD</span> 求出<b>最大不穿透步长</b> $t^\star\in(0,1]$——整段运动里第一次发生接触（距离归零）的比例。只要走的步长 $\le t^\star$，这一步就<b>没有任何一对元件穿过对方</b>。</li>
           <li><code>line_search(x, p, t_star)</code>：在不穿透的前提下，再挑一个<b>真能让 $G$ 下降</b>的步长。最终步长是三者取最小：</li>
         </ul>
-        <div class="math-block">$$\alpha = \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0<c<1$$</div>
+        <div class="math-block">$$\alpha = \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0&lt;c&lt;1$$</div>
         <p>其中 $\alpha_{\text{Newton}}$ 是普通 line search（Armijo 之类，保证能量真的降）想要的步长；$c\cdot t^\star$ 是 CCD 给的不穿透上限，乘 $c$ 是为了不贴死在 $d=0$（barrier 在那里发散）；$\alpha_{\text{CFL}}$ 是 <a href="12-5-ccd-linesearch.html">12-5</a> 那道 CFL 式保守接触界，留一条正的安全缝。<b>谁最保守听谁的。</b></p>
 
         <h2 id="accept">第 6 段：接受这一步 + 收敛判据</h2>

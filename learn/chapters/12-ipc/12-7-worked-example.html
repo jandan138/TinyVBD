@@ -30,7 +30,7 @@
         <h2 id="setup">摆出这一对：一个 2D point-segment</h2>
         <p>为了能手算，我们用一个 <b>2D point-segment</b> 作例子——它是 point-triangle 在二维里的类比，几何完全同构，但所有数都能写在一行里。设：</p>
         <div class="math-block">$$\mathbf p = (0,\ 0.30),\qquad \mathbf a = (-1,0),\quad \mathbf b = (1,0),\qquad \hat d = 0.40,\quad \kappa = 1$$</div>
-        <p>一个点 $\mathbf p$ 悬在线段 $ab$ 正上方 $0.30$ 处；barrier 的激活阈值 $\hat d=0.40$，刚度系数 $\kappa=1$（取 1 是为了让数字干净，真实场景 $\kappa$ 会大得多）。因为点离线段 $0.30 < \hat d = 0.40$，<b>已经进入 barrier 的激活窗口</b>，接触项要发力了。下面顺着 <a href="12-3-distance-geometry.html">12-3</a> → <a href="12-4-barrier-grad-psd.html">12-4</a> 的次序，一步步算。</p>
+        <p>一个点 $\mathbf p$ 悬在线段 $ab$ 正上方 $0.30$ 处；barrier 的激活阈值 $\hat d=0.40$，刚度系数 $\kappa=1$（取 1 是为了让数字干净，真实场景 $\kappa$ 会大得多）。因为点离线段 $0.30 &lt; \hat d = 0.40$，<b>已经进入 barrier 的激活窗口</b>，接触项要发力了。下面顺着 <a href="12-3-distance-geometry.html">12-3</a> → <a href="12-4-barrier-grad-psd.html">12-4</a> 的次序，一步步算。</p>
 
         <div class="callout note">
           <div class="c-h">这组数是为讲解构造的自洽示例</div>
@@ -48,7 +48,7 @@
         <p>把 $d=0.30$、$\hat d=0.40$ 代进 <a href="12-2-barrier-energy.html">12-2</a> 的 barrier。逐个算中间值，每个都能在计算器上验：</p>
         <div class="math-block">$$\frac{d}{\hat d} = \frac{0.30}{0.40} = 0.75,\qquad \ln 0.75 \approx -0.288,\qquad (d-\hat d)^2 = (-0.10)^2 = 0.01$$</div>
         <div class="math-block">$$b = -(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big) \approx -\,(0.01)\times(-0.288) \approx 2.9\times10^{-3}$$</div>
-        <p>读出来：$d<\hat d$ 时 $\ln(d/\hat d)<0$，前面的负号把它翻成<b>正能量</b>——barrier 在「储能」，像一根被压住的弹簧。这个数（约 $2.9\times10^{-3}$，再乘上 $\kappa=1$）现在还小，因为点离墙还有 $0.30$；一旦 $d\to0$，$\ln(d/\hat d)\to-\infty$，$b\to+\infty$，能量冲向无穷——这正是 <a href="12-2-barrier-energy.html">12-2</a> 拆过的「$\ln$ 端发散、$(d-\hat d)^2$ 端平滑接零」。</p>
+        <p>读出来：$d&lt;\hat d$ 时 $\ln(d/\hat d)&lt;0$，前面的负号把它翻成<b>正能量</b>——barrier 在「储能」，像一根被压住的弹簧。这个数（约 $2.9\times10^{-3}$，再乘上 $\kappa=1$）现在还小，因为点离墙还有 $0.30$；一旦 $d\to0$，$\ln(d/\hat d)\to-\infty$，$b\to+\infty$，能量冲向无穷——这正是 <a href="12-2-barrier-energy.html">12-2</a> 拆过的「$\ln$ 端发散、$(d-\hat d)^2$ 端平滑接零」。</p>
 
         <div class="callout note">
           <div class="c-h">能量的绝对值别太当真，趋势才是真的</div>
@@ -58,7 +58,7 @@
         <h2 id="step3">第三步 · 力：方向沿 +n̂ 把点顶开</h2>
         <p>力是能量的负梯度。按 <a href="12-4-barrier-grad-psd.html">12-4</a> 的链式法则，barrier 对 $\mathbf p$ 的力是</p>
         <div class="math-block">$$\mathbf f_{\mathbf p} = -\frac{\partial b}{\partial \mathbf p} = -\,b'(d)\,\frac{\partial d}{\partial \mathbf p} = -\,b'(d)\,\hat{\mathbf n}$$</div>
-        <p>$b'(d)$ 在 $d<\hat d$ 时为<b>负</b>（能量随 $d$ 减小而升，故对 $d$ 的导数为负），于是 $-b'(d)>0$，力沿 $+\hat{\mathbf n}=(0,1)$——<b>竖直向上，把点 $\mathbf p$ 顶离线段</b>。方向算得明明白白：朝着「让距离变大」的方向推。再看大小的趋势：$d$ 越小，$|b'(d)|$ 越大（barrier 越靠近 0 越陡），这股顶开的力就越凶——这就是为什么穿不过去。这里 $d=0.30$ 离 $\hat d=0.40$ 不远，曲线还平缓，所以力还温柔；真把点压到 $d=0.05$，同一个公式会吐出一股极大的排斥力。</p>
+        <p>$b'(d)$ 在 $d&lt;\hat d$ 时为<b>负</b>（能量随 $d$ 减小而升，故对 $d$ 的导数为负），于是 $-b'(d)>0$，力沿 $+\hat{\mathbf n}=(0,1)$——<b>竖直向上，把点 $\mathbf p$ 顶离线段</b>。方向算得明明白白：朝着「让距离变大」的方向推。再看大小的趋势：$d$ 越小，$|b'(d)|$ 越大（barrier 越靠近 0 越陡），这股顶开的力就越凶——这就是为什么穿不过去。这里 $d=0.30$ 离 $\hat d=0.40$ 不远，曲线还平缓，所以力还温柔；真把点压到 $d=0.05$，同一个公式会吐出一股极大的排斥力。</p>
 
         <h2 id="step4">第四步 · 落到顶点：点拿满，两端各分一半</h2>
         <p>这一对接触不只推 $\mathbf p$，线段的两个端点 $\mathbf a,\mathbf b$ 也要受力。按 <a href="12-3-distance-geometry.html">12-3</a> 的 barycentric 落点规则，把同一股标量力 $-b'(d)$ 按权重分给三个顶点：</p>

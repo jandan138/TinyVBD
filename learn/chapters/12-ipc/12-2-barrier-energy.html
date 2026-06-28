@@ -31,7 +31,7 @@
         <p>设 $d$ 是一对 surface primitive 之间的<b>无符号距离</b>（unsigned distance，下一节细说怎么算）。可行域就是 $d>0$——只要不穿透就合法。barrier 的任务，是在 $d\to0$ 这道边界上<b>立起一道发散的墙</b>，让任何想把 $d$ 推到零的力，都被一股越来越大的反作用顶回去。</p>
         <p>它的脾气可以用三句话概括：</p>
         <ul>
-          <li><b>有激活阈值 $\hat d$。</b>当距离还远（$d\ge\hat d$）时，barrier <b>完全不发力</b>，能量为零——远处的几何对不该互相干扰。只有当 $d<\hat d$、两者逼近到这个用户给定的薄壳厚度之内，barrier 才<b>激活</b>，开始往外推。$\hat d$ 是你交给 IPC 的一个旋钮。</li>
+          <li><b>有激活阈值 $\hat d$。</b>当距离还远（$d\ge\hat d$）时，barrier <b>完全不发力</b>，能量为零——远处的几何对不该互相干扰。只有当 $d&lt;\hat d$、两者逼近到这个用户给定的薄壳厚度之内，barrier 才<b>激活</b>，开始往外推。$\hat d$ 是你交给 IPC 的一个旋钮。</li>
           <li><b>$d\to0$ 时发散到无穷。</b>距离越小，能量涨得越凶，到趋零时<b>冲向无穷</b>。能量对距离求导就是力，发散的能量意味着<b>可以产生任意大的接触力</b>——于是无论外界怎么挤，距离<b>永远跨不过 0</b>。这就是「不穿透」在能量层面的根：不是事后拽回来，而是根本到不了零。</li>
           <li><b>设计成 $C^2$。</b>barrier 被刻意构造成<b>二次连续可微</b>。原因很实在：IPC 要拿它进 Newton，Newton 需要梯度（力）和 Hessian（曲率）都连续、良态。一个有折角或跳变的 barrier 会让 Newton 步抽风，所以光滑性是<b>硬指标</b>，不是锦上添花。</li>
         </ul>
@@ -39,12 +39,12 @@
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">barrier 曲线：阈值内激活、趋零发散</span></div>
           <div class="lab-body" data-widget="barrier-curve"></div>
-          <div class="lab-cap">拖动距离 $d$，看 barrier 能量怎么在 $d<\hat d$ 处抬头、在 $d\to0$ 处冲向无穷；调 $\hat d$ 看激活窗口怎么变宽变窄，并可叠加 penalty 对照。</div>
+          <div class="lab-cap">拖动距离 $d$，看 barrier 能量怎么在 $d&lt;\hat d$ 处抬头、在 $d\to0$ 处冲向无穷；调 $\hat d$ 看激活窗口怎么变宽变窄，并可叠加 penalty 对照。</div>
         </div>
 
         <h2 id="analytic-form">解析式：一个把三条性质都装下的具体函数</h2>
-        <p>光说性质有点像隔靴搔痒。现在我们把 IPC 论文常用的那条 barrier <b>写出来</b>，让你看见「激活阈值、趋零发散、$C^2$ 光滑」这三条脾气，是怎么被两个简单因子<b>恰好</b>装进一个式子里的。对 $0<d<\hat d$：</p>
-        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0<d<\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
+        <p>光说性质有点像隔靴搔痒。现在我们把 IPC 论文常用的那条 barrier <b>写出来</b>，让你看见「激活阈值、趋零发散、$C^2$ 光滑」这三条脾气，是怎么被两个简单因子<b>恰好</b>装进一个式子里的。对 $0&lt;d&lt;\hat d$：</p>
+        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0&lt;d&lt;\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
         <p>这条式子看着不起眼，却是<b>两个因子相乘</b>：一个 $\ln(d/\hat d)$，一个 $(d-\hat d)^2$。神奇之处在于，它们各管一头——$\ln$ 管「靠近 $0$ 这一端怎么发散」，$(d-\hat d)^2$ 管「靠近 $\hat d$ 这一端怎么平滑收尾」。我们一项一项拆。</p>
 
         <h3 id="factor-log">因子一：$\ln(d/\hat d)$ —— 趋零发散的发动机</h3>
@@ -52,10 +52,10 @@
         <p>再看另一端：当 $d=\hat d$，$d/\hat d=1$，$\ln 1=0$。也就是说<b>在激活边界上 $\ln$ 因子自己就归零</b>，能量自然从那里起步。$\ln$ 这一项天生就「内端炸、外端归零」，正好对上 barrier「趋零发散、阈值处不发力」这两头的需求。</p>
 
         <h3 id="factor-sq">因子二：$(d-\hat d)^2$ —— 让边界处光滑接零的刹车</h3>
-        <p>但只有 $\ln$ 还不够。如果光用 $-\ln(d/\hat d)$，它在 $d=\hat d$ 处虽然值为零，<b>斜率却不为零</b>——曲线会带一个折角斜插进零。$d>\hat d$ 那边 barrier 恒为零（平的），$d<\hat d$ 这边却带着非零斜率冲下来，两段在 $\hat d$ 接不平滑，导数不连续。Newton 最怕这种折角。</p>
+        <p>但只有 $\ln$ 还不够。如果光用 $-\ln(d/\hat d)$，它在 $d=\hat d$ 处虽然值为零，<b>斜率却不为零</b>——曲线会带一个折角斜插进零。$d>\hat d$ 那边 barrier 恒为零（平的），$d&lt;\hat d$ 这边却带着非零斜率冲下来，两段在 $\hat d$ 接不平滑，导数不连续。Newton 最怕这种折角。</p>
         <p>$(d-\hat d)^2$ 就是来按这个刹车的。它是一个在 $\hat d$ 处<b>二阶为零</b>的乘子：它本身、它的一阶导、它的二阶导在 $d=\hat d$ 处的行为，足够把整个乘积按到「值、一阶、二阶都连续接零」。具体说，乘上它之后：</p>
         <div class="math-block">$$b(\hat d)=0,\qquad b'(\hat d)=0,\qquad b''(\hat d)=0.$$</div>
-        <p>值、一阶导（力）、二阶导（Hessian）在激活边界上<b>全部光滑地落到零</b>，于是 $d<\hat d$ 的 barrier 段和 $d\ge\hat d$ 的零段在 $\hat d$ 处严丝合缝地拼成一条 $C^2$ 曲线——没有折角、没有跳变。没有 $(d-\hat d)^2$ 这个刹车，barrier 在 $\hat d$ 处就会有折角，Newton 的梯度/Hessian 在那里跳一下，迭代不友好。</p>
+        <p>值、一阶导（力）、二阶导（Hessian）在激活边界上<b>全部光滑地落到零</b>，于是 $d&lt;\hat d$ 的 barrier 段和 $d\ge\hat d$ 的零段在 $\hat d$ 处严丝合缝地拼成一条 $C^2$ 曲线——没有折角、没有跳变。没有 $(d-\hat d)^2$ 这个刹车，barrier 在 $\hat d$ 处就会有折角，Newton 的梯度/Hessian 在那里跳一下，迭代不友好。</p>
 
         <h3 id="factor-together">两者相乘：内陡外平、处处二阶光滑的一道墙</h3>
         <p>把两个因子放回去看整体：$\ln(d/\hat d)$ 负责在 $d\to0$ 那一端把能量推向无穷（那道发散的墙），$(d-\hat d)^2$ 负责在 $d=\hat d$ 那一端把能量、力、曲率<b>同时平滑地收到零</b>（让墙的外缘和「不发力」区无缝相接）。相乘的结果，是一条「<b>内端陡峭发散、外端二阶光滑收尾</b>」的曲线——上一节那条你拖着玩过的曲线，正是它。三条性质不是三个独立的设计，而是这两个因子各管一头、自然长出来的。</p>
@@ -67,7 +67,7 @@
 
         <div class="callout note">
           <div class="c-h">想自己验证力与 Hessian？照着求一次导就行</div>
-          <p>力是 barrier 对距离的负斜率，对 $d<\hat d$ 直接求导：$b'(d)=-2(d-\hat d)\ln(d/\hat d)-(d-\hat d)^2/d$。你不必背它，重点是看<b>符号与趋势</b>：$b'(d)<0$（能量随 $d$ 减小而升），所以负梯度的力把距离往<b>增大</b>方向推（即把两个几何对推开）；而当 $d\to0$，$|b'|\to\infty$——力可以无限大，这正对上「任意大接触力」。再求一次导得 $b''(d)$（Hessian），它在 $d\to0$ 时同样爆涨——这就是下一篇会反复出现的「越贴近、条件数越差」的根。下一章 12-4 会把这两步求导接进 Newton，这里先有个印象即可。</p>
+          <p>力是 barrier 对距离的负斜率，对 $d&lt;\hat d$ 直接求导：$b'(d)=-2(d-\hat d)\ln(d/\hat d)-(d-\hat d)^2/d$。你不必背它，重点是看<b>符号与趋势</b>：$b'(d)&lt;0$（能量随 $d$ 减小而升），所以负梯度的力把距离往<b>增大</b>方向推（即把两个几何对推开）；而当 $d\to0$，$|b'|\to\infty$——力可以无限大，这正对上「任意大接触力」。再求一次导得 $b''(d)$（Hessian），它在 $d\to0$ 时同样爆涨——这就是下一篇会反复出现的「越贴近、条件数越差」的根。下一章 12-4 会把这两步求导接进 Newton，这里先有个印象即可。</p>
         </div>
 
         <h2 id="same-min-g">它只是 min G(x) 里又一项</h2>
@@ -91,7 +91,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) IPC 的灵魂是接触 barrier $b(d,\hat d)$——它有<b>激活阈值 $\hat d$</b>（$d<\hat d$ 才发力）、在 <b>$d\to0$ 时发散到无穷</b>（产生任意大接触力，使距离永远跨不过 0）、并被设计成 <b>$C^2$</b> 以便进 Newton。(2) 论文常用的解析式 $b=-(d-\hat d)^2\ln(d/\hat d)$ 把这三条装进两个因子：$\ln(d/\hat d)$ 配负号驱动 $d\to0$ 的发散，$(d-\hat d)^2$ 让值/一阶/二阶在 $\hat d$ 处全部光滑接零（$C^2$）；但关键是这三条性质，不是这一个式子，精确形式以论文为准。(3) 它<b>不是新子系统</b>，只是加进 $\min G(\mathbf x)$ 的又一个能量项，且和 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 是<b>同一个对象</b>，区别在「局部 + 截断兜底」vs「全局 interior-point + line search 保证」。</p>
+        <p>三句话：(1) IPC 的灵魂是接触 barrier $b(d,\hat d)$——它有<b>激活阈值 $\hat d$</b>（$d&lt;\hat d$ 才发力）、在 <b>$d\to0$ 时发散到无穷</b>（产生任意大接触力，使距离永远跨不过 0）、并被设计成 <b>$C^2$</b> 以便进 Newton。(2) 论文常用的解析式 $b=-(d-\hat d)^2\ln(d/\hat d)$ 把这三条装进两个因子：$\ln(d/\hat d)$ 配负号驱动 $d\to0$ 的发散，$(d-\hat d)^2$ 让值/一阶/二阶在 $\hat d$ 处全部光滑接零（$C^2$）；但关键是这三条性质，不是这一个式子，精确形式以论文为准。(3) 它<b>不是新子系统</b>，只是加进 $\min G(\mathbf x)$ 的又一个能量项，且和 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 是<b>同一个对象</b>，区别在「局部 + 截断兜底」vs「全局 interior-point + line search 保证」。</p>
         <p>下一节 <a href="12-3-distance-geometry.html">12-3（距离几何）</a>，我们把 barrier 咬住的那个 $d$ 讲透：point-triangle / edge-edge 的<b>无符号距离</b>怎么定义、它的梯度 $\partial d/\partial\mathbf x$ 怎么按 barycentric 权重落到各顶点上，以及最近点滑到边/顶点时的退化分区。把 $d$ 和 $\partial d/\partial\mathbf x$ 备好，12-4 才能接着把 barrier 沿 $d$ 求导、连同 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 <span class="term">PSD projection</span> 一起送进 Newton。</p>
       </article>
     </main>

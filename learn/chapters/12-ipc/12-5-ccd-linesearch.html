@@ -51,7 +51,7 @@
         <h2 id="cfl-bound">第二道闸：CFL 式保守接触界</h2>
         <p>光有 $t^\star$ 还不够「安全」。如果每步都正好走到 $t^\star$，那就意味着这一步走完后某对元件的距离<b>恰好压到了零</b>——而 barrier 在 $d=0$ 处是发散的，下一步的能量、梯度、Hessian 会瞬间爆炸，数值上完全没法继续。IPC 因此在 $t^\star$ 之外再叠一道更保守的限制：一个 <span class="term">CFL</span> 式的<b>保守接触界</b>，进一步把步长往回收一点，确保走完之后元件之间<b>仍留着一条正的安全缝</b>，距离停在 $\hat d$ 这道激活阈值能温柔接管的范围里，而不是贴死在零上。</p>
         <p>「CFL 式」是个借喻：经典的 <span class="term-i">CFL condition</span>（Courant–Friedrichs–Lewy）在显式时间积分里限制「一步走过的距离不能超过一个网格格子」，本质是「别让一步跨得比你能分辨的尺度还大」。IPC 这里同理——别让一步走得比「当前最近的那对元件之间还剩多少缝」更激进。两道闸合起来，最终步长是</p>
-        <div class="math-block">$$\alpha \;=\; \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0<c<1$$</div>
+        <div class="math-block">$$\alpha \;=\; \min\bigl(\,\alpha_{\text{Newton}},\ \ c\cdot t^\star,\ \ \alpha_{\text{CFL}}\,\bigr),\qquad 0&lt;c&lt;1$$</div>
         <p>其中 $\alpha_{\text{Newton}}$ 是普通 line search（保证能量真的下降、Armijo 之类）想要的步长，$c\cdot t^\star$ 是 CCD 给的不穿透上限（留了系数 $c$ 不贴死），$\alpha_{\text{CFL}}$ 是保守接触界。三者取最小——<b>谁最保守听谁的</b>。</p>
 
         <div class="callout note">

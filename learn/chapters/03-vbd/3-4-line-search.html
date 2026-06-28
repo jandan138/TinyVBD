@@ -51,7 +51,7 @@
         </div>
 
         <h2 id="armijo">怎么算「真正下降」：Armijo 判据</h2>
-        <p>「让能量下降」其实还能再精确一点。如果只要求 $G(x_k+\alpha\mathbf p)<G(x_k)$（落点比出发点低一丁点就行），可能会接受一些「下降得微不足道」的步长，收敛拖沓。实践里用的是一个更稳的判据——<span class="term">Armijo condition</span>（充分下降条件）：要求落点的下降量，至少达到「沿这个方向、按当前坡度预期下降量」的一个固定比例 $c$（通常 $c$ 取一个很小的数，如 $10^{-4}$）：</p>
+        <p>「让能量下降」其实还能再精确一点。如果只要求 $G(x_k+\alpha\mathbf p)&lt;G(x_k)$（落点比出发点低一丁点就行），可能会接受一些「下降得微不足道」的步长，收敛拖沓。实践里用的是一个更稳的判据——<span class="term">Armijo condition</span>（充分下降条件）：要求落点的下降量，至少达到「沿这个方向、按当前坡度预期下降量」的一个固定比例 $c$（通常 $c$ 取一个很小的数，如 $10^{-4}$）：</p>
         <div class="math-block">$$G(\mathbf x_k+\alpha\,\mathbf p)\ \le\ G(\mathbf x_k)\;+\;c\,\alpha\,\nabla G(\mathbf x_k)^\top\mathbf p.$$</div>
         <p>别被式子吓到，读它的直觉就够：右边 $\nabla G^\top\mathbf p$ 是「沿 $\mathbf p$ 方向的坡度」（下降方向时它是负的），$c\,\alpha$ 倍是「我至少要兑现这么多下降」。这条件说的是：<b>这一步的实际下降，不能比「按坡度该有的下降」小太多</b>——既挡住了「冲过头反升」，也挡住了「下降太敷衍」。backtracking 就是不断减半 $\alpha$ 直到这条不等式成立。<b>它给的是一个数学保证：只要方向是下降方向，line search 必然找到一个让能量充分下降的步长，于是整个迭代单调下降、收敛有据。</b>这正是「全局收敛」这四个字的来历。</p>
 
@@ -64,7 +64,7 @@
         <p>这里要钉死一个容易混的边界——<b>line search 只管「走多远」，不管「方向对不对」</b>。回想 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个「碗 vs 马鞍」：</p>
         <ul>
           <li>如果局部 Hessian $\mathbf H_i$ <b>正定</b>（碗），那么牛顿方向 $\mathbf p=\mathbf H_i^{-1}\mathbf f_i$ 一定是<b>下降方向</b>——沿它走一小步能量必降。这种情况 line search 总能找到好步长，它专治「方向对、但一步走太猛」。</li>
-          <li>但如果 $\mathbf H_i$ <b>不定</b>（马鞍，比如压缩弹簧 $\lambda_\perp<0$），牛顿方向可能<b>本身就指向上坡</b>。这时<b>无论 $\alpha$ 缩到多小，沿这个方向走都是在爬坡</b>——line search 把步长缩到零也救不回来。</li>
+          <li>但如果 $\mathbf H_i$ <b>不定</b>（马鞍，比如压缩弹簧 $\lambda_\perp&lt;0$），牛顿方向可能<b>本身就指向上坡</b>。这时<b>无论 $\alpha$ 缩到多小，沿这个方向走都是在爬坡</b>——line search 把步长缩到零也救不回来。</li>
         </ul>
         <p>所以「方向问题」要另一套手段来治：<b>PSD projection</b>（把不定的 $\mathbf H_i$ 投成正定，等于把马鞍「掰回碗」，见 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的 GAMES103 桥与 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），保证牛顿方向是下降方向；line search 再在这个好方向上挑一个安全步长。<b>两者分工明确、缺一不可：PSD 保方向、line search 保步长。</b>（上面的 widget 里，把起点拖到能量曲线 $E''\le0$ 的那一侧，就会看到它提示「这是方向问题、line search 救不了、得先 PSD 投影」——正是这个边界。）</p>
 

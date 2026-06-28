@@ -50,7 +50,7 @@
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">拖三角形，看 F = Ds·Dm⁻¹</span></div>
           <div class="lab-body" data-widget="deformation-gradient-tri"></div>
-          <div class="lab-cap">左：rest 三角形（固定）。右：world 三角形（拖顶点）。实时算 $\mathbf F$、$J=\det\mathbf F$（面积比，$<0$=翻转）、以及极分解 $\mathbf F=\mathbf R\mathbf S$ 的旋转角与两个主拉伸。整片三角形共享同一个 $\mathbf F$——这就是 constant-strain。</div>
+          <div class="lab-cap">左：rest 三角形（固定）。右：world 三角形（拖顶点）。实时算 $\mathbf F$、$J=\det\mathbf F$（面积比，$&lt;0$=翻转）、以及极分解 $\mathbf F=\mathbf R\mathbf S$ 的旋转角与两个主拉伸。整片三角形共享同一个 $\mathbf F$——这就是 constant-strain。</div>
         </div>
 
         <h2 id="det-J">J = det F：面积/体积比，与翻转</h2>
@@ -59,9 +59,9 @@
         <p>逐档读这个数：</p>
         <ul>
           <li>$J=1$：体积/面积不变（材料可能被剪歪、被拉伸但保体积）。</li>
-          <li>$J>1$：膨胀（被撑大）；$0<J<1$：压缩（被压小）。</li>
+          <li>$J>1$：膨胀（被撑大）；$0&lt;J&lt;1$：压缩（被压小）。</li>
           <li>$J\to0$：单元被压到<b>塌缩</b>（趋于零体积，几乎退化成一片/一条线）。好的材料模型会让能量在这里爆炸来抵抗（<a href="9-3-strain-energy.html">9.3</a> 的 $\ln J$ 项）。</li>
-          <li>$J<0$：单元<b>翻转</b>（inverted）——顶点穿过了对面，朝向反了，物理上「里翻到外」。这是仿真里最棘手的退化态之一。在 widget 里把一个顶点拖过对边，你会看到 $J$ 变负。</li>
+          <li>$J&lt;0$：单元<b>翻转</b>（inverted）——顶点穿过了对面，朝向反了，物理上「里翻到外」。这是仿真里最棘手的退化态之一。在 widget 里把一个顶点拖过对边，你会看到 $J$ 变负。</li>
         </ul>
         <p>$J$ 是后面所有体积相关能量项的核心变量。$(J-1)^2$ 罚体积偏离 rest，$\ln J$ 在 $J\to0^+$ 发散来抗塌缩、抗翻转——这些你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 volumetric Neo-Hookean 里都见过，现在知道 $J$ 是从 $\det\mathbf F$ 来的。</p>
 
@@ -86,7 +86,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 形变梯度 $\mathbf F=\partial\mathbf x/\partial\mathbf X$ 是 rest$\to$world 映射的局部线性化，在 constant-strain 三角形/四面体单元上是个常数，实算公式 $\mathbf F=\mathbf D_s\mathbf D_m^{-1}$（world 边矩阵 × rest 边矩阵的逆，$\mathbf D_m^{-1}$ 预存）；(2) $J=\det\mathbf F$ 读体积/面积比——$J=1$ 不变、$J\to0$ 塌缩、$J<0$ 翻转（inverted）；(3) 极分解 $\mathbf F=\mathbf R\mathbf S$ 把旋转 $\mathbf R$ 和拉伸 $\mathbf S$ 分开，<b>刚体旋转不该花能量</b>，所以好的能量只依赖 $\mathbf S$ 或 $\mathbf F^\top\mathbf F$（rotation-invariant）。</p>
+        <p>三句话：(1) 形变梯度 $\mathbf F=\partial\mathbf x/\partial\mathbf X$ 是 rest$\to$world 映射的局部线性化，在 constant-strain 三角形/四面体单元上是个常数，实算公式 $\mathbf F=\mathbf D_s\mathbf D_m^{-1}$（world 边矩阵 × rest 边矩阵的逆，$\mathbf D_m^{-1}$ 预存）；(2) $J=\det\mathbf F$ 读体积/面积比——$J=1$ 不变、$J\to0$ 塌缩、$J&lt;0$ 翻转（inverted）；(3) 极分解 $\mathbf F=\mathbf R\mathbf S$ 把旋转 $\mathbf R$ 和拉伸 $\mathbf S$ 分开，<b>刚体旋转不该花能量</b>，所以好的能量只依赖 $\mathbf S$ 或 $\mathbf F^\top\mathbf F$（rotation-invariant）。</p>
         <p>$\mathbf F$ 立住了、$I_C$ 和 $J$ 两个不变量也备好了，就该往上挂能量。下一节 <a href="9-3-strain-energy.html">9.3</a> 讲应变能密度 $\psi(\mathbf F)$ 的模型谱：StVK（和它著名的压缩反转灾难）、co-rotational、以及 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 用的那个稳定 Neo-Hookean，各自怎么用 $I_C$、$J$ 拼出来、各自的坑在哪。</p>
       </article>
     </main>

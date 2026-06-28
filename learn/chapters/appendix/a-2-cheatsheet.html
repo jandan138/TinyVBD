@@ -81,7 +81,7 @@
         <p>原书公式止于 XPBD；下面这一组是「IPC 篇」的接触公式，记号与 <a href="../12-ipc/12-2-barrier-energy.html">12.2</a>–<a href="../12-ipc/12-9-solver-cost.html">12.9</a> 一致。</p>
 
         <p>log-barrier 能量与它的三条 $C^2$ 性质，以及带接触项的 $G$（<a href="../12-ipc/12-2-barrier-energy.html">12.2</a>）：</p>
-        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0<d<\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
+        <div class="math-block">$$b(d,\hat d) = -\,(d-\hat d)^2\,\ln\!\Big(\frac{d}{\hat d}\Big),\qquad 0&lt;d&lt;\hat d;\qquad b(d,\hat d)=0,\quad d\ge\hat d.$$</div>
         <div class="math-block">$$b(\hat d)=0,\qquad b'(\hat d)=0,\qquad b''(\hat d)=0.$$</div>
         <div class="math-block">$$\min_{\mathbf x} G(\mathbf x)=\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_M^2+\Psi(\mathbf x)+\sum_{(k,l)\in\mathcal C} b\big(d_{kl}(\mathbf x),\hat d\big)$$</div>
         <p>这是论文采用的常见形式，关键是三条性质（$d\to0$ 发散、$d=\hat d$ 处 $C^2$ 接零），精确定义以 Li et al. 2020 PDF 为准。</p>
@@ -99,7 +99,7 @@
 
         <p>CCD-filtered line search 步长（<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a> · <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a>）：</p>
         <div class="math-block">$$t^\star=\max\{t\in(0,1]:\mathbf x+s\mathbf p\ \text{对所有}\ s\in[0,t]\ \text{都无交叉}\}$$</div>
-        <div class="math-block">$$\alpha=\min\bigl(\alpha_\text{Newton},\ c\cdot t^\star,\ \alpha_\text{CFL}\bigr),\qquad 0<c<1$$</div>
+        <div class="math-block">$$\alpha=\min\bigl(\alpha_\text{Newton},\ c\cdot t^\star,\ \alpha_\text{CFL}\bigr),\qquad 0&lt;c&lt;1$$</div>
 
         <p>全局稀疏牛顿解一步并更新（<a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> · <a href="../12-ipc/12-9-solver-cost.html">12.9</a>）：</p>
         <div class="math-block">$$\mathbf H=\mathbf H_\text{elastic}+\mathbf H_\text{barrier}\ (\text{各做 PSD 投影}),\qquad \mathbf H\,\mathbf p=\mathbf f,\qquad \mathbf x\leftarrow\mathbf x+\alpha\mathbf p$$</div>
@@ -129,7 +129,7 @@
             <tr><td>$\alpha$</td><td>compliance 柔度 $=1/k$（XPBD）；$\tilde\alpha=\alpha/h^2$</td></tr>
             <tr><td>$\lambda$</td><td>Lagrange multiplier 拉格朗日乘子 / 约束力对偶变量（XPBD）</td></tr>
             <tr><td>$d$</td><td>无符号距离（一对接触 primitive 间最近距离，barrier 自变量，IPC）</td></tr>
-            <tr><td>$\hat d$</td><td>activation distance 激活阈值（$d<\hat d$ 才发力，IPC）</td></tr>
+            <tr><td>$\hat d$</td><td>activation distance 激活阈值（$d&lt;\hat d$ 才发力，IPC）</td></tr>
             <tr><td>$b(d,\hat d)$</td><td>log-barrier 接触能量 $=-(d-\hat d)^2\ln(d/\hat d)$（IPC）</td></tr>
             <tr><td>$\hat{\mathbf n}$</td><td>单位法向 $=(\mathbf p-\mathbf q)/d$（IPC）</td></tr>
             <tr><td>$\lambda_a,\lambda_b,\lambda_c$</td><td>重心坐标权重（最近点在三角上的权重；距离梯度按它落到各顶点）</td></tr>

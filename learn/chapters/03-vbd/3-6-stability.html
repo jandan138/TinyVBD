@@ -29,7 +29,7 @@
 
         <h2 id="the-worry">先说清楚担心的是什么</h2>
         <p>经典 Newton（以及 Projective Dynamics）通常会把 Hessian 做 <span class="term">SPD projection</span>——强行把负特征值掀到正、或加阻尼，确保 $\mathbf H$ 正定，这样 $\mathbf H^{-1}\mathbf f$ 才保证是个下降方向；再配上 line search 控制步长，免得冲过头让能量反升。这两道保险是 Newton 类方法的标配。</p>
-        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l<l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
+        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l&lt;l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
 
         <h2 id="reason-1">理由一：惯性项是永远正定的压舱石</h2>
         <p>$\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$ 的第一块——惯性项 $\frac{m_i}{h^2}\mathbf I$——是<b>恒正定</b>的各向同性块，三个特征值都等于 $\frac{m_i}{h^2}$。对合理的时间步 $h$，这个值并不小（$h$ 在分母上、还平方），它给整个 $\mathbf H_i$ 的谱<b>抬了一个正的底</b>。</p>
@@ -56,8 +56,8 @@
         <div class="math-block">$$-100 + 3600 = 3500 \;>\; 0$$</div>
         <p>有效特征值 $3500>0$——$\mathbf H_i$ 在这一向仍正定，$\mathbf H_i^{-1}\mathbf f_i$ 是真下降方向。<b>惯性把软弹簧的负特征值轻松抬过零，理由一直接成立。</b></p>
         <p><b>硬弹簧 $k=10^8$（理由一失效，靠理由二）。</b>同样压到 $l=0.5$：</p>
-        <div class="math-block">$$\lambda_\perp = 10^8\,(1-\tfrac{1}{0.5}) = -10^8,\qquad -10^8 + 3600 \approx -10^8 \;<\; 0$$</div>
-        <p>惯性底 $3600$ 在 $10^8$ 面前是杯水车薪，有效特征值仍 $\approx-10^8<0$，$\mathbf H_i$ <b>不定</b>。此时理由一救不回来——若再压过头使 $|\det(\mathbf H_i)|\le\varepsilon$，就触发理由二的「跳过这个顶点」，靠邻居下一遍松动它兜底。<b>这正是「偏置 3600 救得回 $k=100$、救不回 $k=10^8$」的两个数。</b></p>
+        <div class="math-block">$$\lambda_\perp = 10^8\,(1-\tfrac{1}{0.5}) = -10^8,\qquad -10^8 + 3600 \approx -10^8 \;&lt;\; 0$$</div>
+        <p>惯性底 $3600$ 在 $10^8$ 面前是杯水车薪，有效特征值仍 $\approx-10^8&lt;0$，$\mathbf H_i$ <b>不定</b>。此时理由一救不回来——若再压过头使 $|\det(\mathbf H_i)|\le\varepsilon$，就触发理由二的「跳过这个顶点」，靠邻居下一遍松动它兜底。<b>这正是「偏置 3600 救得回 $k=100$、救不回 $k=10^8$」的两个数。</b></p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">3×3 局部 Hessian 的特征值条 + det 阈值守卫</span></div>
