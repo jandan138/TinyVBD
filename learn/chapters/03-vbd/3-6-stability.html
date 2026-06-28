@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="3-5">
+<body data-root="../../" data-section="3-6">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,7 +23,7 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-5</div>
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-6</div>
         <h1>不强制 SPD：稳定性从哪来</h1>
         <p class="lede">我们埋了好几次伏笔：VBD 解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时，<b>不</b>检查 $\mathbf H_i$ 是不是正定，也<b>不</b>做 line search。这在 Newton 方法的世界里近乎"鲁莽"——不定的 Hessian 可能给出上坡方向，没有 line search 步长可能过头。VBD 凭什么这么浪还稳？这一节把三条理由说清楚。</p>
 

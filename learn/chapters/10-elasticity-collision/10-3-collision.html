@@ -61,6 +61,21 @@
           <p>别被「碰撞」这个词吓到以为它是另起炉灶的子系统。在 VBD 的框架里，接触就是<b>能量 $G(\mathbf x)$ 里多出来的几个 term</b>（log-barrier + 摩擦），它们的梯度进 $\mathbf f_i$、Hessian 进 $\mathbf H_i$，和惯性项、弹性项站在同一行加号上。顶点级牛顿步的形状一个字都没改——这就是 VBD 把碰撞处理得如此自然的原因：它从来不是「先解动力学，再单独处理碰撞」，而是<b>把碰撞当成能量的一部分，一起最小化</b>。</p>
         </div>
 
+        <h2 id="inversion-vs-penetration">别混：inversion-free 和 penetration-free 是两种保证</h2>
+        <p>这里必须把两个很像的词拆开。<b>inversion-free</b> 讲的是<b>单个 FEM 单元自己有没有翻面</b>：四面体或三角形的形变梯度 $\mathbf F$ 要保持正取向，$J=\det\mathbf F&gt;0$。一旦 $J&lt;0$，这个单元就从里翻到外，属于 <a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 讲的 <span class="term">inverted element</span> 问题。Neo-Hookean 的 $\ln J$ 或 stable 能量可以在 $J\to0^+$ 处竖墙，<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影让它的 Hessian 更适合进 Newton，但这些主要是在保护<b>材料单元内部</b>。</p>
+        <p><b>penetration-free</b> / <b>intersection-free</b> 讲的是<b>不同几何片之间有没有互相穿过</b>：一个顶点有没有穿过另一个三角形，两条边有没有交叉。一个布片的每个三角形都可能 $J&gt;0$、没有翻面，但整块布仍然可以和另一片布互相穿插；反过来，某个四面体内部翻转，也不是靠 self-collision 检测就一定能修好。两者都叫「free」，但检查对象和保证来源完全不同。</p>
+        <table>
+          <thead><tr><th>保证</th><th>对象</th><th>坏掉时的符号</th><th>主要工具</th></tr></thead>
+          <tbody>
+            <tr><td><b>inversion-free</b></td><td>单元内部形变</td><td>$J=\det\mathbf F\le0$，单元翻面</td><td>抗翻面材料能量、步长控制、单元级数值保护</td></tr>
+            <tr><td><b>penetration / intersection-free</b></td><td>表面 primitive 之间的相对运动</td><td>point-triangle 或 edge-edge 穿越</td><td>碰撞检测、barrier 接触、DAT 截断或 <a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a> 的 CCD-filtered line search</td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          <div class="c-h">一句话区分</div>
+          <p><b>$J&gt;0$ 不等于不穿透，不穿透也不等于所有单元都没翻面。</b>前者是材料单元的取向约束，后者是表面几何的非交约束。10.3 本节解决的是 penetration-free；Part 9/10.2 讨论的是 FEM 单元如何尽量保持可用、稳定、不翻面；Part 12 的 IPC 则把 penetration-free 升级成每次迭代都严格保持的 intersection-free 不变量。</p>
+        </div>
+
         <h2 id="body-particle">body-particle 接触：同一个口子进来</h2>
         <p>布料不只会撞自己，还会落到地面、披到一个刚体球上。这类 <b>body-particle</b> 接触（粒子撞上场景里的 body/shape）走的是同一条路：在按 color 的 sweep 里，先把 body-particle contact 的力/Hessian 累加进对应顶点，再解 elasticity。也就是说，不管是布撞布，还是布撞球，到了顶点这一层，<b>都只是 $\mathbf f_i$、$\mathbf H_i$ 上的又一组加项</b>。VBD 不需要为「自碰」和「外碰」准备两套求解逻辑——它们汇进同一个口子。</p>
 
@@ -78,7 +93,7 @@
 
         <div class="callout note">
           <div class="c-h">消歧：10-3 的 log-barrier 是「强」的那条碰撞路，别和 6-1/11-1 说的 VBD penalty 混了</div>
-          <p>全书会在两处看似矛盾地谈碰撞，这里点破。<b>10-3（本节）</b>讲的是 Newton self-contact 真正走的路：<span class="term">log-barrier</span> + penetration-free 截断——属 <span class="term">IPC</span> 谱系的<b>硬保证</b>（$d\to0$ 时 $-\log d\to\infty$，能量挡 + 几何砍，双层兜底保证不穿透）。而 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> / <a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 反复说的「完整 VBD 用 <b>penalty</b> 碰撞、软的、不保证无穿透」，指的是<b>纯惩罚力</b>那条更弱的路——只往能量里加一个「穿透越深、回推越大」的软项，没有 barrier 的发散、也没有截断兜底，理论上允许穿透。同一本书里两种碰撞处理并存：<b>10-3 讲的是强的那条</b>。barrier 这条路的完整故事——距离几何、barrier 求导与 PSD、CCD line search 截步长——是 <b>Part 12 IPC 篇</b>的主题；这里折进 $\mathbf f_i/\mathbf H_i$ 的「每顶点 log-barrier + 局部截断」是它在 VBD 里的<b>局部</b>体现，而 IPC 那套 <a href="../12-ipc/12-5-ccd-linesearch.html">CCD line search（11-5）</a>提供的是<b>全局</b>步长保证，可点过去看二者如何衔接。</p>
+          <p>全书会在两处看似矛盾地谈碰撞，这里点破。<b>10-3（本节）</b>讲的是 Newton self-contact 真正走的路：<span class="term">log-barrier</span> + penetration-free 截断——属 <span class="term">IPC</span> 谱系的<b>硬保证</b>（$d\to0$ 时 $-\log d\to\infty$，能量挡 + 几何砍，双层兜底保证不穿透）。而 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> / <a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 反复说的「完整 VBD 用 <b>penalty</b> 碰撞、软的、不保证无穿透」，指的是<b>纯惩罚力</b>那条更弱的路——只往能量里加一个「穿透越深、回推越大」的软项，没有 barrier 的发散、也没有截断兜底，理论上允许穿透。同一本书里两种碰撞处理并存：<b>10-3 讲的是强的那条</b>。barrier 这条路的完整故事——距离几何、barrier 求导与 PSD、CCD line search 截步长——是 <b>Part 12 IPC 篇</b>的主题；这里折进 $\mathbf f_i/\mathbf H_i$ 的「每顶点 log-barrier + 局部截断」是它在 VBD 里的<b>局部</b>体现，而 IPC 那套 <a href="../12-ipc/12-5-ccd-linesearch.html">CCD line search（12.5）</a>提供的是<b>全局</b>步长保证，可点过去看二者如何衔接。</p>
         </div>
 
         <h2 id="recap">这一节你要带走的</h2>

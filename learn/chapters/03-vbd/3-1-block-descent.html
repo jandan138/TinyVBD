@@ -73,7 +73,7 @@
     Vec3 dx = h.colPivHouseholderQr().solve(f);   // 解 3x3
     strand.vertex(iV) += dx;                        // 立刻就地更新
 }</code></pre></div>
-        <p>注意最后一行 <code>strand.vertex(iV) += dx</code> 是<b>就地</b>更新 <code>mVertPos</code>，所以下一个顶点 <code>iV+1</code> 在算它自己的力时，读到的就是 <code>iV</code> 的新位置——这就是 Gauss-Seidel。<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a> 会讨论它和 Jacobi 的取舍，以及如何用 graph coloring 把它并行化。</p>
+        <p>注意最后一行 <code>strand.vertex(iV) += dx</code> 是<b>就地</b>更新 <code>mVertPos</code>，所以下一个顶点 <code>iV+1</code> 在算它自己的力时，读到的就是 <code>iV</code> 的新位置——这就是 Gauss-Seidel。<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a> 会讨论它和 Jacobi 的取舍，以及如何用 graph coloring 把它并行化。</p>
 
         <h2 id="the-widget">慢动作：亲眼看 G 单调下降</h2>
         <p>这一节的承诺是：<b>每一个这样的局部牛顿步，都让全局 $G$ 单调下降</b>——不是让 $G_i$ 下降而已，是让整个 $G$ 下降。这个「局部 = 全局」的保证，是 VBD 无条件稳定的根，下一节 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 会证明它。在那之前，先用下面这个慢动作部件亲眼看一遍：每点一次「更新下一个顶点」，就走一个 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，左边显示这个顶点当前的 $\mathbf f_i$、$\mathbf H_i$、$\Delta\mathbf x_i$，右边的 $G$ 曲线一路往下走，从不回头。</p>

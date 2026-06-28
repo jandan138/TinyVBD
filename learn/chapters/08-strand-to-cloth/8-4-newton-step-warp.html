@@ -82,7 +82,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         <h2 id="solve">那个 3×3 解：Δx = H⁻¹f 与 det 守门</h2>
         <p>累加完，<code>h</code> 是完整的 $\mathbf H_i$、<code>f</code> 是完整的 $\mathbf f_i$，最后就是一步牛顿——求顶点该挪多少：</p>
         <div class="math-block">$$\Delta\mathbf x_i = \mathbf H_i^{-1}\,\mathbf f_i$$</div>
-        <p>但 Newton 在求逆前先<b>守一道门</b>：<code>if abs(wp.determinant(h)) &gt; 1e-8</code>。只有当 $\lvert\det(\mathbf H_i)\rvert$ 超过这个阈值，才认为 $\mathbf H_i$ 足够「非退化」、求逆数值上靠谱，于是 <code>h_inv = wp.inverse(h)</code> 直接把 $3\times3$ 求逆，算出 $\mathbf H_i^{-1}\mathbf f_i$；否则<b>什么都不做</b>——这个顶点这一轮的位移保持原样（不加增量），等下一遍 sweep 它的邻居动过、$\mathbf H_i$ 重新变好再说。这就是 <a href="../03-vbd/3-5-stability.html">3.5</a> 讲的「万一退化就跳过」在 GPU 上的具体写法。</p>
+        <p>但 Newton 在求逆前先<b>守一道门</b>：<code>if abs(wp.determinant(h)) &gt; 1e-8</code>。只有当 $\lvert\det(\mathbf H_i)\rvert$ 超过这个阈值，才认为 $\mathbf H_i$ 足够「非退化」、求逆数值上靠谱，于是 <code>h_inv = wp.inverse(h)</code> 直接把 $3\times3$ 求逆，算出 $\mathbf H_i^{-1}\mathbf f_i$；否则<b>什么都不做</b>——这个顶点这一轮的位移保持原样（不加增量），等下一遍 sweep 它的邻居动过、$\mathbf H_i$ 重新变好再说。这就是 <a href="../03-vbd/3-6-stability.html">3.6</a> 讲的「万一退化就跳过」在 GPU 上的具体写法。</p>
         <p>还有个 GPU 细节值得点出：结果不是直接写回位置，而是<b>累加进 per-vertex displacement</b>——<code>particle_displacements[particle_index] += h_inv * f</code>。位移先攒着，等这一 color 的所有顶点都算完，再由外层（<a href="8-5-coloring-parallel.html">8.5</a>）统一施加并做 penetration-free 截断。这样同色顶点之间互不干扰，才能安全并行。</p>
 
         <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 三行对三行</div><p>把 <code>solve_elasticity</code> 接回你吃透的 <code>solve()</code>，几乎是逐行对译：<br>

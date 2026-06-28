@@ -91,7 +91,7 @@
         </div>
 
         <h2 id="descent">从「相等」到「单调下降」</h2>
-        <p>有了上面的等式，逻辑链就闭合了。VBD 给顶点 $i$ 走的那一步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，是沿着 $G_i$（因而也是 $G$）的下降方向走的——只要这一步确实降低了 $G_i$（步长得当时成立，<a href="../03-vbd/3-5-stability.html">3.5</a> 讨论为何这里几乎总成立、且不需要 line search），它就<b>同样幅度地</b>降低了 $G$。把一次 sweep 里的每一步串起来：</p>
+        <p>有了上面的等式，逻辑链就闭合了。VBD 给顶点 $i$ 走的那一步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，是沿着 $G_i$（因而也是 $G$）的下降方向走的——只要这一步确实降低了 $G_i$（步长得当时成立，<a href="../03-vbd/3-6-stability.html">3.6</a> 讨论为何这里几乎总成立、且不需要 line search），它就<b>同样幅度地</b>降低了 $G$。把一次 sweep 里的每一步串起来：</p>
         <div class="math-block">$$G^{(0)}\;\ge\;G^{(1)}\;\ge\;G^{(2)}\;\ge\;\cdots$$</div>
         <p>每动一个顶点，$G$ 要么下降、要么持平，<b>从不上升</b>。这就是上一节 <span class="term-i">vbd-sweep</span> 部件里你看到的那条只跌不涨的曲线背后的道理。</p>
 

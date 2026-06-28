@@ -49,12 +49,19 @@
         <div class="math-block">$$\mathbf f=k\,\frac{l_0-l}{l}\,\mathbf d$$</div>
         <p>Hessian 块（代码里的 <code>h_1_1</code> 形式）：</p>
         <div class="math-block">$$\mathbf H_{aa}=k\left[\mathbf I-\frac{l_0}{l}\!\left(\mathbf I-\frac{\mathbf d\,\mathbf d^\top}{l^2}\right)\right]$$</div>
-        <p>它的特征值：沿弹簧方向 $=k$；垂直方向 $=k\!\left(1-\dfrac{l_0}{l}\right)$。压缩（$l&lt;l_0$）时垂直方向特征值<b>为负</b> → $\mathbf H$ 不定（<a href="../03-vbd/3-5-stability.html">3.5</a>）。</p>
+        <p>它的特征值：沿弹簧方向 $=k$；垂直方向 $=k\!\left(1-\dfrac{l_0}{l}\right)$。压缩（$l&lt;l_0$）时垂直方向特征值<b>为负</b> → $\mathbf H$ 不定（<a href="../03-vbd/3-6-stability.html">3.6</a>）。</p>
 
         <h2 id="newton-step">每个顶点的一步牛顿</h2>
         <p>解一个 3×3 系统、就地更新该顶点（<a href="../04-code/4-3-solve.html">4.3</a>）：</p>
         <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i\mathrel{+}=\Delta\mathbf x_i$$</div>
         <p>按 Gauss-Seidel 顺序扫过所有（非 pinned）顶点为一次 sweep；每帧迭代 <code>numIterations</code> 次 sweep。</p>
+
+        <h2 id="line-search">line search 与 Armijo 充分下降</h2>
+        <p>Newton 步先给方向 $\mathbf p$，line search 再选步长 $\alpha$（<a href="../03-vbd/3-4-line-search.html">3.4</a>）：</p>
+        <div class="math-block">$$\mathbf x_{k+1}=\mathbf x_k+\alpha\mathbf p,\qquad \alpha\in(0,1]$$</div>
+        <p>Armijo condition 要求实际下降不比当前坡度预测少太多：</p>
+        <div class="math-block">$$G(\mathbf x_k+\alpha\mathbf p)\le G(\mathbf x_k)+c\,\alpha\,\nabla G(\mathbf x_k)^\top\mathbf p,\qquad c\ll1$$</div>
+        <p>backtracking 从 $\alpha=1$ 开始，若不满足就减半。IPC 的 CCD-filtered line search（<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a>）是在这套下降检查外，再加「不穿透」的步长上限。</p>
 
         <h2 id="chebyshev">Chebyshev 加速：omega 递推与外推</h2>
         <p>在每次完整 sweep 后做一次外推（Wang 2015，<a href="../04-code/4-4-chebyshev.html">4.4</a>）。系数递推：</p>

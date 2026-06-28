@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 10 · 10-2</div>
         <h1>SPD 投影与 Rayleigh damping</h1>
-        <p class="lede">在 TinyVBD 那根 strand 上，我们做了一个大胆的决定：解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>对局部 Hessian 做 <span class="term">SPD projection</span>，全靠惯性项 + 行列式阈值 + 单调下降三层兜底（<a href="../03-vbd/3-5-stability.html">3.5</a>）。那是因为 strand 只有弹簧、只有一种会变负的特征值，惯性项几乎总能压住。可一旦上了 Newton 的 production 规模——cloth 的 Neo-Hookean membrane、tet 的 volumetric、bending、还有接触——元件的 Hessian 不定起来更凶、更频繁。这一节看 Newton 怎么在每个元件层面把这件事按死：把 per-element Hessian 直接<b>投成 SPD</b>，再配上一个干净的 Rayleigh damping。</p>
+        <p class="lede">在 TinyVBD 那根 strand 上，我们做了一个大胆的决定：解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>对局部 Hessian 做 <span class="term">SPD projection</span>，全靠惯性项 + 行列式阈值 + 单调下降三层兜底（<a href="../03-vbd/3-6-stability.html">3.6</a>）。那是因为 strand 只有弹簧、只有一种会变负的特征值，惯性项几乎总能压住。可一旦上了 Newton 的 production 规模——cloth 的 Neo-Hookean membrane、tet 的 volumetric、bending、还有接触——元件的 Hessian 不定起来更凶、更频繁。这一节看 Newton 怎么在每个元件层面把这件事按死：把 per-element Hessian 直接<b>投成 SPD</b>，再配上一个干净的 Rayleigh damping。</p>
 
         <h2 id="why-project">为什么 production 要在元件层面投影</h2>
         <p>回忆 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个核心事实：一根被压缩的弹簧，Hessian 在垂直方向特征值 $k(1-l_0/l)$ 会变负，矩阵不定——这是 <span class="term">buckling</span>（屈曲）方向的忠实编码。strand 里只有这一种元件、这一种负特征值来源，所以 TinyVBD 敢赌「惯性项 $\frac{m_i}{h^2}\mathbf I$ 多半能把它顶回正」。</p>
@@ -73,7 +73,7 @@ c1 = lmbd_nh - r</code></pre></div>
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个负特征值，两种处理哲学</div>
-          <p>你在 strand 上亲眼见过：压缩弹簧 → 垂直方向特征值 $k(1-l_0/l)$ 变负 → 局部 $\mathbf H$ 不定（<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的 <span class="term-i">spring-hessian</span> 部件拖一下就能看到）。TinyVBD 的回应是「<b>不投影、赌惯性项</b>」（<a href="../03-vbd/3-5-stability.html">3.5</a>）：靠 $\frac{m_i}{h^2}\mathbf I$ 抬底、det 太小就跳过、单调下降兜大局——三层兜底，省掉 SPD 投影的开销，在单根 strand 上够用。Newton 面对的是同样的负特征值（只是从 Neo-Hookean、tet、bending 多个能量里冒出来、更密更猛），但它不能赌：在每个元件上<b>提前 $\max(0,\cdot)$ 投成 SPD</b>，再让惯性项接力。一句话——<b>$\min G(\mathbf x)$ 没变，压缩元件会让 Hessian 不定这件事也没变；变的是「单根赌惯性」升级成了「整网在 GPU 上逐元件 SPD 投影 + 惯性接力」。</b></p>
+          <p>你在 strand 上亲眼见过：压缩弹簧 → 垂直方向特征值 $k(1-l_0/l)$ 变负 → 局部 $\mathbf H$ 不定（<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的 <span class="term-i">spring-hessian</span> 部件拖一下就能看到）。TinyVBD 的回应是「<b>不投影、赌惯性项</b>」（<a href="../03-vbd/3-6-stability.html">3.6</a>）：靠 $\frac{m_i}{h^2}\mathbf I$ 抬底、det 太小就跳过、单调下降兜大局——三层兜底，省掉 SPD 投影的开销，在单根 strand 上够用。Newton 面对的是同样的负特征值（只是从 Neo-Hookean、tet、bending 多个能量里冒出来、更密更猛），但它不能赌：在每个元件上<b>提前 $\max(0,\cdot)$ 投成 SPD</b>，再让惯性项接力。一句话——<b>$\min G(\mathbf x)$ 没变，压缩元件会让 Hessian 不定这件事也没变；变的是「单根赌惯性」升级成了「整网在 GPU 上逐元件 SPD 投影 + 惯性接力」。</b></p>
         </div>
 
         <h2 id="rayleigh">Rayleigh damping：D = kd·ke</h2>

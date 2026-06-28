@@ -87,7 +87,7 @@ def ipc_outer_iteration(x, y):
 
         <h2 id="psd">第 2 段：PSD 投影每个局部块</h2>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">② psd_project_blocks</span><button class="cp">复制</button></div><pre><code>H = psd_project_blocks(H)   # 负特征值钳到 0，保证下降方向</code></pre></div>
-        <p>这一段在 4-3 的 VBD <code>solve()</code> 里<b>是没有的</b>——VBD 故意不投影，靠那块恒正定的惯性 Hessian 把整体兜回正定附近（见 <a href="../03-vbd/3-5-stability.html">3.5</a>）。IPC 走全局 Newton，就必须更讲究：要让 $\mathbf H\,\mathbf p=\mathbf f$ 解出来的 $\mathbf p$ <b>确实是一个下降方向</b>，$\mathbf H$ 得是（半）正定的。</p>
+        <p>这一段在 4-3 的 VBD <code>solve()</code> 里<b>是没有的</b>——VBD 故意不投影，靠那块恒正定的惯性 Hessian 把整体兜回正定附近（见 <a href="../03-vbd/3-6-stability.html">3.6</a>）。IPC 走全局 Newton，就必须更讲究：要让 $\mathbf H\,\mathbf p=\mathbf f$ 解出来的 $\mathbf p$ <b>确实是一个下降方向</b>，$\mathbf H$ 得是（半）正定的。</p>
         <p>问题出在哪？弹性 Hessian 在压缩时可能不定（4-3 里那个 $k(1-l_0/l)$ 负特征值），barrier Hessian 里那个 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 项（距离的二阶项）<b>也不保证半正定</b>——这正是 <a href="12-4-barrier-grad-psd.html">12-4</a> 重点讲的。办法和 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影同源：对每个<b>局部</b> Hessian 块做特征分解，把负特征值<b>钳到零</b>，再把投影后的块装进全局 $\mathbf H$。</p>
         <div class="math-block">$$\mathbf H_{\text{local}} = \mathbf Q\,\mathrm{diag}(\lambda_1,\dots,\lambda_n)\,\mathbf Q^\top \;\longrightarrow\; \mathbf Q\,\mathrm{diag}(\max(\lambda_1,0),\dots,\max(\lambda_n,0))\,\mathbf Q^\top$$</div>
         <p>「逐块投影再装配」是关键细节：投影发生在每个小块（一个 force element、一对接触）<b>本地</b>，而不是对整个全局大矩阵做（那太贵）。每个本地块半正定，累加成的全局 $\mathbf H$ 也半正定——于是下一步的解必为下降方向。</p>

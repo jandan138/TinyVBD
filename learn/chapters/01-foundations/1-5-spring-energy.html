@@ -54,7 +54,7 @@
         <p>一个特征值正、一个负，意味着压缩状态下 $\mathbf H_{aa}$ <b>不再正定，而是<span class="term-i">indefinite</span>（不定）</b>。物理上这正是<span class="term">buckling</span>（屈曲）方向：一根被压短的杆，往侧向偏一点点能量反而下降，所以它不愿待在直的状态、想弯掉。负特征值忠实地编码了这种「侧向不稳定」。</p>
 
         <h3 id="what-is-pd">退一步：「正定」到底在说什么——碗 vs 马鞍</h3>
-        <p>我们一路在说「正定 / 不定」，但这两个词的<b>物理画面</b>值得停下来钉死，因为它远不止弹簧——后面整本书（<a href="../03-vbd/3-5-stability.html">3.5</a> 的稳定性、<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影、IPC 的 Hessian）反复要用它。Hessian 是能量的<b>二阶导</b>，它描述的是<b>能量面在这一点的弯曲方式</b>，而它的特征值，就是<b>各个主方向上「弯」的方向与程度</b>：</p>
+        <p>我们一路在说「正定 / 不定」，但这两个词的<b>物理画面</b>值得停下来钉死，因为它远不止弹簧——后面整本书（<a href="../03-vbd/3-6-stability.html">3.6</a> 的稳定性、<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影、IPC 的 Hessian）反复要用它。Hessian 是能量的<b>二阶导</b>，它描述的是<b>能量面在这一点的弯曲方式</b>，而它的特征值，就是<b>各个主方向上「弯」的方向与程度</b>：</p>
         <ul>
           <li><b>特征值都为正 → 正定 → 能量面是个「碗」。</b>往<b>任何</b>方向走，能量都升高。所以这一点是一个<b>真正的、稳定的极小</b>：你把球放在碗底，推它一下，它会滚回来。这正是我们求解想落到的地方。</li>
           <li><b>有一个特征值为负 → 不定 → 能量面是个「马鞍」。</b>沿正特征值方向是上坡（谷），沿负特征值方向却是下坡（脊）。球放在鞍点上，只要往那个负方向轻轻一推，它就<b>一路滑下去、回不来</b>——这就是<b>失稳</b>。压缩弹簧的屈曲，正是这种马鞍：沿弹簧方向是稳的（$\lambda_\parallel=k>0$），垂直方向却塌了（$\lambda_\perp<0$），球（顶点）于是想往侧向滑，杆就弯了。</li>
@@ -111,12 +111,12 @@ h += h_1_1;</code></pre></div>
 
         <div class="callout warn">
           <div class="c-h">但偏置不是万能的</div>
-          <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 这点正偏置可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。Newton 类方法到这里要么投影、要么 line search 才能保稳。VBD 选了另一条路：它<b>不强制把局部 Hessian 投成 SPD</b>，而是靠一套别的机制（行列式阈值、单调下降保证）照样稳。这条路怎么走，正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 的主题。</p>
+          <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 这点正偏置可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。Newton 类方法到这里要么投影、要么 line search 才能保稳。VBD 选了另一条路：它<b>不强制把局部 Hessian 投成 SPD</b>，而是靠一套别的机制（行列式阈值、单调下降保证）照样稳。这条路怎么走，正是 <a href="../03-vbd/3-6-stability.html">3.6</a> 的主题。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) 一根 Hookean 弹簧 $E=\tfrac12 k(l-l_0)^2$，力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$，Hessian $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$，就是 <code>solve()</code> 的 <code>h_1_1</code>；(2) 它沿弹簧的特征值恒为 $k$，垂直方向为 $k(1-l_0/l)$——<b>压缩时变负</b>，$\mathbf H$ 不定（屈曲方向）；(3) 永远正定的惯性项 $\frac{m}{h^2}\mathbf I$ 给所有特征值加正偏置，多数情况下把它顶回正定，但不是万能。</p>
-        <p>带着「局部 Hessian 可能不定」这个事实，我们就有了进入 Part 3 的票。<a href="../03-vbd/3-5-stability.html">3.5</a> 会讲 VBD 如何不靠 SPD 投影也能稳，<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 里这套力与 Hessian 的装配逐行读完。Part 1 的地基到此打齐——隐式欧拉是什么、为什么、长什么样，你都拿到手了。</p>
+        <p>带着「局部 Hessian 可能不定」这个事实，我们就有了进入 Part 3 的票。<a href="../03-vbd/3-6-stability.html">3.6</a> 会讲 VBD 如何不靠 SPD 投影也能稳，<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 里这套力与 Hessian 的装配逐行读完。Part 1 的地基到此打齐——隐式欧拉是什么、为什么、长什么样，你都拿到手了。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

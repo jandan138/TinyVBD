@@ -71,7 +71,7 @@
 
         <div class="callout warn">
           <div class="c-h">不投影会怎样：和压缩弹簧同一种翻车</div>
-          <p>设想跳过 SPD 投影、直接把原始单元 Hessian 叠进 $\mathbf H_i$。一旦合成的 $\mathbf H_i$ 带了负特征值，$\mathbf H_i^{-1}\mathbf f_i$ 就可能指向上坡：轻则这个顶点抖、收敛慢，重则在高刚度大网格上把整块软体推爆。strand 里只有弹簧一种负特征值来源、来得稀，TinyVBD 敢赌惯性项 $\frac{m_i}{h^2}\mathbf I$ 顶得住（<a href="../03-vbd/3-5-stability.html">3.5</a>）；可一块 FEM 软体把许多单元的负特征值叠到一个顶点上，惯性底未必次次够。所以 production 不赌——先在每个单元上 $\max(0,\cdot)$ 投成 SPD（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），再让惯性项把半正定顶成正定。<b>SPD 投影不是 FEM 的附加题，它是 FEM 单元能稳进牛顿步的前置条件。</b></p>
+          <p>设想跳过 SPD 投影、直接把原始单元 Hessian 叠进 $\mathbf H_i$。一旦合成的 $\mathbf H_i$ 带了负特征值，$\mathbf H_i^{-1}\mathbf f_i$ 就可能指向上坡：轻则这个顶点抖、收敛慢，重则在高刚度大网格上把整块软体推爆。strand 里只有弹簧一种负特征值来源、来得稀，TinyVBD 敢赌惯性项 $\frac{m_i}{h^2}\mathbf I$ 顶得住（<a href="../03-vbd/3-6-stability.html">3.6</a>）；可一块 FEM 软体把许多单元的负特征值叠到一个顶点上，惯性底未必次次够。所以 production 不赌——先在每个单元上 $\max(0,\cdot)$ 投成 SPD（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），再让惯性项把半正定顶成正定。<b>SPD 投影不是 FEM 的附加题，它是 FEM 单元能稳进牛顿步的前置条件。</b></p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>

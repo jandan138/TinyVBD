@@ -71,12 +71,17 @@
             <tr>
               <td><span class="term">SPD</span> / positive definite</td>
               <td>对称正定。Hessian 正定时局部能量是个有唯一谷底的碗。惯性项恒正定，是 VBD 不必强制 SPD 投影也能稳的关键。</td>
-              <td><a href="../03-vbd/3-5-stability.html">3.5</a></td>
+              <td><a href="../03-vbd/3-6-stability.html">3.6</a></td>
             </tr>
             <tr>
               <td><span class="term">Newton's method</span></td>
               <td>牛顿法。用 Hessian 解 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$。VBD 对每个顶点做<b>一步</b>局部牛顿；全局 Newton 则解整个大稀疏系统。</td>
               <td><a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">line search</span> / <span class="term">Armijo condition</span></td>
+              <td>线搜索 / Armijo 充分下降。Newton 先给方向，再用回溯步长 $\alpha$ 试探着走，直到能量下降量足够；IPC 的 CCD line search 是它的接触感知升级版。</td>
+              <td><a href="../03-vbd/3-4-line-search.html">3.4</a> · <a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a></td>
             </tr>
             <tr>
               <td><span class="term">stiffness</span> $k$ / <span class="term">rest length</span> $l_0$</td>
@@ -113,17 +118,17 @@
             <tr>
               <td><span class="term">Gauss-Seidel</span></td>
               <td>逐个更新、立刻用上刚算出的新值的扫描顺序。收敛快，但有顺序依赖。VBD 的 sweep 用它。</td>
-              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+              <td><a href="../03-vbd/3-5-coloring-parallel.html">3.5</a></td>
             </tr>
             <tr>
               <td><span class="term">Jacobi</span></td>
               <td>所有点用同一份旧值并行更新。易并行但收敛慢。VBD 靠图着色逼近 Jacobi 的并行度而保持 Gauss-Seidel 的收敛。</td>
-              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+              <td><a href="../03-vbd/3-5-coloring-parallel.html">3.5</a></td>
             </tr>
             <tr>
               <td><span class="term">graph coloring</span></td>
               <td>图着色。给顶点染色使相邻点不同色；同色顶点可并行更新。VBD 着色的是顶点图，颜色数远少于 XPBD 的约束图。</td>
-              <td><a href="../03-vbd/3-4-coloring-parallel.html">3.4</a></td>
+              <td><a href="../03-vbd/3-5-coloring-parallel.html">3.5</a></td>
             </tr>
             <tr>
               <td><span class="term">PBD</span> (Position Based Dynamics)</td>
@@ -189,6 +194,11 @@
               <td><span class="term">activation distance</span> $\hat d$</td>
               <td>激活阈值：距离 $<\hat d$ 才开始发力（barrier 非零）的用户参数。</td>
               <td><a href="../12-ipc/12-2-barrier-energy.html">12.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">inversion-free</span></td>
+              <td>不翻转保证：单个 FEM 单元保持正取向，$J=\det\mathbf F&gt;0$。它是材料单元内部的保证，和 surface primitive 之间的 penetration-free 不同。</td>
+              <td><a href="../09-fem/9-2-deformation-gradient.html">9.2</a> · <a href="../10-elasticity-collision/10-3-collision.html">10.3</a></td>
             </tr>
             <tr>
               <td><span class="term">intersection-free</span></td>

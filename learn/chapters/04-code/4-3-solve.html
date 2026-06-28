@@ -88,7 +88,7 @@ for (size_t iV = 1; iV &lt; strand.numVerts; iV++)</code></pre></div>
 h += strand.vertexMass(iV) * dtSqrReciprocal * Mat3::Identity();</code></pre></div>
         <p>这两行就是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 里 $\mathbf f_i$、$\mathbf H_i$ 的<b>惯性部分</b>：</p>
         <div class="math-block">$$\mathbf f_i \mathrel{+}= \frac{m_i}{h^2}\big(\mathbf y_i - \mathbf x_i\big),\qquad \mathbf H_i \mathrel{+}= \frac{m_i}{h^2}\mathbf I$$</div>
-        <p>对照：<code>vertexMass(iV)</code> 是 $m_i$，<code>inertia.col(iV)</code> 是惯性目标 $\mathbf y_i$，<code>vertex(iV)</code> 是当前位置 $\mathbf x_i$，<code>dtSqrReciprocal</code> 是 $1/h^2$。<b>力 $\mathbf f$ 是负梯度</b>：$-\nabla_i G$ 的惯性部分是 $-\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i)=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$，正是代码里 <code>(inertia - x)</code> 的方向——它把顶点往惯性碗底 $\mathbf y_i$ 拉。Hessian 的惯性部分 $\frac{m_i}{h^2}\mathbf I$ <b>恒正定</b>，是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里「即使弹簧 Hessian 不定也能稳」的那块定海神针。</p>
+        <p>对照：<code>vertexMass(iV)</code> 是 $m_i$，<code>inertia.col(iV)</code> 是惯性目标 $\mathbf y_i$，<code>vertex(iV)</code> 是当前位置 $\mathbf x_i$，<code>dtSqrReciprocal</code> 是 $1/h^2$。<b>力 $\mathbf f$ 是负梯度</b>：$-\nabla_i G$ 的惯性部分是 $-\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i)=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$，正是代码里 <code>(inertia - x)</code> 的方向——它把顶点往惯性碗底 $\mathbf y_i$ 拉。Hessian 的惯性部分 $\frac{m_i}{h^2}\mathbf I$ <b>恒正定</b>，是 <a href="../03-vbd/3-6-stability.html">3.6</a> 里「即使弹簧 Hessian 不定也能稳」的那块定海神针。</p>
 
         <h2 id="springs">内层循环：每条邻接弹簧的贡献</h2>
         <p>现在遍历这个顶点的邻接弹簧——用的正是 <a href="4-1-data-structures.html">4.1</a> 里的 <code>vertAdjacentEdges[iV]</code>（force elements 集合 $\mathcal F_i$）。先取边、取几何量：</p>
@@ -108,7 +108,7 @@ if (edgeId1 != -1)
 h += h_1_1;</code></pre></div>
         <p>这一行是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 推出来的弹簧 Hessian，直接抄进代码：</p>
         <div class="math-block">$$\mathbf H_{aa} = k\Big[\mathbf I - \frac{l_0}{l}\Big(\mathbf I - \frac{\mathbf d\mathbf d^\top}{l^2}\Big)\Big]$$</div>
-        <p>对照：<code>diff * diff.transpose()</code> 是外积 $\mathbf d\mathbf d^\top$，除以 <code>(l*l)</code> 即 $/l^2$。整块乘 <code>stiffness_</code>=$k$。把它的物理读出来：沿弹簧方向的特征值是 $k$（拉伸方向永远硬）；垂直方向的特征值是 $k(1-l_0/l)$——<b>当弹簧被压缩（$l&lt;l_0$）时这个值为负，$\mathbf H_{aa}$ 不定</b>。这正是 <a href="../03-vbd/3-5-stability.html">3.5</a> 里那个「弹簧单独看可能不定」的来源。VBD 不对它做 SPD 投影，靠的就是上面那块恒正定的惯性 Hessian 把整个 <code>h</code> 兜回正定附近。注意代码无脑 <code>+=</code> 累加、不做任何 clamp——这是 VBD 的故意设计。</p>
+        <p>对照：<code>diff * diff.transpose()</code> 是外积 $\mathbf d\mathbf d^\top$，除以 <code>(l*l)</code> 即 $/l^2$。整块乘 <code>stiffness_</code>=$k$。把它的物理读出来：沿弹簧方向的特征值是 $k$（拉伸方向永远硬）；垂直方向的特征值是 $k(1-l_0/l)$——<b>当弹簧被压缩（$l&lt;l_0$）时这个值为负，$\mathbf H_{aa}$ 不定</b>。这正是 <a href="../03-vbd/3-6-stability.html">3.6</a> 里那个「弹簧单独看可能不定」的来源。VBD 不对它做 SPD 投影，靠的就是上面那块恒正定的惯性 Hessian 把整个 <code>h</code> 兜回正定附近。注意代码无脑 <code>+=</code> 累加、不做任何 clamp——这是 VBD 的故意设计。</p>
 
         <h3 id="spring-f">弹簧力：那个 ± 号</h3>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">solve() · 弹簧力</span><button class="cp">复制</button></div><pre><code>if (v1 == iV)
@@ -132,7 +132,7 @@ else {
 strand.vertex(iV) += dx;</code></pre></div>
         <p>累加完，<code>h</code> 是完整的 $\mathbf H_i$、<code>f</code> 是完整的 $\mathbf f_i$。最后两行就是一步牛顿：</p>
         <div class="math-block">$$\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i \mathrel{+}= \Delta\mathbf x_i$$</div>
-        <p><code>colPivHouseholderQr().solve(f)</code> 是 Eigen 解这个 3×3 系统 $\mathbf H_i\,\Delta\mathbf x = \mathbf f_i$ 的方式（列主元 QR，对 3×3 又稳又快，不必显式求逆）。<code>strand.vertex(iV) += dx</code> 借助 <a href="4-1-data-structures.html">4.1</a> 的「返回列引用」<b>就地</b>把顶点挪过去。就地是关键：循环里下一个顶点 <code>iV+1</code> 计算它的 <code>diff</code> 时，立刻读到 <code>iV</code> 的<b>新</b>位置——这就是 <span class="term">Gauss-Seidel</span>（用最新值），而非 Jacobi（统一用旧值）。<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a> 讲的就是怎么靠图着色在 GPU 上既保 Gauss-Seidel 的收敛、又拿到并行。</p>
+        <p><code>colPivHouseholderQr().solve(f)</code> 是 Eigen 解这个 3×3 系统 $\mathbf H_i\,\Delta\mathbf x = \mathbf f_i$ 的方式（列主元 QR，对 3×3 又稳又快，不必显式求逆）。<code>strand.vertex(iV) += dx</code> 借助 <a href="4-1-data-structures.html">4.1</a> 的「返回列引用」<b>就地</b>把顶点挪过去。就地是关键：循环里下一个顶点 <code>iV+1</code> 计算它的 <code>diff</code> 时，立刻读到 <code>iV</code> 的<b>新</b>位置——这就是 <span class="term">Gauss-Seidel</span>（用最新值），而非 Jacobi（统一用旧值）。<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a> 讲的就是怎么靠图着色在 GPU 上既保 Gauss-Seidel 的收敛、又拿到并行。</p>
 
         <div class="callout note">
           <div class="c-h">把这一步 3×3 放到全程尺度（呼应 0-2）</div>

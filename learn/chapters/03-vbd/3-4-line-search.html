@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>line search：牛顿步为什么要「试探着走」 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="3-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 3 · Vertex Block Descent · 3-4</div>
+        <h1>line search：牛顿步为什么要「试探着走」</h1>
+        <p class="lede"><a href="../03-vbd/3-3-newton-step.html">3.3</a> 给了每个顶点一步牛顿 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$。但这里藏着一个 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 没说破的细节：牛顿步只给你一个<b>方向</b>，并<b>不保证「沿这个方向一步走满」就对</b>。一步走满很可能<b>冲过头</b>，落到能量更高的地方——那这一步不但没下降，反而把系统推得更糟。这一节讲优化求解器里那个低调却关键的角色——<span class="term">line search</span>（线搜索）：它怎么「先探探路、再决定走多远」，从而保证每一步都货真价实地让能量下降。这是从「能写出牛顿步」到「牛顿步真能收敛」之间，必须补上的一课。</p>
+
+        <h2 id="newton-only-direction">牛顿步给的是方向，不是落点</h2>
+        <p>先把 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 那步牛顿看仔细。$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 是怎么来的？它是用当前点附近的一个<b>二次模型</b>去近似真实能量 $G$，然后<b>一步跳到那个二次模型的碗底</b>。问题在于：</p>
+        <ul>
+          <li>真实的 $G$ <b>不是</b>二次的（弹簧能量 $\tfrac12k(l-l_0)^2$ 里 $l=\lVert\mathbf d\rVert$ 对位置是非线性的）。二次模型只在当前点附近像 $G$，离得远了就不准。</li>
+          <li>牛顿一步 $\Delta\mathbf x_i$ 可能<b>迈得很大</b>，大到跳出了「二次模型还像 $G$」的范围。落点处真实的 $G$，完全可能比出发点<b>还高</b>。</li>
+        </ul>
+        <p>所以正确的姿势是：把牛顿步只当成一个<b>方向</b> $\mathbf p=\Delta\mathbf x_i$，真正要走的是 $\mathbf x_i\leftarrow\mathbf x_i+\alpha\,\mathbf p$，其中 $\alpha\in(0,1]$ 是一个待定的<b>步长</b>。「一步走满」就是 $\alpha=1$（full step），但它只是<b>一个候选</b>，不是铁律。<b>决定 $\alpha$ 该取多少的那套机制，就是 line search。</b></p>
+
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从 GAMES103 看</span> 你写隐式积分时多半已经踩过这个坑</div>
+          <p>GAMES103 写隐式积分 + Newton 迭代时，你大概率遇到过「某些帧 Newton 不收敛、能量乱跳甚至炸」。十有八九不是公式写错，而是<b>没做 line search、直接 $\alpha=1$ 走满</b>。课上常一句带过「加个 line search 就稳了」——这一节就把那句话背后的「为什么」与「怎么做」补全。它是优化式仿真器（<a href="../06-closing/6-1-place-and-limits.html">Part 6</a> 会把这个统一骨架点明）里和「组装、求解」并列的一等公民。</p>
+        </div>
+
+        <h2 id="overshoot">一步走满会怎样：冲过头，能量反升</h2>
+        <p>用一个最干净的一维画面看清楚。设当前点 $x_k$，牛顿方向 $\mathbf p$ 指向二次模型的碗底。如果真实能量曲线在那个方向上「比二次模型更早回升」（非二次、不对称），那么走满 $\alpha=1$ 就会<b>越过真正的谷底、爬上对面的坡</b>——落点能量比出发点还高。这一步是<b>失败</b>的：牛顿法的全部前提是「每步让能量下降」，一旦某步反而上升，迭代就可能开始震荡甚至发散。</p>
+        <p>line search 的对策朴素得让人安心——<b>backtracking（回溯）</b>：从最贪心的 $\alpha=1$ 试起，如果落点能量没下降，就把 $\alpha$ <b>减半</b>（$1\to\tfrac12\to\tfrac14\to\cdots$），一直试到找出一个让能量真正下降的步长为止。因为方向 $\mathbf p$ 只要是<b>下降方向</b>（沿它走一小步能量必降，这点下面会讲），足够小的 $\alpha$ 就一定能下降——所以回溯总会停下来，且停在一个安全的步长上。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">full step 冲过头，line search 回退把它救回来</span></div>
+          <div class="lab-body" data-widget="line-search"></div>
+          <div class="lab-cap">能量曲线 + 牛顿方向。full step（α=1，红/琥珀）常常冲过头、落到能量更高处；line search 从 α=1 起不断减半，直到找到让能量真正下降的 α（青）。拖「能量不对称」或挪起点，看 full step 何时翻车、line search 怎么每次都救回。</div>
+        </div>
+
+        <h2 id="armijo">怎么算「真正下降」：Armijo 判据</h2>
+        <p>「让能量下降」其实还能再精确一点。如果只要求 $G(x_k+\alpha\mathbf p)<G(x_k)$（落点比出发点低一丁点就行），可能会接受一些「下降得微不足道」的步长，收敛拖沓。实践里用的是一个更稳的判据——<span class="term">Armijo condition</span>（充分下降条件）：要求落点的下降量，至少达到「沿这个方向、按当前坡度预期下降量」的一个固定比例 $c$（通常 $c$ 取一个很小的数，如 $10^{-4}$）：</p>
+        <div class="math-block">$$G(\mathbf x_k+\alpha\,\mathbf p)\ \le\ G(\mathbf x_k)\;+\;c\,\alpha\,\nabla G(\mathbf x_k)^\top\mathbf p.$$</div>
+        <p>别被式子吓到，读它的直觉就够：右边 $\nabla G^\top\mathbf p$ 是「沿 $\mathbf p$ 方向的坡度」（下降方向时它是负的），$c\,\alpha$ 倍是「我至少要兑现这么多下降」。这条件说的是：<b>这一步的实际下降，不能比「按坡度该有的下降」小太多</b>——既挡住了「冲过头反升」，也挡住了「下降太敷衍」。backtracking 就是不断减半 $\alpha$ 直到这条不等式成立。<b>它给的是一个数学保证：只要方向是下降方向，line search 必然找到一个让能量充分下降的步长，于是整个迭代单调下降、收敛有据。</b>这正是「全局收敛」这四个字的来历。</p>
+
+        <div class="callout note">
+          <div class="c-h">为什么这件事在我们书里值得单独一节</div>
+          <p>line search 是优化式仿真的通用基础设施，但它在我们书里之前一直是「配角」——<a href="../03-vbd/3-6-stability.html">3.6</a> 提它当 VBD 不投影也稳的对照，<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a> 讲 IPC 那个「接触感知」的升级版（line search 里还要塞 CCD 保证不穿透）。但「牛顿步为什么不能走满、line search 怎么保证收敛」这个最基础的为什么，一直没正面讲透。补上它，你再去读 12.5 的 CCD line search，会发现那只是这一节的同一套思想，多加了一道「别穿透」的约束而已。<span class="term-i">（这一节的组织受 Minchen Li《Physics-Based Simulation》把 line search 当优化积分器一等公民的讲法启发；延伸阅读见 <a href="../appendix/a-3-references.html">a-3 参考文献</a>。）</span></p>
+        </div>
+
+        <h2 id="direction-vs-steplength">步长 vs 方向：line search 救不了的那种翻车</h2>
+        <p>这里要钉死一个容易混的边界——<b>line search 只管「走多远」，不管「方向对不对」</b>。回想 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个「碗 vs 马鞍」：</p>
+        <ul>
+          <li>如果局部 Hessian $\mathbf H_i$ <b>正定</b>（碗），那么牛顿方向 $\mathbf p=\mathbf H_i^{-1}\mathbf f_i$ 一定是<b>下降方向</b>——沿它走一小步能量必降。这种情况 line search 总能找到好步长，它专治「方向对、但一步走太猛」。</li>
+          <li>但如果 $\mathbf H_i$ <b>不定</b>（马鞍，比如压缩弹簧 $\lambda_\perp<0$），牛顿方向可能<b>本身就指向上坡</b>。这时<b>无论 $\alpha$ 缩到多小，沿这个方向走都是在爬坡</b>——line search 把步长缩到零也救不回来。</li>
+        </ul>
+        <p>所以「方向问题」要另一套手段来治：<b>PSD projection</b>（把不定的 $\mathbf H_i$ 投成正定，等于把马鞍「掰回碗」，见 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的 GAMES103 桥与 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），保证牛顿方向是下降方向；line search 再在这个好方向上挑一个安全步长。<b>两者分工明确、缺一不可：PSD 保方向、line search 保步长。</b>（上面的 widget 里，把起点拖到能量曲线 $E''\le0$ 的那一侧，就会看到它提示「这是方向问题、line search 救不了、得先 PSD 投影」——正是这个边界。）</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 那 VBD 为什么几乎不用 line search？</div>
+          <p>你可能纳闷：既然 line search 这么重要，TinyVBD 的 <code>solve()</code>（<a href="../04-code/4-3-solve.html">4.3</a>）里怎么没见它？这恰恰是 VBD 聪明的地方，下一篇会细讲（<a href="../03-vbd/3-6-stability.html">3.6</a>）。简单说：VBD 每个顶点的局部 $\mathbf H_i$ 里，<b>那个恒正定的惯性项 $\frac{m_i}{h^2}\mathbf I$ 已经帮它把方向兜得八九不离十</b>——多数情况下方向就是下降的，步长也不会疯狂过头（它只动一个顶点、幅度有限）。所以 VBD 用一个轻量的<b>行列式阈值</b>兜底，就能在不显式做 line search、也不强制 PSD 投影的情况下保持稳定。但「不太需要」不等于「这套保证不重要」——理解了 line search 与 PSD 各保什么，你才看得懂 VBD 是<b>省掉</b>了它们、还是<b>替换</b>了它们。答案是后者：VBD 用惯性兜底 + 行列式阈值，换掉了通用求解器的 line search + PSD 那一套。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) 牛顿步 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$ 只给<b>方向</b>，不保证「走满 $\alpha=1$」对——非二次能量下一步走满常<b>冲过头、能量反升</b>，牛顿迭代就可能发散。(2) <span class="term">line search</span> 用 <b>backtracking</b>（从 $\alpha=1$ 起减半）+ <span class="term">Armijo</span> 充分下降判据，挑一个让能量<b>真正下降</b>的步长，给出「全局收敛」的保证。(3) line search 只保<b>步长</b>、不保<b>方向</b>：方向若因 $\mathbf H$ 不定而指向上坡（马鞍，<a href="../01-foundations/1-5-spring-energy.html">1.5</a>），得靠 <b>PSD projection</b> 先把方向掰正——<b>PSD 保方向、line search 保步长，分工互补</b>。</p>
+        <p>下一节 <a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>，我们换个话题——既然每个顶点各解各的牛顿步，怎么让它们<b>并行</b>跑而又不互相打架？这就要请出 Gauss-Seidel、Jacobi 与图着色。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -83,7 +83,7 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 把 <code>for iV=1..numVerts</code> 拆成「按 color launch」</div>
-          <p>TinyVBD 的 <code>solve()</code> 就是一句 <code>for (iV=1; iV&lt;numVerts; ++iV)</code>——一次一个顶点，纯串行 Gauss-Seidel，没有颜色、没有并行批次（参见 <a href="../03-vbd/3-4-coloring-parallel.html">3.4</a>，那里我们已经讲过这套着色思想，但也诚实交代了 TinyVBD 自己并不着色）。Newton 做的事，本质上是把这个 <code>for</code> 循环<b>重排</b>：先把顶点按 color 分组，再 <code>for color in color_groups</code>，每个 color 用一次 <code>wp.launch</code> 把这一批顶点<b>一口气并行做完</b>。算法没变——还是逐顶点牛顿步、还是单调下降的 Gauss-Seidel 收敛——只是扫描的<b>次序</b>从「一个挨一个」变成了「一批挨一批」，而每一批内部交给 GPU 的几万个 thread 同时跑。</p>
+          <p>TinyVBD 的 <code>solve()</code> 就是一句 <code>for (iV=1; iV&lt;numVerts; ++iV)</code>——一次一个顶点，纯串行 Gauss-Seidel，没有颜色、没有并行批次（参见 <a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>，那里我们已经讲过这套着色思想，但也诚实交代了 TinyVBD 自己并不着色）。Newton 做的事，本质上是把这个 <code>for</code> 循环<b>重排</b>：先把顶点按 color 分组，再 <code>for color in color_groups</code>，每个 color 用一次 <code>wp.launch</code> 把这一批顶点<b>一口气并行做完</b>。算法没变——还是逐顶点牛顿步、还是单调下降的 Gauss-Seidel 收敛——只是扫描的<b>次序</b>从「一个挨一个」变成了「一批挨一批」，而每一批内部交给 GPU 的几万个 thread 同时跑。</p>
         </div>
 
         <h2 id="no-chebyshev">顺带说一句：这里没有 Chebyshev</h2>

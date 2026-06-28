@@ -33,7 +33,7 @@
         <ul>
           <li><b>对象是真正的 $G$。</b>它直接最小化完整的增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$，而不是某个约束违反量的近似。每个顶点的局部牛顿步用的是<b>完整的局部 Hessian</b> $\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j \partial^2 E_j/\partial\mathbf x_i^2$，惯性项加弹性项一项不少（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）。</li>
           <li><b>更新顺序是 Gauss-Seidel，收敛快。</b>一次只动一个顶点，且立刻用上刚更新过的邻居——这是 <span class="term">Gauss-Seidel</span> 而非 <span class="term">Jacobi</span>，所以信息在一次 sweep 内就能往前串一截，收敛比纯 Jacobi 快（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）。</li>
-          <li><b>并行度却接近 Jacobi。</b>靠对<b>顶点图</b>做 <span class="term">graph coloring</span>：同色顶点互不相邻、可并行更新，颜色数远少于 XPBD 要着色的约束/对偶图。于是 VBD 拿到了「Gauss-Seidel 的收敛 + 近 Jacobi 的并行」这个看似矛盾的组合（<a href="../03-vbd/3-4-coloring-parallel.html">3.4</a>）。</li>
+          <li><b>并行度却接近 Jacobi。</b>靠对<b>顶点图</b>做 <span class="term">graph coloring</span>：同色顶点互不相邻、可并行更新，颜色数远少于 XPBD 要着色的约束/对偶图。于是 VBD 拿到了「Gauss-Seidel 的收敛 + 近 Jacobi 的并行」这个看似矛盾的组合（<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>）。</li>
         </ul>
         <p>还有一个隐性但关键的坐标：VBD 是 <span class="term">primal</span> 求解器——它直接在<b>位置</b>这个原始变量上下降，而不是像 XPBD 那样去解一套 <span class="term">dual</span>（对偶 / 约束力 $\lambda$）系统。这一条决定了它在高质量比下的命运，下面会展开。</p>
 
@@ -43,7 +43,7 @@
           <li><b>解的是真东西。</b>XPBD 本质是约束近似，且只保留惯性项那部分 Hessian（丢掉了弹性项的二阶信息）；大时间步 $h$ 或少迭代时，它会偏离真正的隐式欧拉解。VBD 最小化完整的 $G$、保留完整局部 Hessian，每步保证 $G$ 单调下降（<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>），不会越解越偏。</li>
           <li><b>扛得住高质量比。</b>这是全书最戏剧化的一幕（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a>）：XPBD 是 dual 求解器，修正按逆质量分配，一根末端重 1000× 的 strand 会被「轻的拽不动重的」逼到崩溃；VBD 是 primal，直接解位置，高质量比对它没有这种结构性压力。TinyVBD 默认跑的 <code>initializeTilted()</code> 就是这个 1:1000 实验。</li>
           <li><b>不替你决定初始化。</b>XPBD 把初始位置强制成惯性预测；VBD 不强制任何初始化，这恰恰是它能做<b>自适应初始化</b>的前提——自由下落的顶点带上完整重力、被托住的顶点停在原位，避免把叠放物初始化成穿插的自由下落态（<a href="../04-code/4-2-forward-step.html">4.2</a>）。</li>
-          <li><b>稳，且不靠打补丁稳。</b>它无条件稳定来自「单调下降」这把尺子，而不是靠对 Hessian 做 SPD 投影或 line search；惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定，把局部系统兜住，所以即便弹簧被压缩、弹性 Hessian 不定，整体也立得住（<a href="../03-vbd/3-5-stability.html">3.5</a>）。</li>
+          <li><b>稳，且不靠打补丁稳。</b>它无条件稳定来自「单调下降」这把尺子，而不是靠对 Hessian 做 SPD 投影或 line search；惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定，把局部系统兜住，所以即便弹簧被压缩、弹性 Hessian 不定，整体也立得住（<a href="../03-vbd/3-6-stability.html">3.6</a>）。</li>
         </ul>
 
         <div class="callout note">
@@ -99,6 +99,35 @@
           </tbody>
         </table>
         <p>横着扫一遍就能读出全书主线：往右走，「最小化什么」从约束近似收敛到真正的 $G$；「保留多少 Hessian」从几乎不用爬到完整。VBD 是这张表里唯一同时拿到「真 $G$ + primal + Gauss-Seidel 收敛 + 着色并行」的一行——它的强项正是把别人各自的优点叠在一起，代价就落在最后一列那个高刚度比。</p>
+
+        <h2 id="optimizer-skeleton">把仿真器看成优化器：一帧的通用骨架</h2>
+        <p>到这里可以把「物理仿真器」暂时翻译成「优化器」。只要你走的是隐式欧拉 / 增量势能这条路，一帧的核心都在重复同一个骨架：先写出 $G(\mathbf x)$，再在当前点附近装配导数，求一个下降方向，挑一个安全步长，接受新位置。差别不在这条脊梁，而在每一步的实现有多局部、多全局、要不要额外保持可行性。</p>
+        <div class="code" data-lang="pseudo"><div class="code-h"><span class="fn">optimization-based simulator skeleton</span><button class="cp">复制</button></div><pre><code>given x_n, v_n:
+    y = inertial_prediction(x_n, v_n, h)
+    x = initialize_guess(y)
+
+    repeat until converged or iteration budget used:
+        assemble energy G(x) = inertia(x, y) + elastic(x) + contact(x)
+        assemble gradient/force and Hessian (or local Hessian blocks)
+        make Hessian usable as a descent model (PSD projection, damping, or local guard)
+        solve for a direction p
+        choose step length alpha (line search; contact solvers also apply CCD)
+        accept x = x + alpha * p
+
+    update velocity from x - x_n</code></pre></div>
+        <p>这段伪代码故意写得像「优化器」而不是像某个具体引擎。因为 VBD、全局 Newton、IPC 都能落到它上面：</p>
+        <table>
+          <thead><tr><th>求解器</th><th>装配什么</th><th>怎么求方向</th><th>怎么选步长 / 保证</th></tr></thead>
+          <tbody>
+            <tr><td><b>VBD</b></td><td>每个顶点邻接的弹性 / 接触元件块</td><td>per-vertex $3\times3$ 局部 Newton，Gauss-Seidel sweep</td><td>通常不显式 line search，靠惯性正定、det guard、单调下降兜底（<a href="../03-vbd/3-6-stability.html">3.6</a>）</td></tr>
+            <tr><td><b>global Newton</b></td><td>全局梯度与稀疏 Hessian</td><td>解一个大稀疏线性系统</td><td>PSD / damping 保方向，backtracking line search 保下降（<a href="../03-vbd/3-4-line-search.html">3.4</a>）</td></tr>
+            <tr><td><b>IPC</b></td><td>弹性 + barrier 接触能量，以及距离导数</td><td>全局 Newton 方向</td><td>CCD-filtered line search 先限制最大安全步长，再做下降检查，保证 intersection-free（<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a>）</td></tr>
+          </tbody>
+        </table>
+        <div class="callout note">
+          <div class="c-h">为什么这张骨架图重要</div>
+          <p>它把后半本书的新增内容都接回同一根线：FEM 只是在 <code>elastic(x)</code> 里把弹簧换成 $\sum_e V_0^e\psi(F^e)$（Part 9），production VBD 在「make Hessian usable」处加 per-element SPD 投影和阻尼（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），IPC 在 <code>contact(x)</code> 与 line search 处加 barrier 和 CCD（Part 12）。这套组织受《Physics-Based Simulation》把仿真统一写成优化流程的讲法启发；这里用本书自己的 VBD / Newton / IPC 例子重写。</p>
+        </div>
 
         <h2 id="honest-limits">诚实地交代它的局限</h2>
         <p>没有银弹。VBD 的强项和弱项是同一枚硬币的两面——它是个<b>局部下降法</b>，这让它稳、可并行、扛质量比，但也带来三处真实的短板。</p>
