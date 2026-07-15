@@ -186,9 +186,9 @@
               <td><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a></td>
             </tr>
             <tr>
-              <td><span class="term">SPD projection</span></td>
-              <td>把局部 Hessian 投影成对称正定，保证每步牛顿都是「往谷底走」。membrane 的做法是把违正定的特征值 clamp（<code>s_clamp = max(0, …)</code>）。</td>
-              <td><a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a></td>
+              <td><span class="term">PSD projection</span> / eigenvalue clamp</td>
+              <td>把局部 Hessian 的负特征值截到 $0$（如 membrane 的 <code>s_clamp = max(0, …)</code>），得到可能奇异的 PSD modified Hessian，而不是 SPD。这是 elementwise 鲁棒策略之一，不单独保证 inverse、普通 Cholesky、严格下降、inversion-free 或 static stability；正质量惯性、约束消元或 positive shift 使总系统 SPD 后才得到严格下降方向，full step 仍需 line search。这里说的是 Newton/Warp production 路径，不是 TinyVBD C++ 已有的保护。</td>
+              <td><a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> · <a href="../14-curvature-mass/14-3-buckling-newton.html#newton-safeguards">14.3</a></td>
             </tr>
             <tr>
               <td><span class="term">Rayleigh damping</span> ($D=k_d\cdot k_e$)</td>
@@ -219,8 +219,8 @@
           <tbody>
             <tr>
               <td><span class="term">VBD</span> (Vertex Block Descent)</td>
-              <td>本书主角，搬到 GPU 上：per-vertex 3×3 牛顿步 + 按颜色的 Gauss-Seidel，无条件稳定。Newton 的 particle 路径用它。</td>
-              <td><a href="../08-strand-to-cloth/8-1-same-min-G.html">8.1</a></td>
+              <td>本书主角，搬到 GPU 上后仍是 per-vertex 3×3 牛顿候选 + 按颜色的 Gauss-Seidel。任意单 block 位移恒有 $\Delta G=\Delta G_i$；只有精确 block minimizer 或经 backtracking/Armijo 验收的步才推出全局单调。Newton 的 particle 路径使用这套结构；Newton/Warp 的 det heuristic 只检查显式求逆的近退化性，不能倒灌成 TinyVBD C++ 的 det guard，也不证明 SPD 或下降。</td>
+              <td><a href="../08-strand-to-cloth/8-1-same-min-G.html">8.1</a> · <a href="../03-vbd/3-6-stability.html">3.6</a></td>
             </tr>
             <tr>
               <td><span class="term">AVBD</span> (Augmented VBD)</td>

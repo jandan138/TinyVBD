@@ -309,4 +309,23 @@ input[type="range"]::-moz-range-thumb { width: 15px; height: 15px; border-radius
   main { padding: 0 20px; }
   .cover h1 { font-size: 2.4rem; }
 }
+@media (max-width: 560px) {
+  main { padding: 0 12px; }
+  .article { padding-top: 28px; }
+  .article h1 { font-size: 1.95rem; }
+  .article h2 { font-size: 1.38rem; }
+  .lede { font-size: 1.04rem; }
+  .lab .lab-body { padding: 10px; }
+  .lab .lab-h { align-items: flex-start; padding: 9px 11px; }
+  .lab .lab-cap { padding: 0 11px 11px; }
+  .ctrl-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .ctrl { width: 100%; }
+  input[type="range"] { width: 100%; height: 6px; }
+  input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+  input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
+  .seg { width: 100%; }
+  .seg button { flex: 1 1 auto; min-height: 40px; }
+  .prevnext { flex-direction: column; }
+  .prevnext a.next { text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }

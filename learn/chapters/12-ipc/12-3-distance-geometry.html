@@ -39,8 +39,9 @@
         <p>注意这里是<b>无符号距离</b>（unsigned distance）：$d\ge0$，不区分 $\mathbf p$ 在三角形哪一侧。IPC 用无符号距离配合 barrier「$d\to0$ 发散」来挡穿透，靠的是<a href="12-5-ccd-linesearch.html">后面</a> CCD line search 保证迭代始终停在「还没穿过」的那一侧，而不是靠距离的正负号判别方位。</p>
 
         <h2 id="gradient">梯度方向就是那条单位法向</h2>
-        <p>$d=\lVert\mathbf p-\mathbf q\rVert$ 对 $\mathbf p$ 求导，是一个干净得让人欣慰的结果——<b>梯度方向就是从最近点指向 $\mathbf p$ 的单位向量</b>：</p>
-        <div class="math-block">$$\hat{\mathbf n} = \frac{\mathbf p - \mathbf q}{d},\qquad \frac{\partial d}{\partial \mathbf p} = \hat{\mathbf n}$$</div>
+        <p>在 $d&gt;0$ 的可行域内部，$d=\lVert\mathbf p-\mathbf q\rVert$ 对 $\mathbf p$ 求导，是一个干净得让人欣慰的结果——<b>梯度方向就是从最近点指向 $\mathbf p$ 的单位向量</b>：</p>
+        <div class="math-block">$$\hat{\mathbf n} = \frac{\mathbf p - \mathbf q}{d},\qquad \frac{\partial d}{\partial \mathbf p} = \hat{\mathbf n}\qquad(d&gt;0)$$</div>
+        <p>$d=0$ 时这个单位法向本身未定义；IPC 从严格可行的 $d&gt;0$ 位形出发，并用 CCD-filtered line search 避免迭代真正走到该边界。</p>
         <p>直觉很硬核：把 $\mathbf p$ 沿 $\hat{\mathbf n}$ 方向挪一小步，距离<b>等量</b>变大（单位长度对单位长度，所以梯度是单位向量）；沿垂直方向挪，最近点跟着滑、$d$ 一阶不变。这个 $\hat{\mathbf n}$ 也正是接触力的方向——barrier 要把 $\mathbf p$「顶开」，顶的方向就是 $\hat{\mathbf n}$，把它推得离三角形更远。</p>
 
         <h2 id="weights">梯度落到 4 个顶点：谁近谁分得多</h2>
@@ -80,7 +81,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三件事：(1) point-triangle 距离 $d=\lVert\mathbf p-\mathbf q\rVert$，最近点 $\mathbf q$ 是三角形顶点的 barycentric 组合；梯度方向是单位法向 $\hat{\mathbf n}=(\mathbf p-\mathbf q)/d$，对 $\mathbf p$ 是 $+\hat{\mathbf n}$、对三个顶点是 $-\lambda\hat{\mathbf n}$——<b>谁离最近点近谁分到的梯度大</b>，四者相加为零正是牛顿第三定律。(2) 真正「系统」的部分是<b>退化分区</b>：barycentric 出现负值就把最近点降维投影到边（point-edge）或顶点（point-point），参与的顶点和权重随之改变；edge-edge 还多一个<b>近平行</b>的病态，IPC 用 mollifier 压住。(3) 这两类接触对，正是 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 那个 BVH 检测器找出来的——同样的几何，这里喂给全局 interior-point barrier。</p>
-        <p>下一节我们把 barrier 和距离梯度<b>串起来求导</b>：链式法则下接触力和 Hessian 各自长什么样，为什么距离的二阶项会让 Hessian 不再保证半正定，以及怎么用 <a href="12-4-barrier-grad-psd.html">12-4（barrier 求导与 PSD）</a> 的 PSD projection 把特征值钳回去——这一步直接接回你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 学过的 SPD 投影。</p>
+        <p>下一节我们把 barrier 和距离梯度<b>串起来求导</b>：链式法则下接触力和 Hessian 各自长什么样，为什么距离的二阶项会让 Hessian 不再保证半正定，以及怎么用 <a href="12-4-barrier-grad-psd.html">12-4（barrier 求导与 PSD）</a> 的 PSD clamp / projection 把负特征值截到 $0$——这一步直接接回你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 见过的同类 modified-Hessian 策略。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

@@ -87,8 +87,8 @@
         <p>这本书有一条精心安排的坡度，<b>强烈建议从 Part 1 顺着读到 Part 6</b>，不要跳：</p>
         <ol>
           <li><b>Part 1 · 数学地基</b>：补回那块发虚的拼图——隐式欧拉的变分真身：一步隐式欧拉 = 最小化能量 $G(\mathbf x)$。这是全书的地基，跳过它后面会处处卡壳。</li>
-          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，发现它们都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同。你对 PBD 的旧印象会在这里被校准。</li>
-          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点，为什么局部下降能保证全局下降，为什么又快又稳。</li>
+          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，分清共享的增量动力学 / 能量-约束视角与不同的数学对象：位置投影、compliant constraints 的 KKT 系统、可投影能量的 local/global。你对 PBD 的旧印象会在这里被校准。</li>
+          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点，为什么局部与全局的能量变化相同，以及候选步何时才能串成单调下降。</li>
           <li><b>Part 4 · 读代码</b>：把 <a href="../04-code/4-2-forward-step.html">forwardStep()</a>、<a href="../04-code/4-3-solve.html">solve()</a>、Chebyshev 加速逐行读透，每行都对得上前面的公式。</li>
           <li><b>Part 5 · 实验</b>：亲手复现论文招牌实验——高质量比、高刚度比、弯曲——理解每个实验在「考」VBD 的什么。</li>
           <li><b>Part 6 + 附录</b>：VBD 的位置、局限与后续（AVBD），外加术语表、公式速查、参考文献。</li>
@@ -96,7 +96,7 @@
 
         <div class="callout note">
           <div class="c-h">为什么先讲数学再读代码</div>
-          <p>很多人写过隐式积分，却说不清「它到底在求什么」。这本书坚持<b>先把「隐式欧拉 = 最小化一个能量」讲透，再去碰代码</b>——因为它是理解 VBD（以及 PBD / XPBD / Projective Dynamics 全家）的那把钥匙。先有钥匙，Part 4 的每一行代码才会自己解释自己。</p>
+          <p>很多人写过隐式积分，却说不清「它到底在求什么」。这本书坚持<b>先把「隐式欧拉 = 最小化一个能量」讲透，再去碰代码</b>——因为它直接解释 VBD，也为比较 PBD / XPBD / Projective Dynamics 提供共同坐标；但比较时还必须追问各方法实际解的是投影、KKT 系统还是受限能量。先有这套坐标，Part 4 的每一行代码才会自己解释自己。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>

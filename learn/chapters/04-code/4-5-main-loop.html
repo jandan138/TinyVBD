@@ -64,28 +64,28 @@
 
         <p>从外往里读这三层循环：</p>
         <ul>
-          <li><b>开场两行</b>：先 <code>saveOutputs()</code> 把<b>初始帧（第 0 帧）</b>写出去，再 <code>params.dt /= params.substeps</code>——把一帧的时间切成 <code>substeps</code> 份。默认 <code>substeps=1</code>，所以 <code>dt</code> 不变还是 $1/60$；但若你把 substeps 调成 10，每个 substep 的 $h$ 就变成 $1/600$（小 $h$ = 惯性碗更陡、更稳，代价是算 10 倍，见 <a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>）。</li>
+          <li><b>开场两行</b>：先 <code>saveOutputs()</code> 把<b>初始帧（第 0 帧）</b>写出去，再 <code>params.dt /= params.substeps</code>——把一帧的时间切成 <code>substeps</code> 份。默认 <code>substeps=1</code>，所以 <code>dt</code> 不变还是 $1/60$；但若你把 substeps 调成 10，每个 substep 的 $h$ 就变成 $1/600$（小 $h$ 让惯性碗更陡、单步运动更短，通常更易求解，代价是算 10 倍，见 <a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>）。</li>
           <li><b>帧循环</b>（<code>frameId</code> 从 1 到 <code>numFrames-1</code>，默认 300 帧）：每帧末尾 <code>saveOutputs()</code> 落一帧、打一行 <code>Frame: N finished!</code>。</li>
-          <li><b>substep 循环</b>：每个 substep 是一次完整的隐式欧拉步——<code>forwardStep()</code>（<a href="4-2-forward-step.html">4.2</a>：算 $\mathbf y$、挑初始猜测）打头，<code>updateVelocity()</code> 收尾。</li>
-          <li><b>迭代循环</b>（<code>numIterations</code> 次，默认 100）：每次 <code>prevIterPos = mVertPos</code> 存档，再 <code>solve()</code> 做一遍 Gauss-Seidel sweep（<a href="4-3-solve.html">4.3</a>），把 $G$ 往下推一截。可选的 Chebyshev 加速（<a href="4-4-chebyshev.html">4.4</a>）挂在每次 sweep 之后；默认 <code>useAcceleration=false</code>，这块不跑。</li>
+          <li><b>substep 循环</b>：每个 substep 以一次 backward Euler 变分步为目标——<code>forwardStep()</code>（<a href="4-2-forward-step.html">4.2</a>：算 $\mathbf y$、挑初始猜测）打头，有限次 <code>solve()</code> 近似求解，<code>updateVelocity()</code> 收尾。</li>
+          <li><b>迭代循环</b>（<code>numIterations</code> 次，默认 100）：每次 <code>prevIterPos = mVertPos</code> 存档，再 <code>solve()</code> 做一遍 Gauss-Seidel sweep（<a href="4-3-solve.html">4.3</a>）。这里每个 block 是未经 PSD、det guard 或 line search 验收的 QR raw full step，不能预设每遍都降低 $G$。可选的 Chebyshev 加速（<a href="4-4-chebyshev.html">4.4</a>）挂在每次 sweep 之后，还可能再次升能；默认 <code>useAcceleration=false</code>，这块不跑。</li>
         </ul>
-        <p>一句话：<b>「迭代 100 次 solve」= 把这一 substep 的 $\arg\min G$ 解到够准；「substep」= 推进一个隐式欧拉时间步；「frame」= 攒够 substep 推进一整帧并写盘</b>。VBD 的无条件稳定意味着即使把 <code>numIterations</code> 压到很低，它也不炸，只是欠收敛、偏软（<a href="../00-orientation/0-1-where-we-go.html">0.1</a> 那个 strand-lab 就让你拉这个滑块）。</p>
+        <p>一句话：<b>「迭代 100 次 solve」= 用默认预算近似这一 substep 的 $\arg\min G$；「substep」= 以一个 backward Euler 时间步为目标；「frame」= 攒够 substep 推进一整帧并写盘</b>。精确求解的 backward Euler 在线性测试方程上 A-stable，但这不等于当前非线性 C++ 内层的任意 raw full step、任意低迭代预算都不炸。给定 strand demo 把迭代压低时通常表现为欠收敛、偏软且仍能运行，这是工程观察，不是任意参数下的定理。</p>
 
         <h2 id="substep-tradeoff">代数字：substeps=10 是「陡 100 倍、贵 10 倍」</h2>
-        <p>上面那句「小 $h$ = 惯性碗更陡更稳，代价 N 倍算量」是断言，把它代成数就成了一笔可算的账。开场那行 <code>params.dt /= params.substeps</code> 是关键：substep 不是多迭代，而是<b>把时间步切细</b>。取默认 $h=1/60$，惯性碗系数（<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的 $m/h^2$，$m=1$）：</p>
+        <p>上面说「小 $h$ 让惯性碗更陡、单步更短，代价 N 倍算量」，把它代成数就成了一笔可算的账。开场那行 <code>params.dt /= params.substeps</code> 是关键：substep 不是多迭代，而是<b>把时间步切细</b>。取默认 $h=1/60$，惯性碗系数（<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的 $m/h^2$，$m=1$）：</p>
         <div class="math-block">$$\frac{m}{h^2} = \frac{1}{(1/60)^2} = 3600$$</div>
         <p>把 <code>substeps=10</code>，每个 substep 的步长 $h'=h/10=1/600$，惯性碗系数变成：</p>
         <div class="math-block">$$\frac{m}{h'^2} = \frac{1}{(1/600)^2} = 3.6\times10^5 \quad(\text{陡 } 100\times)$$</div>
-        <p>切细 10 倍，惯性碗<b>陡了 $10^2=100$ 倍</b>——碗越陡，惯性项把 $\mathbf H_i$ 抬得越正（<a href="../03-vbd/3-6-stability.html">3.6</a> 理由一），越能压住硬弹簧、大形变带来的不稳定。但代价直接写在三层循环里：每帧 <code>solve()</code> 调用次数从 <code>substeps×numIterations = 1×100 = 100</code> 变成 <code>10×100 = 1000</code>，<b>贵了 10 倍</b>。</p>
+        <p>切细 10 倍，惯性碗<b>陡了 $10^2=100$ 倍</b>——惯性项给 $\mathbf H_i$ 的每个特征值多加一份更大的正偏置（<a href="../03-vbd/3-6-stability.html">3.6</a>），通常能改善局部条件；但弹性负曲率可能仍把总 Hessian 拉成不定，因此这不是 SPD 或 raw full-step 单调保证（见 <a href="../14-curvature-mass/14-3-buckling-newton.html#newton-safeguards">14-3</a>）。代价直接写在三层循环里：每帧 <code>solve()</code> 调用次数从 <code>substeps×numIterations = 1×100 = 100</code> 变成 <code>10×100 = 1000</code>，<b>贵了 10 倍</b>。</p>
         <div class="callout note">
           <div class="c-h">这是为讲解构造的自洽示例</div>
-          <p>「陡 100×、贵 10×」是 substep 调稳定性的本质权衡（与 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的惯性/弹性拔河、<a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a> 的迭代预算自洽）：稳定性按 $1/h^2$ 平方级改善，算量只按 $1/h$ 线性增长——所以遇到「迭代再多也压不稳」的硬场景，加 substep 常比加 iteration 更划算。数字为默认参数下的自洽示例。</p>
+          <p>「陡 100×、贵 10×」精确描述的是<b>惯性曲率与调用次数</b>的缩放，不是「稳定性按 $1/h^2$ 保证改善」。增加 substep 还改变了时间离散：每个目标对应更短的一步，而不是在同一个 $G$ 上单纯多迭代。工程上它常能同时减小单步非线性并增强惯性偏置，但具体鲁棒性仍要看总曲率与求解接受机制。数字为默认参数下的自洽示例。</p>
         </div>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">同样的总预算：分给更多 substep 还是更多 iteration</span></div>
           <div class="lab-body" data-widget="substep-iteration-grid"></div>
-          <div class="lab-cap">x 轴 substeps、y 轴 numIterations，格子颜色编码一根 strand 在该预算下的最终能量残差 / 是否欠收敛偏软；选中格子看对应末态。调<b>总预算</b>、<b>时间步 $h$</b>、<b>末端质量比</b>，亲手感受「同样的总 solve 次数，分给更多 substep（更稳）还是更多 iteration（更收敛）」的不同效果。</div>
+          <div class="lab-cap">x 轴 substeps、y 轴 numIterations，格子颜色编码一根 strand 在该预算下的最终能量残差 / 是否欠收敛偏软；选中格子看对应末态。调<b>总预算</b>、<b>时间步 $h$</b>、<b>末端质量比</b>，亲手感受「同样的总 solve 次数，分给更多 substep（时间更细、惯性偏置更强）还是更多 iteration（同一子步求得更充分）」的不同效果。</div>
         </div>
 
         <h2 id="updatevel">updateVelocity()：从位移反算速度</h2>
@@ -133,7 +133,7 @@
         <h2 id="chain">把整条链连起来</h2>
         <p>退一步看全景，一次 <code>simulate()</code> 就是：</p>
         <div class="math-block">$$\underbrace{\text{frame}}_{\times 300}\;\to\;\underbrace{\text{substep}}_{\times 1}\;\to\;\Big[\;\texttt{forwardStep} \to \underbrace{\texttt{solve}}_{\times 100\;(+\text{Cheb?})} \to \texttt{updateVelocity}\;\Big]\;\to\;\texttt{saveOutputs}$$</div>
-        <p>每个箭头你都已经逐行读过：<code>forwardStep()</code>（<a href="4-2-forward-step.html">4.2</a>）备好惯性 $\mathbf y$ 和初始猜测；<code>solve()</code>（<a href="4-3-solve.html">4.3</a>）一遍遍把 $G$ 推向谷底；可选 Chebyshev（<a href="4-4-chebyshev.html">4.4</a>）给它提速；<code>updateVelocity()</code> 反算速度、为下一步的自适应初始化留好 $\mathbf v^{t-1}$；<code>saveOutputs()</code> 落盘交给 Blender。<b>这就是 TinyVBD 的全部</b>——一根 strand、一套 Eigen、一个 min $G(\mathbf x)$，被这台三层时钟一帧帧地仿真出来。</p>
+        <p>每个箭头你都已经逐行读过：<code>forwardStep()</code>（<a href="4-2-forward-step.html">4.2</a>）备好惯性 $\mathbf y$ 和初始猜测；<code>solve()</code>（<a href="4-3-solve.html">4.3</a>）用一遍遍 QR raw sweep 近似求解 $\min G$，但不做逐步下降验收；可选 Chebyshev（<a href="4-4-chebyshev.html">4.4</a>）再外推，可能提速也可能升能；<code>updateVelocity()</code> 反算速度、为下一步的自适应初始化留好 $\mathbf v^{t-1}$；<code>saveOutputs()</code> 落盘交给 Blender。<b>这就是 TinyVBD 的全部</b>——一根 strand、一套 Eigen、一个 min $G(\mathbf x)$，被这台三层时钟一帧帧地近似求解。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三件事：(1) <code>simulate()</code> 三层循环——帧（300）× substep（1，会把 $h$ 切细）× 迭代（100 次 <code>solve</code>），可选 Chebyshev 挂在每次 sweep 后；(2) <code>updateVelocity()</code> 用 $(\mathbf x-\mathbf x^t)/h$ 反算速度，先存旧速度供自适应初始化、再 pin 住 0 号顶点；(3) <code>saveOutputs()</code> 每帧写一个 <code>A%08d.json</code> 的 <code>"pos"</code>，由 <code>VisualizeStrand.blend</code> 可视化——但 <code>outPath</code> 是 Windows 路径、<code>createFolder</code> 只在 <code>_WIN32</code> 下有效，换平台要改。</p>

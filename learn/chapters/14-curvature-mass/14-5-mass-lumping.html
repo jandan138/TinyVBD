@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>为什么行和是节点质量：consistent 与 lumped 的取舍 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-5">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-5</div>
+        <h1>为什么行和是节点质量：consistent 与 lumped 的取舍</h1>
+        <p class="lede"><a href="14-4-consistent-mass.html">上一页 14-4</a> 从连续动能算出了 P1 三角形的 consistent mass：对角是 2，非对角是 1。真实材料被三个形函数共同搬运，所以耦合有物理来历；可显式更新和逐节点局部求解又希望质量矩阵是对角的。质量集中不是把耦合项一删了之，而是要回答一个更精确的问题：每一行里的质量怎样完整地归到该节点名下？答案仍来自 partition of unity。</p>
+
+        <h2 id="row-sum">把一行加起来，为什么正好是一份节点质量</h2>
+        <p>从标量 consistent 矩阵 $\bar M_{ij}=\int_{\bar T}\rho tN_iN_j\,dA$ 出发。我们想构造对角矩阵 $D=\operatorname{diag}(m_1^L,m_2^L,m_3^L)$。标准 <span class="term">row-sum</span> lumping 的定义，是把第 $i$ 行所有项都并到第 $i$ 个对角元：</p>
+        <div class="math-block">$$m_i^L=\sum_j\bar M_{ij}.$$</div>
+        <p>这不是经验配方。把矩阵定义代进去，再利用形函数的 partition of unity，等式会自己化简：</p>
+        <div class="math-block">$$\sum_j\bar M_{ij}=\sum_j\int_{\bar T}\rho tN_iN_j\,dA=\int_{\bar T}\rho tN_i\left(\sum_jN_j\right)dA=\int_{\bar T}\rho tN_i\,dA.$$</div>
+        <p>最后一项非常有物理味道：节点 $i$ 得到的不是“离它最近那块区域”的质量，而是整枚单元上每一小片质量按 $N_i$ 权重分给它的份额。内部材料点可以同时给三个节点记账；因为三个权重之和恒为 1，同一小片质量恰好被完整分配一次，既不遗漏也不重复。</p>
+        <p>对 P1 triangle，$\int_{\bar T}N_i\,dA=A/3$，所以三个节点各得单元总质量的三分之一：</p>
+        <div class="math-block">$$m_1^L=m_2^L=m_3^L=\frac{\rho tA}{3},\qquad D=\frac{\rho tA}{3}I_3.$$</div>
+        <p>和上一页的矩阵对照就更清楚。consistent 对角本身只有 $\rho tA/6$；同一行中的两个非对角项各为 $\rho tA/12$，把它们也归进来才得到 $\rho tA/3$。若所谓“对角化”只是丢掉非对角、保留原对角，三个节点总共只剩 $3\times\rho tA/6=\rho tA/2$，整枚三角形一半的质量会凭空消失。row-sum 的重点不只是矩阵变对角，更是耦合质量被守恒地搬到对角。</p>
+        <p>拿总质量 12 做一次心算：consistent 标量矩阵正是 $\begin{pmatrix}2&amp;1&amp;1\\1&amp;2&amp;1\\1&amp;1&amp;2\end{pmatrix}$，每行和为 4；row-sum 后变成 $\operatorname{diag}(4,4,4)$，总和仍为 12。若只抄原对角，则得到 $\operatorname{diag}(2,2,2)$，总和只有 6。这个整数例子很适合检查代码：错误的“删非对角”看起来同样是漂亮的对角阵，却会让重力、碰撞冲量与振动时间尺度全部使用半份质量。</p>
+        <p>从线性代数看，row-sum 正是在要求对角近似满足 $D\boldsymbol 1=\bar M\boldsymbol 1$。它让新旧矩阵对常量节点向量的作用完全一致，所以保住质量的零阶矩；但这个条件没有要求两者对线性或更高频向量也一致。后面的“保留什么、改变什么”，都可从这条边界读出来。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">同一枚三角形：耦合质量怎样流向对角</span></div>
+          <div class="lab-body" data-widget="triangle-mass"></div>
+          <div class="lab-cap">先点“常速度”，确认两种动能一致；再点“交替速度”，复现本页的 $q=(1,-1,0)$ 反例；最后点“单点速度”，观察只移动一个节点时三种质量表的差别。面板同时显示 $q^\top Mq$ 与真正动能 $T=\tfrac12q^\top Mq$。</div>
+        </div>
+
+        <p>放到整张网格上，集中通常逐单元完成再装配。每枚 P1 三角形把自己的 $\rho_et_eA_e/3$ 加给三个顶点；共享顶点最终收到所有相邻单元的贡献。在线性装配且尚未做约束消元时，这与先装配全局 consistent $M$、再取 $\operatorname{diag}(M\boldsymbol1)$ 完全等价：</p>
+        <div class="math-block">$$m_i=\sum_{e\ni i}\int_{\bar T_e}\rho_et_eN_i^e\,dA=\sum_{e\ni i}\frac{\rho_et_eA_e}{3}\qquad(\rho_et_e\text{ 在单元内为常数}).$$</div>
+        <p>因此不规则网格中的节点质量不会普遍相等：围绕它的材料面积越大、面密度越高，累加越多。这仍不是 Voronoi 最近点划分，而是每个单元自己的 shape function 权重份额。先在单元里正确分账，再按全局顶点编号累加，是 FEM 装配始终不变的顺序。</p>
+
+        <div class="callout warn">
+          <div class="c-h">先 lump 还是先消元？这两个操作一般不交换</div>
+          <p>看最小的二节点例子 $M=\begin{psmallmatrix}2&amp;1\\1&amp;2\end{psmallmatrix}$。先对完整矩阵行和集中，得到 $D=\operatorname{diag}(3,3)$；再 pin 第二个自由度，自由块是 $[3]$。若先消去第二个自由度，只剩 $M_{ff}=[2]$，此后再做行和仍是 $[2]$。前者表示“先把完整材料质量集中到节点，再施加边界”；后者是在已经约化的运动空间里重新近似。两种流程保留的常量场不同，代码和论文都应写清采用哪一种。</p>
+        </div>
+
+        <h2 id="what-is-preserved">集中以后，哪些连续事实还在</h2>
+        <p>第一个严格保留的是<span class="term">总质量</span>。在一个单元上，</p>
+        <div class="math-block">$$\sum_i m_i^L=\sum_{i,j}\bar M_{ij}=\int_{\bar T}\rho t\left(\sum_iN_i\right)\left(\sum_jN_j\right)dA=\rho tA.$$</div>
+        <p>全局装配只是继续相加，所以整张网格的总质量也保留。这里统计的是 3×3 标量节点矩阵；扩成二维向量自由度后，不能用“把 6×6 所有元素再加一次”解释物理质量，因为 $x,y$ 两个分量只是同一份质量的两个作用方向。</p>
+        <p>第二个保留的是<span class="term">常速度场的动能</span>。若所有节点速度都是同一个向量 $\boldsymbol c$，consistent 插值得到处处常值；lumped 也给出</p>
+        <div class="math-block">$$T_L=\frac12\sum_i m_i^L\lVert\boldsymbol c\rVert^2=\frac12\rho tA\lVert\boldsymbol c\rVert^2=T_C.$$</div>
+        <p>第三个相关事实是常加速度响应。令 $\boldsymbol 1=(1,1,1)^\top$，行和定义直接给出 $D\boldsymbol 1=\bar M\boldsymbol 1$。所以所有节点具有同一加速度时，consistent 与 row-sum lumped 产生相同节点惯性力。由对称性还有 $\boldsymbol1^\top Dv=\boldsymbol1^\top\bar Mv$，因此任意节点速度下的总线动量也保留；同一 isoparametric 插值下，一阶质量矩/质心同样可保持。这些结论依赖单位分解与标准装配，不是“任意对角近似都保常量”的许可证。</p>
+        <p>但一般速度场的动能不再相同。consistent 二次型含 $\bar M_{ij}(\boldsymbol v_i\cdot\boldsymbol v_j)$，能分辨相邻节点同向、反向或幅值不同；lumped 只剩 $\sum_i m_i^L\lVert\boldsymbol v_i\rVert^2$。刚体转动的速度随位置线性变化，P1 插值可精确表示这条速度场，但把面质量集中到顶点后，绕一般转轴的二阶质量矩会改变，所以一般不保旋转惯量。某些特殊几何或专门修正的集中规则可能匹配部分惯量，row-sum 本身没有这种保证。</p>
+        <p>一个极简反例能看出差距。把单元总质量记为 $m$，只看某个标量方向，并取节点速度 $q=(1,-1,0)^\top$。consistent 给出 $q^\top\bar Mq=m/6$，因为单元内部的线性速度会从 1 平滑过渡到 -1，大量区域速度接近零；row-sum 对角矩阵则给出 $q^\top Dq=2m/3$，只在节点采样后看不到中间的抵消。这个四倍差异只针对这条高变化速度，并不推出所有频率误差都有同一比例，却清楚说明“总质量相同”远不足以保证一般动能相同。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 5：同样 12 kg，三种对角化差多少？</div>
+          <p>沿用上一页的 $m=12$ 与 $q=(1,-1,0)$。consistent、row-sum lumped、只保留原对角依次给出</p>
+          <div class="math-block">$$q^\top M_Cq=2,\qquad q^\top Dq=8,\qquad q^\top\operatorname{diag}(M_C)q=4.$$</div>
+          <p>动能要再乘 $1/2$，所以 $T_C=1$、$T_L=4$、$T_{\mathrm{diag}}=2$。只删非对角看似处在两者中间，却不是一个守恒折中：它把总质量从 12 丢成了 6。打开上面的“交替速度”预设，面板应逐项复现这六个数字。</p>
+        </div>
+        <p>高频模态是同一差异的放大版：相邻节点速度剧烈交替，正是非对角耦合最有存在感的场景。集中质量保住了常量场，却改变这些快速变化场的离散内积，因此模态频率和波传播色散都会变化。对这里的 P1 simplex row-sum，有 $D-\bar M\succeq0$，所以在同一 $K\succeq0$ 与同一约束空间下，lumped 的离散广义特征值不高于 consistent；但两种离散结果相对<b>连续真值</b>的误差方向与大小仍依赖网格、边界和频段。不能脱离比较基准、成本与目标笼统说谁在所有问题上都更准。</p>
+
+        <h2 id="consistent-vs-lumped">不是精确对粗糙，而是信息与结构的交换</h2>
+        <p><b>consistent 的长处</b>是忠实保留所选有限元空间里的连续动能积分。对 P1 三角形，任何由节点速度线性插值得到的场，其动能二次型都由 $\bar M$ 精确表达，惯性耦合也进入模态和波传播分析。代价是 $M$ 虽稀疏却非对角，显式动力学里的 $\boldsymbol a=M^{-1}\boldsymbol f$ 需要解线性系统，不能逐节点除质量；而 $M^{-1}$ 本身通常不再稀疏。</p>
+        <p><b>lumped 的长处</b>是 $D^{-1}$ 仍为对角。显式更新、冲量转速度、预条件以及许多局部 solver 都可把“逆质量”变成每个节点一次除法，内存访问规则，并行也直接。代价是舍弃一般速度场中的交叉动能，改变高频模态与数值色散。实时仿真常愿意做这笔交换；精细结构动力学或模态分析则可能保留 consistent，或至少比较两者随网格加密的收敛行为。选择取决于时间积分、目标频段、网格质量和计算预算，而不是一句“谁绝对更准”。</p>
+        <p>还要区分“应用 $M$”与“应用 $M^{-1}$”。consistent 矩阵乘一个向量仍只是稀疏邻接运算，成本通常可控；真正让显式步为难的是求逆。隐式方法本来就在解包含刚度的全局系统，保留 consistent 有时只是在系统矩阵中多一项稀疏耦合，边际代价未必像显式方法那样突出。反过来，即使采用 lumped，也不会自动解决刚度、接触和约束带来的全局耦合。因此取舍必须放回整个求解流程，而不能只盯质量矩阵一项。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 block coordinate descent 看</span> 非对角质量增加依赖，但不让数学失效</div>
+          <p>隐式步的惯性目标为 $\tfrac{1}{2h^2}(\boldsymbol x-\boldsymbol y)^\top M(\boldsymbol x-\boldsymbol y)$。若 $M$ 是 consistent，节点 $i$ 的惯性梯度不再只有 $m_i(x_i-y_i)/h^2$，而是 $\sum_jM_{ij}(x_j-y_j)/h^2$。冻结其余 block 后，仍可对 $x_i$ 做合法的坐标最小化；block coordinate descent 的定义、下降逻辑和数学并未失效。真正增加的是依赖图与成本：更新一个节点要读取质量邻居，平行着色也要把质量边计入，局部梯度维护更贵。lumped 质量删掉这些惯性边，使每个节点的惯性部分完全局部，但这是实现与性能优势，不是算法成立的必要条件。</p>
+        </div>
+
+        <h2 id="higher-order-warning">P2 警告：行和集中不保证正质量</h2>
+        <p>P1 上的三等分太漂亮，容易让人误以为 row-sum 对任何阶数都安全。P2 指二次、六节点的 Lagrange triangle；标准 P2 立刻给出反例。用重心坐标 $\lambda_1,\lambda_2,\lambda_3$，三个顶点形函数和三个边中点形函数分别是</p>
+        <div class="math-block">$$N_i^v=\lambda_i(2\lambda_i-1),\qquad N_{ij}^e=4\lambda_i\lambda_j.$$</div>
+        <p>三角形上的基本积分为 $\int\lambda_i\,dA=A/3$、$\int\lambda_i^2dA=A/6$、$\int\lambda_i\lambda_jdA=A/12$。于是一个顶点形函数的积分是</p>
+        <div class="math-block">$$\int_{\bar T}N_i^v\,dA=2\frac{A}{6}-\frac{A}{3}=0,$$</div>
+        <p>而一个边中点形函数的积分是</p>
+        <div class="math-block">$$\int_{\bar T}N_{ij}^e\,dA=4\frac{A}{12}=\frac{A}{3}.$$</div>
+        <p>因此对标准 P2 consistent 矩阵做朴素行和集中，三个顶点得到 0，三个边中点各得 $\rho tA/3$，这就是 <span class="term">zero vertex masses</span>。总质量仍正确，但对角矩阵已有零元，因而奇异，顶点自由度没有可用的逆质量。必须分清：奇异的是朴素 row-sum 后的对角矩阵；正密度下，原 consistent mass 对线性无关的形函数仍为正定，并没有因为单个 $\int N_i^v=0$ 就失去质量。</p>
+
+        <div class="callout warn">
+          <div class="c-h">高阶集中要与单元、节点和求积一起设计</div>
+          <p>高阶时有几条可靠路线：使用节点匹配、权重为正的 mass-lumped quadrature，并配合专门构造或增加节点的 mass-lumped simplex elements；在张量积谱元中使用 Gauss-Lobatto-Legendre（GLL）节点与求积得到对角结构；或保留 consistent 矩阵，用稀疏直接法、迭代法与预条件器处理。GLL 不是给普通六节点 P2 三角形随手换一张求积表，任意正权求积也不自动同时保证原节点集上的阶数、精度和对角性。应先确认离散空间与积分规则配套，再谈集中。</p>
+        </div>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">两分钟自测：先预测，再看交互读数</div>
+          <p>保持总质量 12，把速度依次设成 $(1,1,1)$、$(1,-1,0)$、$(1,0,0)$。先不点按钮，预测哪一组会让 consistent 与 lumped 相等。再用矩阵手算三组 $T$ 并点预设核对。关键答案是：只有这里的常速度组由 $D\boldsymbol1=M\boldsymbol1$ 保证一致；另外两组是否接近，不能从“总质量相同”推出。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>行和之所以是节点质量，核心只有一步：$\sum_jM_{ij}=\int\rho tN_i(\sum_jN_j)dA=\int\rho tN_idA$。对 P1 三角形，它把单元质量各三分之一交给三个节点；只保留 consistent 原对角则会丢掉一半总质量。逐单元 row-sum 后再全局累加，得到的是形函数权重份额，不是最近节点分区。</p>
+        <p>这种集中严格保留总质量、常速度动能和标准惯性项下的常加速度响应，却一般改变转动惯量、一般速度场动能、高频模态与色散。它用惯性耦合信息换来对角逆、显式更新和局部 solver 的低成本；consistent 则保留有限元空间中的动能积分，而且不会让 block coordinate descent 在数学上失效。到了 P2，朴素行和甚至产生 zero vertex masses，说明集中必须与高阶单元和求积共同设计。<a href="14-6-mass-metric-modes.html">下一页 14-6</a> 会把 $M$ 提升为度量：为什么振型问题写成 $K\phi=\omega^2M\phi$，以及质量矩阵如何改变我们所说的长度、正交与曲率。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

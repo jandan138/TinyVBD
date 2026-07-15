@@ -65,24 +65,24 @@
           <thead><tr><th>变体（顶点 / 迭代 / ρ）</th><th>它设置了什么</th><th>它在演示什么</th></tr></thead>
           <tbody>
             <tr><td>3 verts / 100 / ρ=0.0</td><td>最短的刚度比链，无加速</td><td>baseline：100 迭代下软硬链还没收敛到位</td></tr>
-            <tr><td>3 verts / 20000 / ρ=0.0<br><code>_converged</code></td><td>把迭代拉到 20000</td><td><b>真收敛</b>需要多少迭代——和上一行对比，看软段从过拉到绷紧</td></tr>
-            <tr><td>10 verts / 100 / ρ=0.08<br><code>_accelerated</code></td><td>更长的链 + Chebyshev 加速</td><td>Chebyshev（<a href="../04-code/4-4-chebyshev.html">4.4</a>）能缓解慢收敛，但治标不治本</td></tr>
-            <tr><td>10 verts / 20000<br><code>_accelerated_converged</code></td><td>长链跑到真收敛</td><td>长链上高刚度比更吃力，信息要传更远</td></tr>
-            <tr><td>5 verts / 20000 / ρ=0.0<br><code>_converged</code></td><td>当前 5 顶点链的收敛版</td><td>和默认 5 verts / 100 对比，量出收敛差距</td></tr>
+            <tr><td>3 verts / 20000 / ρ=0.0<br><code>_converged</code></td><td>把迭代拉到 20000</td><td>高迭代参考——和上一行对比，看软段从过拉到绷紧；文件名不是严格收敛证明</td></tr>
+            <tr><td>10 verts / 100 / ρ=0.08<br><code>_accelerated</code></td><td>更长的链 + Chebyshev 加速</td><td>观察 Chebyshev（<a href="../04-code/4-4-chebyshev.html">4.4</a>）在该配置中能否提速；外推也可能升能</td></tr>
+            <tr><td>10 verts / 20000<br><code>_accelerated_converged</code></td><td>长链的高迭代参考</td><td>长链上高刚度比更吃力，信息要传更远</td></tr>
+            <tr><td>5 verts / 20000 / ρ=0.0<br><code>_converged</code></td><td>当前 5 顶点链的高迭代版</td><td>和默认 5 verts / 100 对比，量出有限预算差距</td></tr>
           </tbody>
         </table>
 
         <div class="callout note">
-          <div class="c-h">跑出来该长什么样：100 迭代 vs 20000 迭代</div>
-          <p>表里 <code>_converged</code> 行只说「真收敛要多少迭代」，但没告诉你屏幕上该看到什么差别、怎么判断「还没收敛」。给一句可观测判据：在那条高刚度比链上跑 <b>100 迭代</b>，你会看到 <b>软段（<code>1e4</code>）被重力过度拉长、硬段（<code>1e8</code>）几乎纹丝不动</b>——残余的约束违反肉眼可见，软段明显比 rest length 长一截。把迭代拉到 <b>20000</b>，软段才被一点点绷回接近 rest length，整条链稳定下来。</p>
-          <p>关键是：这个「过拉 + 迟钝」<b>不是不稳定</b>。能量 $G$ 在两种迭代下都<b>始终在下降</b>，链既不爆也不抖——差的只是<b>精度没到</b>，迭代被高刚度比拖住、信息在软硬交界处传得太慢（<a href="5-2-stiffness-ratio.html">5.2</a>）。这正对应 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> 要点破的那句「无条件稳定 ≠ 无条件正确」：稳定保证它不炸，但不保证 100 迭代就解对。看到软段过拉别急着以为求解器坏了——多半只是迭代不够。</p>
+          <div class="c-h">跑出来该长什么样：100 迭代 vs 20000 高迭代参考</div>
+          <p>表里 <code>_converged</code> 是源码的实验标签，不等于严格证明已经收敛。给一句可观测判据：在那条高刚度比链上跑 <b>100 迭代</b>，你会看到 <b>软段（<code>1e4</code>）被重力过度拉长、硬段（<code>1e8</code>）几乎纹丝不动</b>——残余的约束违反肉眼可见，软段明显比 rest length 长一截。把迭代拉到 <b>20000</b>，给定运行的软段会更接近 rest length，可把它当作高迭代参考来量有限预算误差。</p>
+          <p>关键是：在这些给定配置中，「过拉 + 迟钝」主要表现为欠收敛，运行也保持有限；但不能因此写成 $G$ 始终下降、链在任意参数下既不爆也不抖。TinyVBD C++ 的 QR raw full step 没有 PSD、det guard 或 line search，Chebyshev 外推也可升能；只有精确 block minimizer 或经 backtracking/Armijo 验收的更新，才能由 $\Delta G=\Delta G_i$ 推出单调。看到软段过拉时应先检查迭代误差，但也不能排除 raw 步本身失效。</p>
         </div>
 
         <p>另外还有几个旋钮散落在各处，都可以单独拨动：</p>
         <ul>
-          <li><b><code>params.numIterations</code></b>（默认 100）：每帧解多少次。压低看数值阻尼变大、链变软，但永不爆（<a href="5-3-skip-spring-iterations.html">5.3</a>）。</li>
-          <li><b><code>params.substeps</code></b>（默认 1）：把一帧切成几段，主循环里 <code>dt/=substeps</code>。源码 outPath 注释里那个 <code>10substeps</code> 变体就是把它设到 10——更小的 $h$ 让 $G$ 更好解。算一笔：惯性项权重是 $1/h^2$，$h\to h/10$ 让 $1/h^2$ 涨 $100\times$（$3600\to3.6\times10^5$），惯性碗陡 100 倍 → 局部牛顿步条件数改善、$G$ 更凸更好解。「更小 $h$ 更好解」落到的就是 $1/h^2$ 的这个具体倍数。</li>
-          <li><b><code>params.useAcceleration</code> + <code>params.accelerationRho</code></b>：开关 Chebyshev 加速并调谱半径估计 ρ。ρ 太大会 overshoot/振荡（<a href="../04-code/4-4-chebyshev.html">4.4</a>）。</li>
+          <li><b><code>params.numIterations</code></b>（默认 100）：每帧解多少次。压低后在给定 demo 中常见欠收敛、链变软；「仍能运行」是观察，不是低迭代永不爆的保证（<a href="5-3-skip-spring-iterations.html">5.3</a>）。</li>
+          <li><b><code>params.substeps</code></b>（默认 1）：把一帧切成几段，主循环里 <code>dt/=substeps</code>。源码 outPath 注释里那个 <code>10substeps</code> 变体就是把它设到 10。算一笔：惯性项权重是 $1/h^2$，$h\to h/10$ 让 $1/h^2$ 涨 $100\times$（$3600\to3.6\times10^5$），所以惯性正曲率偏置陡 100 倍；这通常有助于条件，但不保证总 Hessian 变凸、raw full step 降能或稳定性也提高 100 倍。</li>
+          <li><b><code>params.useAcceleration</code> + <code>params.accelerationRho</code></b>：开关 Chebyshev 加速并调谱半径估计 ρ。外推没有能量验收，即使尚未发散也可能升高 $G$；ρ 太大还会 overshoot/振荡（<a href="../04-code/4-4-chebyshev.html">4.4</a>）。</li>
           <li><b><code>addSkipSpring</code> / <code>skipSpringStrength</code></b>：开关 / 调弯曲刚度。关掉看链如何自折叠卷曲（<a href="5-3-skip-spring-iterations.html">5.3</a>）。</li>
           <li><b>刚度比 <code>stiffness1 / stiffness2</code></b>（<code>stiffnessRatio48</code> 那一族）：把 1e4 / 1e8 改近一点，看收敛变快；改远一点，看 VBD 更吃力。</li>
         </ul>
@@ -93,7 +93,7 @@
         </div>
 
         <h2 id="capstone">capstone：在浏览器里把所有旋钮跑一遍</h2>
-        <p>不想反复编译？下面这个 <code>strand-lab</code> 就是 VBD 核心的实时 JS 移植——它把上面那些旋钮都做成了滑块。现在你已经懂每个旋钮背后的数学了：<code>stiffness</code> 决定弹性碗多陡、<b>末端质量比</b>对应 $m_i/h^2$、<b>迭代数</b>决定离真解多近、<b>Chebyshev(ρ)</b> 是加速、<b>skip spring</b> 是弯曲。一边拖一边把它们和 <code>main.cpp</code> 的 config 对应起来，是给整个 Part 5 收尾的最好方式。</p>
+        <p>不想反复编译？下面这个 <code>strand-lab</code> 就是 VBD 核心的实时 JS 移植——它把上面那些旋钮都做成了滑块。现在你已经懂每个旋钮背后的数学了：<code>stiffness</code> 决定弹性碗多陡、<b>末端质量比</b>对应 $m_i/h^2$、<b>迭代预算</b>影响欠收敛误差、<b>Chebyshev(ρ)</b> 是可能提速也可能升能的外推、<b>skip spring</b> 是弯曲。一边拖一边把它们和 <code>main.cpp</code> 的 config 对应起来，是给整个 Part 5 收尾的最好方式。</p>
 
         <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">capstone：自己跑一遍所有旋钮</span></div><div class="lab-body" data-widget="strand-lab"></div><div class="lab-cap">现在你懂每个旋钮背后的数学了：stiffness、末端质量比、迭代数、Chebyshev(ρ)、skip spring。把它们和 main.cpp 的 config 对应起来。</div></div>
 

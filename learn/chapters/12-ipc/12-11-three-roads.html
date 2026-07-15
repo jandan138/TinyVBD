@@ -79,7 +79,7 @@
           </tbody>
         </table>
 
-        <p>这张表读下来有一条清晰的脊梁：从左到右，<b>无穿透从「不保证」走到「严格保证」，代价从「便宜局部」走到「昂贵全局」</b>。penalty 和 AVBD 共享「局部 + 便宜 + 可并行」的体质，区别只在 AVBD 多了一层 augmented Lagrangian 把约束逼得更硬、收敛得更稳；IPC 则独自站在「全局 + 昂贵 + 严格保证」的另一端。</p>
+        <p>这张表读下来有一条清晰的脊梁：从左到右，<b>无穿透从「不保证」走到「严格保证」，代价从「便宜局部」走到「昂贵全局」</b>。penalty 和 AVBD 共享「局部 + 便宜 + 可并行」的体质；AVBD 额外维护 augmented Lagrangian 的 multiplier 与 penalty，把约束逼得更硬；IPC 则独自站在「全局 + 昂贵 + 严格保证」的另一端。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">三条路压向地面：最后再看一眼穿透深度</span></div>
@@ -96,27 +96,27 @@
         </ul>
 
         <div class="callout note">
-          <div class="c-h">三条路，同一个 barrier，同一条主线</div>
-          <p>别忘了一个贯穿全篇的事实：penalty 的软能量、AVBD ramp 出的硬约束、IPC 的 interior-point barrier，本质上都是往 $G(\mathbf x)$ 里加<b>接触项</b>。你在 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 亲手累加进 $\mathbf f_i/\mathbf H_i$ 的那个 log-barrier，和 IPC 全局优化里的 barrier 是<b>同一个数学对象</b>，区别只在「局部 + 几何截断兜底」还是「全局 + CCD 严格保证」。三条路看似各走各的，其实都站在同一行加号上。</p>
+          <div class="c-h">共享接触目标，不是同一个 barrier 或固定目标</div>
+          <p>三条路都要把接触反馈耦合进一个 time step，但数学对象不同：penalty 使用有限的软能量；AVBD 把接触写成约束，并逐轮更新 augmented-Lagrangian 的 $\lambda$ 与 penalty；IPC 使用 interior-point log-barrier，再用 CCD-filtered line search 保持可行。<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 的局部 log-barrier 与 IPC barrier 有共同的能量建模来源，但「局部 + 几何截断」和「全局 + CCD 可行性」并不是同一个完整算法，更不能把 penalty 与 AVBD 也统称为同一个 barrier。</p>
         </div>
 
-        <h2 id="main-thread">收线：还是那一句 min G(x)</h2>
-        <p>从 Part 1 的变分欧拉，到 Part 3 的 block coordinate descent，到 Part 10 的接触，到 Part 11 的 AVBD，再到这一整篇 IPC——你会发现整本书其实只讲了一件事：<b>把一个 time step 的动力学，写成最小化一个 incremental potential $G(\mathbf x)$</b>。</p>
+        <h2 id="main-thread">收线：共享 incremental dynamics / 能量-约束视角</h2>
+        <p>从 Part 1 的变分欧拉，到 Part 3 的 block coordinate descent，到 Part 10 的接触、Part 11 的 AVBD，再到这一整篇 IPC，共同问题都是如何在一个 time step 内平衡惯性、弹性与接触。对 penalty 或 IPC 这样的 energy-based 路线，当前一步可以写成 incremental potential：</p>
 
-        <div class="math-block">$$\mathbf x^{t+1} \,=\, \arg\min_{\mathbf x}\; G(\mathbf x),\qquad G(\mathbf x) \,=\, \underbrace{\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_{\mathbf M}^2}_{\text{惯性}} \,+\, \underbrace{E_{\text{elastic}}(\mathbf x)}_{\text{弹性}} \,+\, \underbrace{E_{\text{contact}}(\mathbf x)}_{\text{接触：三条路之一}}$$</div>
+        <div class="math-block">$$\mathbf x^{t+1} \,=\, \arg\min_{\mathbf x}\; G(\mathbf x),\qquad G(\mathbf x) \,=\, \underbrace{\tfrac{1}{2h^2}\|\mathbf x-\mathbf y\|_{\mathbf M}^2}_{\text{惯性}} \,+\, \underbrace{E_{\text{elastic}}(\mathbf x)}_{\text{弹性}} \,+\, \underbrace{E_{\text{contact}}(\mathbf x)}_{\text{penalty 或 barrier}}$$</div>
 
-        <p>惯性项、弹性项，从 strand 到 cloth 到 IPC 一字未改。变的，只有最后那个接触项 $E_{\text{contact}}$ 的写法：penalty 的软能量、AVBD 的 ramp，还是 IPC 的 log-barrier。怎么解它——per-vertex 局部下降，还是全局稀疏 Newton——也只是同一个 $\min G(\mathbf x)$ 的不同求解策略。<b>整本书的接触主线，到这里闭合：三条路，三种接触项写法，一条 $\min G(\mathbf x)$。</b></p>
+        <p>在这条能量路线里，penalty 与 IPC 分别选择软能量和 log-barrier，并可用 per-vertex 下降或全局稀疏 Newton 求解。AVBD 不能只看成替换上式的 $E_{\text{contact}}$：它还维护 multiplier 与 penalty，每轮处理一份随这些量变化的 augmented-Lagrangian 子问题。<b>整本书的接触主线由共同动力学目标闭合，但三条路不是同一个固定 $\min G(\mathbf x)$ 的三种写法。</b></p>
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你早就握着这把钥匙</div>
-          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触项都没有。但正是从那根 strand 上，你学会了把动力学读成 $\min G(\mathbf x)$、读成 per-vertex 的 $\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$。这把钥匙一路开到了 IPC——IPC 再贵再复杂，骨子里还是「往 $G$ 里加一项、再把它解出来」。你不是学了三套互不相干的接触算法，而是学会了用同一条主线，看穿三种接触写法的取舍。</p>
+          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触项都没有。但正是从那根 strand 上，你学会了把变分动力学读成 $\min G(\mathbf x)$、读成 per-vertex 的 $\Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$。这把钥匙可以直接打开 penalty / IPC 的能量路线；遇到 AVBD，还要再加上 KKT 与 augmented-Lagrangian 这把钥匙。共同视角让三条路线可比较，并不要求把它们说成同一个优化器。</p>
         </div>
 
         <h2 id="further-reading">进一步阅读</h2>
         <p>这一篇是概念篇，刻意没碰那些只有读原文才能落实的细节（精确 barrier 解析式、收敛性证明、具体性能数据）。要往下走，从原始论文进——IPC 2020、以及它的几个重要后续工作（C-IPC、Convergent IPC、Affine Body Dynamics），都整理在附录 <a href="../appendix/a-7-ipc-references.html">a-7：IPC 参考文献</a>，每条都附一句中文告诉你值不值得点进去。术语见 <a href="../appendix/a-1-glossary.html">术语表</a>，公式见 <a href="../appendix/a-2-cheatsheet.html">公式速查</a>。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 三条路沿六维度对照——penalty <b>软、局部、便宜、不保证</b>；AVBD <b>用 augmented Lagrangian 逼近硬、局部、便宜可并行</b>；IPC <b>用 interior-point barrier + CCD line search 严格保证、全局稀疏 Newton、贵</b>，整张表的脊梁就是「无穿透越严、代价越贵」。(2) <b>没有银弹</b>：要实时可并行、容忍微穿透就选 penalty/AVBD，要严格 intersection-free、能接受离线算力就选 IPC，按场景取舍而非排高下。(3) 三条路本质都是往 $\min G(\mathbf x)$ 里加一个<b>接触项</b>——你在 10.3 亲手见过的那个 log-barrier 就是同一个数学对象——整本书的接触主线到此闭合：三种写法，一条主线。</p>
+        <p>三句话：(1) 三条路沿六维度对照——penalty <b>软、局部、便宜、不保证</b>；AVBD <b>用 augmented Lagrangian 逼近硬、局部、便宜可并行</b>；IPC <b>用 interior-point barrier + CCD line search 严格保证、全局稀疏 Newton、贵</b>，整张表的脊梁就是「无穿透越严、代价越贵」。(2) <b>没有银弹</b>：要实时可并行、容忍微穿透就选 penalty/AVBD，要严格 intersection-free、能接受离线算力就选 IPC，按场景取舍而非排高下。(3) 三者共享把接触耦合进增量动力学的目标，但数学对象不同：penalty / IPC 可写接触能量，AVBD 每轮处理变化的 augmented-Lagrangian 子问题；共同主线不等于同一个固定 $\min G$。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

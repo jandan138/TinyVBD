@@ -33,7 +33,7 @@
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 这是真正的「无中生有」</div>
-          <p>前面 membrane、bending、SPD 投影，多少还能在 strand 的弹簧上找到影子。但碰撞不行——TinyVBD 这根 strand <b>单体、不自碰、没有 BVH</b>，它对「撞」这个字毫无概念。Newton 的 cloth 这边却要凭空长出三样东西：一个 <span class="term">BVH</span> 自碰检测器、一组接触力/Hessian、还有一道 <span class="term">penetration-free</span> 的位移截断。读这一节时别再去 strand 里找对应了——找不到的。这正是 <code>min G(x)</code> 这条主线之外，cloth 真正多出来的份量。</p>
+          <p>前面 membrane、bending、PSD clamp / projection，多少还能在 strand 的弹簧上找到影子。但碰撞不行——TinyVBD 这根 strand <b>单体、不自碰、没有 BVH</b>，它对「撞」这个字毫无概念。Newton 的 cloth 这边却要凭空长出三样东西：一个 <span class="term">BVH</span> 自碰检测器、一组接触力/Hessian、还有一道 <span class="term">penetration-free</span> 的位移截断。读这一节时别再去 strand 里找对应了——找不到的。这正是 <code>min G(x)</code> 这条主线之外，cloth 真正多出来的份量。</p>
         </div>
 
         <h2 id="detector">第一问：谁撞了谁——<span class="term">TriMeshCollisionDetector</span></h2>
@@ -51,7 +51,7 @@
         </div>
 
         <h2 id="force-hessian">第二问：写成 VBD 认得的话——接触折进 f_i / H_i</h2>
-        <p>有了邻近清单，Newton 调 <span class="term">accumulate_self_contact_force_and_hessian</span>，把每一对潜在接触换算成作用在相关顶点上的<b>力和 3×3 Hessian</b>。接触能量用的是 <span class="term">log-barrier</span>：当两个几何元件的距离 $d$ 趋近某个阈值时，能量像 $-\log d$ 一样飙到无穷，于是<b>距离永远跨不过零</b>——这是「不穿透」的能量层面保证。摩擦则用 <span class="term">Coulomb friction</span> 模型一并算进来。</p>
+        <p>有了邻近清单，Newton 调 <span class="term">accumulate_self_contact_force_and_hessian</span>，把每一对潜在接触换算成作用在相关顶点上的<b>力和 3×3 Hessian</b>。接触能量用的是 <span class="term">log-barrier</span>：当两个几何元件的距离 $d$ 趋近 $0$ 时，连续能量像 $-\log d$ 一样飙到无穷，在可行域内部强烈阻止继续逼近。<b>这不是对离散 full step 的单独保证</b>：一步仍可能跨过 $d=0$，所以后面还需要几何截断或 IPC 的 CCD-filtered line search。摩擦则用 <span class="term">Coulomb friction</span> 模型一并算进来。</p>
         <p>关键在于：这些力和 Hessian <b>累加进的，正是那个你已经无比熟悉的 $\mathbf f_i$ 和 $\mathbf H_i$</b>。回想 VBD 的顶点级牛顿步：</p>
         <div class="math-block">$$\mathbf f_i = -\frac{m_i}{h^2}(\mathbf x_i-\mathbf y_i) - \sum_{j\in\mathcal F_i}\frac{\partial E_j}{\partial \mathbf x_i},\qquad \mathbf H_i = \frac{m_i}{h^2}\mathbf I + \sum_{j\in\mathcal F_i}\frac{\partial^2 E_j}{\partial\mathbf x_i^2},\qquad \Delta\mathbf x_i = \mathbf H_i^{-1}\mathbf f_i$$</div>
         <p>接触不过是往 $\sum_j$ 里又添了几项 force element。一个顶点除了被它的弹簧、membrane、bending 拉扯，现在还被它正在逼近的那些三角形/边「顶」一下——这些「顶」的力和曲率，和弹性项一样累加进同一个 $\mathbf f_i$、同一个 $\mathbf H_i$，最后一起解那一步 $\mathbf H_i^{-1}\mathbf f_i$。</p>
@@ -62,7 +62,7 @@
         </div>
 
         <h2 id="inversion-vs-penetration">别混：inversion-free 和 penetration-free 是两种保证</h2>
-        <p>这里必须把两个很像的词拆开。<b>inversion-free</b> 讲的是<b>单个 FEM 单元自己有没有翻面</b>：四面体或三角形的形变梯度 $\mathbf F$ 要保持正取向，$J=\det\mathbf F&gt;0$。一旦 $J&lt;0$，这个单元就从里翻到外，属于 <a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 讲的 <span class="term">inverted element</span> 问题。Neo-Hookean 的 $\ln J$ 或 stable 能量可以在 $J\to0^+$ 处竖墙，<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影让它的 Hessian 更适合进 Newton，但这些主要是在保护<b>材料单元内部</b>。</p>
+        <p>这里必须把两个很像的词拆开。<b>inversion-free</b> 讲的是<b>单个 FEM 单元自己有没有翻面</b>：四面体或三角形的形变梯度 $\mathbf F$ 要保持正取向，$J=\det\mathbf F&gt;0$。一旦 $J&lt;0$，这个单元就从里翻到外，属于 <a href="../09-fem/9-2-deformation-gradient.html">9.2</a> 讲的 <span class="term">inverted element</span> 问题。Neo-Hookean 的 $\ln J$ 或 stable 能量可以在 $J\to0^+$ 处竖墙，<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 elementwise PSD clamp 则提供一种 modified-Hessian 鲁棒策略；后者只修正求解曲率，<b>本身不保证 $J&gt;0$、inversion-free 或 static stability</b>，离散保证仍要靠相应的可行域与步长控制。</p>
         <p><b>penetration-free</b> / <b>intersection-free</b> 讲的是<b>不同几何片之间有没有互相穿过</b>：一个顶点有没有穿过另一个三角形，两条边有没有交叉。一个布片的每个三角形都可能 $J&gt;0$、没有翻面，但整块布仍然可以和另一片布互相穿插；反过来，某个四面体内部翻转，也不是靠 self-collision 检测就一定能修好。两者都叫「free」，但检查对象和保证来源完全不同。</p>
         <table>
           <thead><tr><th>保证</th><th>对象</th><th>坏掉时的符号</th><th>主要工具</th></tr></thead>
@@ -73,7 +73,7 @@
         </table>
         <div class="callout warn">
           <div class="c-h">一句话区分</div>
-          <p><b>$J&gt;0$ 不等于不穿透，不穿透也不等于所有单元都没翻面。</b>前者是材料单元的取向约束，后者是表面几何的非交约束。10.3 本节解决的是 penetration-free；Part 9/10.2 讨论的是 FEM 单元如何尽量保持可用、稳定、不翻面；Part 12 的 IPC 则把 penetration-free 升级成每次迭代都严格保持的 intersection-free 不变量。</p>
+          <p><b>$J&gt;0$ 不等于不穿透，不穿透也不等于所有单元都没翻面。</b>前者是材料单元的取向约束，后者是表面几何的非交约束。10.3 本节解决的是 penetration-free；Part 9/10.2 讨论材料模型与 modified-Hessian 鲁棒性，但 PSD clamp 不是不翻面的证明；Part 12 的 IPC 则用可行初值与 CCD-filtered line search 把 intersection-free 保持为迭代不变量。</p>
         </div>
 
         <h2 id="body-particle">body-particle 接触：同一个口子进来</h2>
@@ -93,7 +93,7 @@
 
         <div class="callout note">
           <div class="c-h">消歧：10-3 的 log-barrier 是「强」的那条碰撞路，别和 6-1/11-1 说的 VBD penalty 混了</div>
-          <p>全书会在两处看似矛盾地谈碰撞，这里点破。<b>10-3（本节）</b>讲的是 Newton self-contact 真正走的路：<span class="term">log-barrier</span> + penetration-free 截断——属 <span class="term">IPC</span> 谱系的<b>硬保证</b>（$d\to0$ 时 $-\log d\to\infty$，能量挡 + 几何砍，双层兜底保证不穿透）。而 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> / <a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 反复说的「完整 VBD 用 <b>penalty</b> 碰撞、软的、不保证无穿透」，指的是<b>纯惩罚力</b>那条更弱的路——只往能量里加一个「穿透越深、回推越大」的软项，没有 barrier 的发散、也没有截断兜底，理论上允许穿透。同一本书里两种碰撞处理并存：<b>10-3 讲的是强的那条</b>。barrier 这条路的完整故事——距离几何、barrier 求导与 PSD、CCD line search 截步长——是 <b>Part 12 IPC 篇</b>的主题；这里折进 $\mathbf f_i/\mathbf H_i$ 的「每顶点 log-barrier + 局部截断」是它在 VBD 里的<b>局部</b>体现，而 IPC 那套 <a href="../12-ipc/12-5-ccd-linesearch.html">CCD line search（12.5）</a>提供的是<b>全局</b>步长保证，可点过去看二者如何衔接。</p>
+          <p>全书会在两处看似矛盾地谈碰撞，这里点破。<b>10-3（本节）</b>讲的是 Newton self-contact 真正走的路：<span class="term">log-barrier</span> + penetration-free 截断；其中 barrier 给连续模型提供排斥，<b>离散不穿透保证来自保守的几何截断，而不是 barrier 或 PSD Hessian 本身</b>。而 <a href="../06-closing/6-1-place-and-limits.html">6.1</a> / <a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 反复说的「完整 VBD 用 <b>penalty</b> 碰撞、软的、不保证无穿透」，指的是<b>纯惩罚力</b>那条更弱的路——只往能量里加一个「穿透越深、回推越大」的软项，没有 barrier 的发散、也没有截断兜底，理论上允许穿透。同一本书里两种碰撞处理并存：<b>10-3 讲的是强的那条</b>。barrier 这条路的完整故事——距离几何、barrier 求导与 PSD、CCD line search 截步长——是 <b>Part 12 IPC 篇</b>的主题；这里折进 $\mathbf f_i/\mathbf H_i$ 的「每顶点 log-barrier + 局部截断」是它在 VBD 里的<b>局部</b>体现，而 IPC 那套 <a href="../12-ipc/12-5-ccd-linesearch.html">CCD line search（12.5）</a>提供的是<b>全局</b>步长保证，可点过去看二者如何衔接。</p>
         </div>
 
         <h2 id="recap">这一节你要带走的</h2>

@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 12 · 12-4</div>
         <h1>barrier 求导与 PSD 投影：怎么进 Newton</h1>
-        <p class="lede">上一节 <a href="12-3-distance-geometry.html">12-3</a> 已经把 barrier 咬住的那个量备齐了：point-triangle / edge-edge 的无符号距离 $d(\mathbf x)$，以及它对各顶点的几何梯度 $\partial d/\partial\mathbf x$。再上一节 <a href="12-2-barrier-energy.html">12-2</a> 给了 barrier $b(d,\hat d)$ 本身。这一节把这两块拼起来：Newton 不吃曲线、吃<b>梯度和 Hessian</b>，我们就用<b>两步链式法则</b>，把 barrier 沿 $d$ 求导、接上 $\partial d/\partial\mathbf x$，得到喂给全局 Newton 步的<b>接触力</b>与<b>曲率</b>；再讲一道你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 已经见过的老操作——<span class="term">PSD projection</span>——为什么在这里同样不可或缺。</p>
+        <p class="lede">上一节 <a href="12-3-distance-geometry.html">12-3</a> 已经把 barrier 咬住的那个量备齐了：point-triangle / edge-edge 的无符号距离 $d(\mathbf x)$，以及它对各顶点的几何梯度 $\partial d/\partial\mathbf x$。再上一节 <a href="12-2-barrier-energy.html">12-2</a> 给了 barrier $b(d,\hat d)$ 本身。这一节把这两块拼起来：Newton 不吃曲线、吃<b>梯度和 Hessian</b>，我们就用<b>两步链式法则</b>，把 barrier 沿 $d$ 求导、接上 $\partial d/\partial\mathbf x$，得到喂给全局 Newton 步的<b>接触力</b>与<b>曲率</b>；再讲一道你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 已经见过的常用 modified-Hessian 策略——<span class="term">PSD projection</span>。</p>
 
         <h2 id="chain-force">第一步链式法则：barrier 的接触力</h2>
         <p>barrier 是距离的函数，距离又是位置的函数：$b\big(d(\mathbf x)\big)$。要算它对位置的梯度，就是经典的<b>两层复合求导</b>。<b>接触力</b>是 barrier 对位置的负梯度：</p>
@@ -44,13 +44,15 @@
 
         <h2 id="psd-projection">PSD 投影：把不保险的第二项按住</h2>
         <p>上面 Hessian 的第二项 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 是个隐患——它不保证半正定。一旦合成的局部 Hessian 出现负特征值，Newton 解出来的方向可能<b>不是下降方向</b>，那一步会把能量越解越高，迭代发散。这正是 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 在弹性元件上遇到过的同一个毛病（压缩 membrane 的体积项让 Hessian 变负），换了个出处而已。</p>
-        <p>解法你也早在 10.2 学过：<b>把每个接触对（以及弹性项）的局部 Hessian 做 PSD projection</b>——对它做<b>特征分解</b>，把负特征值<b>钳到零</b>（或一个小正数），强行投影成半正定，再装配进全局 Hessian：</p>
+        <p>一种常用解法是构造 <span class="term">modified Hessian</span>：对每个接触对（以及选定的弹性项）局部 Hessian 做特征分解，把负特征值<b>钳到零</b>，再把这个 PSD 近似装配进全局矩阵。这会改写 Newton 使用的二阶模型，而不是改变原目标的梯度；它是鲁棒策略之一，并非所有 IPC / FEM 求解器都必须采用：</p>
         <div class="math-block">$$\mathbf H_\text{local}=\sum_i \lambda_i\,\mathbf v_i\mathbf v_i^{\!\top}\ \longrightarrow\ \widetilde{\mathbf H}_\text{local}=\sum_i \max(0,\lambda_i)\,\mathbf v_i\mathbf v_i^{\!\top}.$$</div>
-        <p>这样保证每一块都半正定，累加出来的全局 Hessian 也半正定，Newton 步永远<b>朝下走</b>。注意它只动<b>负</b>特征值——半正定的外积项 (I) 原封不动，被按住的只是第二项 (II) 偶尔甩出来的负方向。</p>
+        <p>这样每个修正块都是半正定，累加仍至多得到 PSD；<b>PSD 可能奇异</b>，所以它本身既不保证 inverse / 普通 Cholesky 可用，也不保证严格下降。若正质量惯性在自由 DOF 上提供正定块，并已消去固定 / 约束自由度，或另加 positive shift 使总系统 $\mathbf H_{\mathrm{total}}\succ0$，在 $\mathbf f=-\nabla G$ 的记号下才有</p>
+        <div class="math-block">$$\mathbf p=\mathbf H_{\mathrm{total}}^{-1}\mathbf f,\qquad \nabla G^\top\mathbf p=-\nabla G^\top\mathbf H_{\mathrm{total}}^{-1}\nabla G&lt;0.$$</div>
+        <p>这只证明 $\mathbf p$ 是严格下降<b>方向</b>；非线性目标上的 full step $\alpha=1$ 仍可能过头，必须由 line search 决定步长。PSD modified Hessian 也不提供 inversion-free / intersection-free 保证，后者来自可行初值与相应的步长控制 / CCD。</p>
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个 PSD 投影，换了个容器</div>
-          <p>10.2 里你对弹性元件的 3×3 / 小块 Hessian 做 SPD 投影，是为了让 VBD 的<b>per-vertex</b> 牛顿步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 稳定下降。IPC 做的是<b>一模一样的事</b>，只是对象换成了 barrier + elasticity 的局部 Hessian，投影后装配进一个<b>全局</b>稀疏矩阵，再交给全局线性求解器。<b>同一个数学操作（钳负特征值），同一个目的（保证下降方向），只是从 per-vertex 容器换成了全局容器。</b>读到这里你会发现，IPC 的每一块零件你几乎都见过——它的新意不在零件，而在「全局 + CCD line search」这套装配方式。</p>
+          <p>10.2 里弹性元件使用的负特征值 clamp，与这里 barrier + elasticity 局部块的操作同属 <b>PSD modified-Hessian</b> 策略：对象从 per-vertex 小块换成装配进全局稀疏矩阵的局部块。它们都在二阶模型里移除负曲率，但都不把单块变成 SPD；总系统的可逆性与严格下降还依赖正质量惯性、约束处理或 regularization，full step 再交给 line search。IPC 的 intersection-free 新意则在「全局目标 + CCD-filtered line search」，不在 PSD clamp 本身。</p>
         </div>
 
         <h2 id="dhat-tradeoff">$\hat d$ 的两难：更紧，但更难解</h2>
@@ -68,7 +70,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) barrier 进 Newton 靠<b>两步链式法则</b>：接触力 $=-b'(d)\,\partial d/\partial\mathbf x$（标量斜率乘 12-3 的几何方向），Hessian $=b''(d)\,\partial d/\partial\mathbf x(\partial d/\partial\mathbf x)^\top + b'(d)\,\partial^2 d/\partial\mathbf x^2$。(2) Hessian 第一项是半正定的外积项、天生乖，<b>第二项含距离二阶项 $\partial^2 d/\partial\mathbf x^2$，不保证半正定</b>，会拖出负特征值；必须像 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 那样做 <span class="term">PSD projection</span>——特征分解、把负特征值钳到零——才能保证 Newton 步是下降方向。(3) 阈值 $\hat d$ 是<b>几何精度与可解性的取舍</b>：越小越贴真，但 $b''$ 越大、条件数越差、Newton 越难收。</p>
+        <p>三句话：(1) barrier 进 Newton 靠<b>两步链式法则</b>：接触力 $=-b'(d)\,\partial d/\partial\mathbf x$（标量斜率乘 12-3 的几何方向），Hessian $=b''(d)\,\partial d/\partial\mathbf x(\partial d/\partial\mathbf x)^\top + b'(d)\,\partial^2 d/\partial\mathbf x^2$。(2) 第二项可能拖出负特征值；常见的 <span class="term">PSD projection</span> 把它换成半正定 modified Hessian，但 PSD 可能奇异，必须在惯性 / 约束处理 / positive shift 使总系统 SPD 后才得到严格下降方向，full step 仍由 line search 控制。(3) 阈值 $\hat d$ 是<b>几何精度与可解性的取舍</b>：越小越贴真，但 $b''$ 越大、条件数越差、Newton 越难收。</p>
         <p>到此，barrier 已经完整地咬进了 Newton 步。但还差最关键的一把锁：链式法则给的力/Hessian 挡得住<b>连续</b>的逼近，挡不住<b>离散一步跨过去</b>的越界。下一节 <a href="12-5-ccd-linesearch.html">12-5（CCD line search）</a>，我们就讲 IPC 那道 <span class="term">CCD</span>-filtered line search——它才是把「不穿透」从软挡升级成<b>严格保证</b>的真正功臣。</p>
       </article>
     </main>

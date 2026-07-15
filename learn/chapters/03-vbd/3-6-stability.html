@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>不强制 SPD：稳定性从哪来 · TinyVBD 教程</title>
+  <title>惯性偏置、可逆求解与下降验收 · TinyVBD 教程</title>
   <link rel="stylesheet" href="../../assets/css/book.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -24,61 +24,64 @@
     <main>
       <article class="article">
         <div class="eyebrow">Part 3 · Vertex Block Descent · 3-6</div>
-        <h1>不强制 SPD：稳定性从哪来</h1>
-        <p class="lede">我们埋了好几次伏笔：VBD 解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时，<b>不</b>检查 $\mathbf H_i$ 是不是正定，也<b>不</b>做 line search。这在 Newton 方法的世界里近乎"鲁莽"——不定的 Hessian 可能给出上坡方向，没有 line search 步长可能过头。VBD 凭什么这么浪还稳？这一节把三条理由说清楚。</p>
+        <h1>惯性偏置、可逆求解与下降验收</h1>
+        <p class="lede">看到局部系统 $\mathbf H_i\mathbf p_i=\mathbf f_i$，必须分开问三件事：$\mathbf H_i$ 的谱是否给出下降方向？线性系统能否数值求解？候选 full step 是否真的降低 $G_i$？惯性项、QR/determinant 检查和 line search 分别只回答其中一个问题。TinyVBD 的 <code>main.cpp</code> 选择了精简的 QR full step，没有 PSD、显式 det guard 或 line search，因此这里应讨论它为什么常常好用，也要诚实标出它没有哪些定理保证。</p>
 
-        <h2 id="the-worry">先说清楚担心的是什么</h2>
-        <p>经典 Newton（以及 Projective Dynamics）通常会把 Hessian 做 <span class="term">SPD projection</span>——强行把负特征值掀到正、或加阻尼，确保 $\mathbf H$ 正定，这样 $\mathbf H^{-1}\mathbf f$ 才保证是个下降方向；再配上 line search 控制步长，免得冲过头让能量反升。这两道保险是 Newton 类方法的标配。</p>
-        <p>而 VBD 的 <code>solve()</code> 里，<b>两道保险都没有</b>。它直接拿装配好的 $\mathbf H_i$——而我们在 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 和 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 已经知道，弹簧被压缩（$l&lt;l_0$）时它的 Hessian 块在垂直方向特征值 $k(1-l_0/l)$ 会<b>变负</b>，让 $\mathbf H_i$ 有沦为不定的风险——然后解一个 $3\times3$ 就直接挪过去。为什么不出事？三条理由叠在一起。</p>
+        <h2 id="the-worry">先把三个问题拆开</h2>
+        <ul>
+          <li><b>方向</b>：若对称 $\mathbf H_i$ 为 SPD，则 $\mathbf p_i=\mathbf H_i^{-1}\mathbf f_i$ 是下降方向；若它不定，raw Newton 可能上坡。</li>
+          <li><b>可逆/可解</b>：QR 或 determinant heuristic 关心能否得到有限的线性系统解，但不判断这个解是否下降。</li>
+          <li><b>接受</b>：即使方向下降，$\alpha=1$ 也可能超出局部二次模型的可信范围；精确 block minimizer 或 backtracking/Armijo 才负责 $\Delta G_i\le0$。</li>
+        </ul>
+        <p><a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 的 $\Delta G=\Delta G_i$ 只在第三项通过后把局部下降传给全局。把这三个问题混成一个「稳定守卫」，就会错误地把可逆性当成 SPD，再把 SPD 当成 full-step 单调。</p>
 
-        <h2 id="reason-1">理由一：惯性项是永远正定的压舱石</h2>
-        <p>$\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\frac{\partial^2 E_j}{\partial\mathbf x_i^2}$ 的第一块——惯性项 $\frac{m_i}{h^2}\mathbf I$——是<b>恒正定</b>的各向同性块，三个特征值都等于 $\frac{m_i}{h^2}$。对合理的时间步 $h$，这个值并不小（$h$ 在分母上、还平方），它给整个 $\mathbf H_i$ 的谱<b>抬了一个正的底</b>。</p>
-        <div class="math-block">$$\lambda_{\min}(\mathbf H_i)\;\ge\;\frac{m_i}{h^2}+\lambda_{\min}\Big(\textstyle\sum_j\tfrac{\partial^2 E_j}{\partial\mathbf x_i^2}\Big)$$</div>
-        <p>弹簧块的最负特征值是 $k(1-l_0/l)$，只有在压缩时为负、且有界。只要惯性那一项 $\frac{m_i}{h^2}$ 够大，把弹簧块那点负的抬过零，$\mathbf H_i$ 就仍是正定的，$\mathbf H_i^{-1}\mathbf f_i$ 就仍是货真价实的下降方向。这正是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那条「惯性项保证问题不病态」的 callout 在逐顶点层面的兑现：<b>时间步把 Hessian 拉回正定附近，是 VBD 不必做 SPD 投影的第一根支柱。</b></p>
+        <h2 id="reason-1">一：惯性项提供正的谱偏置，不提供无条件 SPD</h2>
+        <p>局部 Hessian 是</p>
+        <div class="math-block">$$\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\frac{\partial^2 E_j}{\partial\mathbf x_i^2},\qquad
+        \lambda_{\min}(\mathbf H_i)=\frac{m_i}{h^2}+\lambda_{\min}\Big(\textstyle\sum_j\tfrac{\partial^2E_j}{\partial\mathbf x_i^2}\Big).$$</div>
+        <p>$\frac{m_i}{h^2}\mathbf I$ 把三个特征值统一加上正数 $m_i/h^2$；小时间步或大质量会增强这项，大时间步则会削弱它。因此惯性经常改善局部谱，但是否足以让总和 SPD 仍取决于当前几何和弹性曲率。</p>
+        <p>对长度 $l&gt;0$ 的弹簧，横向特征值是 $k(1-l_0/l)$。它在压缩时为负，并非「负但有界」：当 $l\to0^+$ 时它趋于 $-\infty$；在 $l=0$，$\lVert\mathbf d\rVert$ 不可微，力与 Hessian 公式本身失效。因此不存在一个固定惯性偏置能覆盖所有压缩构形。惯性偏置是重要的 conditioning 机制，不是普遍下降证明。</p>
 
-        <h2 id="reason-2">理由二：真退化了，就跳过这个顶点</h2>
-        <p>那万一惯性也兜不住——弹簧压得极狠、$\mathbf H_i$ 真的接近奇异呢？办法朴素得令人发笑：<b>这一遍就别动这个顶点了。</b>判据是看 $\mathbf H_i$ 的行列式：若 $|\det(\mathbf H_i)|\le\varepsilon$（接近奇异），跳过它，等下一遍迭代再说。</p>
-        <p>为什么这样没问题？因为这是 <span class="term">Gauss-Seidel</span>：这个顶点跳过了，但它的<b>邻居照样在动</b>。邻居一动，这个顶点周围的几何就变了，下一遍它的 $\mathbf H_i$ 极可能就不再奇异——所以它<b>不会一直卡在奇异态</b>，迟早会被更新。跳过一个顶点一两遍，对一帧上百次迭代的整体收敛毫无影响。</p>
+        <h2 id="reason-2">二：QR 与 determinant 只涉及求解，不判 SPD 或下降</h2>
+        <p>TinyVBD C++ 的真实代码只有：</p>
+        <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · solve()</span><button class="cp">复制</button></div><pre><code>Vec3 dx = h.colPivHouseholderQr().solve(f);
+strand.vertex(iV) += dx;</code></pre></div>
+        <p>列主元 QR 避免显式写 $\mathbf H_i^{-1}$，并能比朴素逆更合理地处理秩信息；但这两行没有检查特征值、没有 determinant 分支，也没有在写回前比较能量。QR 成功返回一个解，不代表 $\mathbf H_i$ 为 SPD，更不代表 full step 下降。</p>
         <div class="callout note">
-          <div class="c-h">代码里的真实情况：QR 求解 + det 阈值</div>
-          <p>TinyVBD 的 <code>solve()</code> 用的是 Eigen 的 <code>h.colPivHouseholderQr().solve(f)</code>——列主元 QR 本身就对接近奇异的 $\mathbf H_i$ 很稳健，不会像直接求逆那样炸出垃圾。论文里那个「$|\det(\mathbf H_i)|\le\varepsilon$ 就跳过」的策略，我们在本教程的 JS 移植（<span class="term-i">vbd-sweep</span> 等部件）里如实镜像了：算一下行列式，太小就把这个顶点的 $\Delta\mathbf x_i$ 置零、留到下一遍。两种写法殊途同归——核心都是<b>不让一个退化的局部 Hessian 把仿真带飞</b>。</p>
+          <div class="c-h">别把 Newton/Warp 或 JS 的 det heuristic 倒灌进 C++</div>
+          <p>Newton/Warp 的另一条实现路径在显式 <code>inverse</code> 前使用 <code>abs(det(H)) &gt; 1e-8</code>；本教程的 <code>vbd-core.js</code> 也有一个更小阈值，只为避免浏览器演示在除以极小 determinant 时产生非有限数。两者都<b>不是</b> TinyVBD <code>main.cpp</code> 的逻辑。并且 $\det\mathbf H\ne0$ 只说明可逆：例如 $\operatorname{diag}(-1,10^6,10^6)$ 不定，却有 $|\det|=10^{12}$。determinant 数值还随单位和尺度改变，不能替代谱检查或下降验收。</p>
         </div>
 
-        <h2 id="numbers">代数字：惯性抬得正 vs 抬不正，两个数</h2>
-        <p>前两条理由都是定性的——「惯性够大就兜得住」「真退化就跳过」。用共享参数把它们算成两个具体的数，「兜得住 / 兜不住」立刻有了边界。取一根被压缩到一半的弹簧：$l_0=1$、当前 $l=0.5$（$l&lt;l_0$，垂直特征值为负），惯性底 $m/h^2=3600$（$m=1$、$1/h^2=3600$）。</p>
-        <div class="callout note">
-          <div class="c-h">这是为讲解构造的自洽示例</div>
-          <p>下面两组数字是为说清「理由一何时成立、何时失效」挑的共享参数（与 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>、<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 自洽），可上计算器复算，不是某次真实运行的输出。</p>
-        </div>
-        <p><b>软弹簧 $k=100$（理由一成立）。</b>垂直方向特征值：</p>
-        <div class="math-block">$$\lambda_\perp = k\Big(1-\frac{l_0}{l}\Big) = 100\,(1-\tfrac{1}{0.5}) = 100\times(-1) = -100$$</div>
-        <p>弹簧块这一向是负的 $-100$。但加上惯性底 $m/h^2=3600$：</p>
-        <div class="math-block">$$-100 + 3600 = 3500 \;>\; 0$$</div>
-        <p>有效特征值 $3500>0$——$\mathbf H_i$ 在这一向仍正定，$\mathbf H_i^{-1}\mathbf f_i$ 是真下降方向。<b>惯性把软弹簧的负特征值轻松抬过零，理由一直接成立。</b></p>
-        <p><b>硬弹簧 $k=10^8$（理由一失效，靠理由二）。</b>同样压到 $l=0.5$：</p>
-        <div class="math-block">$$\lambda_\perp = 10^8\,(1-\tfrac{1}{0.5}) = -10^8,\qquad -10^8 + 3600 \approx -10^8 \;&lt;\; 0$$</div>
-        <p>惯性底 $3600$ 在 $10^8$ 面前是杯水车薪，有效特征值仍 $\approx-10^8&lt;0$，$\mathbf H_i$ <b>不定</b>。此时理由一救不回来——若再压过头使 $|\det(\mathbf H_i)|\le\varepsilon$，就触发理由二的「跳过这个顶点」，靠邻居下一遍松动它兜底。<b>这正是「偏置 3600 救得回 $k=100$、救不回 $k=10^8$」的两个数。</b></p>
+        <h2 id="numbers">代数字：不定矩阵也能有巨大 determinant</h2>
+        <p>取单根弹簧 $l_0=1$、$l=0.5$，惯性偏置 $m/h^2=3600$。这些是讲解用参数，不代表某次真实运行。</p>
+        <p><b>软弹簧 $k=100$。</b>裸横向特征值为 $-100$，合成后是 $-100+3600=3500&gt;0$；轴向特征值为 $100+3600=3700$。这组参数下 $\mathbf H_i$ 为 SPD，所以 raw Newton 至少有正确的局部方向，full step 是否下降仍是另一个问题。</p>
+        <p><b>硬弹簧 $k=10^8$。</b>合成特征值约为</p>
+        <div class="math-block">$$\lambda_\parallel=10^8+3600&gt;0,\qquad
+        \lambda_{\perp,1}=\lambda_{\perp,2}=-10^8+3600&lt;0.$$</div>
+        <p>矩阵明显不定，但</p>
+        <div class="math-block">$$\det(\mathbf H_i)=\lambda_\parallel\lambda_{\perp,1}\lambda_{\perp,2}\approx10^{24},$$</div>
+        <p>所以 <code>abs(det(H)) &gt; 1e-8</code> 反而会轻松放行。只有某个特征值<b>穿过零的狭窄位置</b> determinant 才接近零；继续压缩后，负特征值绝对值增大，$|\det|$ 也会再次变大。不能把「压得更狠」画成「det 持续趋零」。</p>
 
         <div class="lab">
-          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">3×3 局部 Hessian 的特征值条 + det 阈值守卫</span></div>
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">3×3 局部 Hessian 的谱与 determinant 诊断</span></div>
           <div class="lab-body" data-widget="hessian-spd-guard"></div>
-          <div class="lab-cap">左侧拖弹簧端点改压缩比 $l/l_0$；右侧三根特征值条：惯性底 $m/h^2$（恒正，绿）与叠上弹簧块后的合成三特征值。把弹簧压到 $l&lt;l_0$，垂直特征值条往下探；切换刚度 <b>k = 100 vs $10^8$</b> 看惯性底何时仍把它抬到 $\ge 0$（理由一），何时压过头触发红色「SKIP this vertex」（理由二）。再调时间步 $h$ 看绿底高度怎么变。</div>
+          <div class="lab-cap">右侧用最小特征值判断 SPD，同时独立显示 <code>abs(det(H)) &gt; 1e-8</code> 的可逆性 heuristic。切到高刚度并压缩时会看到「矩阵不定，但 determinant 很大、heuristic 仍 PASS」；只有特征值过零附近才会 REJECT。该诊断不代表 TinyVBD C++ 存在 det guard，也不代表被放行的步会下降。</div>
         </div>
 
-        <h2 id="reason-3">理由三：有全局下降兜底，不需要 line search</h2>
-        <p>最后一根支柱回到 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 的那条定理。Newton 之所以离不开 line search，是怕某一步冲过头让能量反升、失去单调性。而 VBD 有一个更强的结构性保证：<b>整个 sweep 让全局 $G$ 单调下降</b>，且 $G$ 下有界，所以序列必收敛。论文据此<b>直接关掉了 line search</b>——在实践中，逐顶点的牛顿步几乎总落在「让 $G_i$（因而 $G$）下降」的安全区里，省下逐步回溯的开销。</p>
-        <p>把三条合起来看：惯性项把 Hessian 大多数时候摁成正定（理由一），偶尔真退化就跳过、靠邻居松动它（理由二），而单调下降这把大尺子在宏观上保证整盘棋不会走崩（理由三）。三层兜底叠在一起，VBD 才敢省掉 SPD 投影和 line search 这两道在 Newton 里必备的保险，还照样稳。</p>
+        <h2 id="reason-3">三：下降来自接受条件，不来自可逆性</h2>
+        <p>只移动顶点 $i$ 时，$\Delta G=\Delta G_i$ 永远成立；但 raw full Newton 可能有 $\Delta G_i&gt;0$。论文/完整算法可以对局部 $G_i$ 做 backtracking，以 Armijo 或至少能量不增作为接受条件；局部能量只涉及顶点惯性和邻接元件，检查成本仍然很小。这样才有「每个已接受 block 步使全局 $G$ 不增」的条件性结论。</p>
+        <p>TinyVBD 的 <code>main.cpp</code> 为简洁关闭了这类 line search，直接接受 QR full step，也不做 PSD 修正或显式 det guard。它是精简、经验性实现：惯性偏置、小 block、Gauss-Seidel 与多次 sweep 常带来良好表现，但不能声称 raw 步逐次单调。若打开 Chebyshev，sweep 后的外推还可能再次抬高 $G$，除非对外推结果另做能量验收。方向、步长与可逆性的完整 Newton 视角见 <a href="../14-curvature-mass/14-3-buckling-newton.html#newton-safeguards">Part 14 深挖</a>。</p>
 
         <div class="bridge pbd">
-          <div class="c-h"><span class="tag">从 PBD 看</span> "鲁莽"得有底气，和 PBD 的"鲁莽"不一样</div>
-          <p>PBD 也"鲁莽"——它不算 Hessian、不管能量，直接把粒子掰到约束上。但 PBD 的鲁莽没有兜底：迭代多了刚度漂、约束互相打架，稳是经验上的稳。VBD 的"鲁莽"（不投影、不 line search）背后却站着三层保险，尤其是那条<b>可证明的单调下降</b>。所以同样是"不老实算大系统"，PBD 是省事，VBD 是<b>省得有数学依据</b>。</p>
+          <div class="c-h"><span class="tag">从 PBD 看</span> 有目标函数的价值在于可以验收</div>
+          <p>VBD 的结构优势不是「写出 $G$ 后 full step 自动安全」，而是可以用很局部的 $G_i$ 检查得到精确的全局改变量。完整算法若真正执行这个检查，就有 PBD 投影不直接提供的标量下降证书；TinyVBD 为简洁省掉检查时，得到的是实用基线而非同一份证书。</p>
         </div>
 
-        <p>这也正是你在 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 那个 <span class="term-i">strand-lab</span> 里体验到的鲁棒性的来源：把末端质量调到 1000×、把迭代数压到很低、用大时间步甩它，它就是不炸。现在你知道，这"不炸"不是调出来的运气，而是这三层兜底 + 单调下降合力给的保证。后面 <a href="../05-experiments/5-1-mass-ratio.html">Part 5</a> 的压力测试会把这份鲁棒性推到极限——高质量比、高刚度比——看它在哪里依旧稳、又在哪里露出局部方法的软肋。</p>
+        <p><a href="../00-orientation/0-1-where-we-go.html">0.1</a> 的 <span class="term-i">strand-lab</span> 在给定参数范围内表现鲁棒，这可以作为工程观察；它不能单独证明任意时间步、刚度、压缩状态或迭代数都不会失败。后面 <a href="../05-experiments/5-1-mass-ratio.html">Part 5</a> 的压力测试应据此解读为经验边界测试，而不是替代理论前提。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) VBD 解析地解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，<b>不</b>对 $\mathbf H_i$ 做 SPD 投影、也<b>不</b> line search；(2) 它靠三层兜底依然稳——惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定、多数时候把 $\mathbf H_i$ 撑成正定；真接近奇异（$|\det|\le\varepsilon$）就跳过该顶点、靠邻居松动它；全局单调下降保证无需 line search；(3) 这份鲁棒性正是 0.1 里那根怎么甩都不炸的 strand 的来源。</p>
-        <p>Part 3 到此把 VBD 的算法内核讲完了。接下来 Part 4 进代码：把 <code>forwardStep()</code>、<code>solve()</code>、Chebyshev 加速逐行读透，每一行都对得上这三章的公式。</p>
+        <p>三句话：(1) 惯性项 $\frac{m_i}{h^2}\mathbf I$ 提供正的谱偏置，但压缩弹簧的负横向特征值在 $l\to0^+$ 时无界，不能无条件保证 SPD；(2) TinyVBD C++ 实际是无 det guard 的 QR full step，Newton/Warp 的 <code>abs(det)&gt;1e-8</code> 和 JS 阈值只属各自实现的可逆性 heuristic，det 非零或巨大都不判断 SPD/下降；(3) 单调性来自精确 block minimizer 或 backtracking/Armijo 接受，TinyVBD 精简实现与 Chebyshev 外推若无验收都不能直接继承这项结论。</p>
+        <p>Part 3 到此把 VBD 的算法内核和前提边界讲完。接下来 Part 4 进代码：逐行区分公式负责什么、QR 实际做什么，以及可选 Chebyshev 又引入什么额外取舍。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

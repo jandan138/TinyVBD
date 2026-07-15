@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPM 篇收尾：三条现代路线与全书关系 · TinyVBD 教程</title>
+  <title>MPM 篇收束：三条现代路线与算法地图 · TinyVBD 教程</title>
   <link rel="stylesheet" href="../../assets/css/book.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -24,8 +24,8 @@
     <main>
       <article class="article">
         <div class="eyebrow">Part 13 · 13-9</div>
-        <h1>MPM 篇收尾：三条现代路线与全书关系</h1>
-        <p class="lede">MPM 篇走到这里：你已经懂了它为什么混合 Lagrangian-Eulerian、一步循环怎么转、传输（PIC/FLIP/APIC）的灵魂与软肋、粒子上的 $F$ 与本构、隐式 MPM 为什么仍是 $\min G(\mathbf x)$，又看了三条把 MPM 推向现代的路线。这一节不引入新东西，只做两件事：把<b>三条现代 MPM 路线</b>并排放进一张对照表，再把 MPM 接回 FEM、VBD、IPC——让整本书在「一个 $\min G(\mathbf x)$」上闭合。这是全书当前的最后一章内容，我们好好收个尾。</p>
+        <h1>MPM 篇收束：三条现代路线与算法地图</h1>
+        <p class="lede">MPM 篇走到这里：你已经懂了它为什么混合 Lagrangian-Eulerian、一步循环怎么转、传输（PIC/FLIP/APIC）的灵魂与软肋、粒子上的 $F$ 与本构、隐式 MPM 为什么仍是 $\min G(\mathbf x)$，又看了三条把 MPM 推向现代的路线。这一节不引入新算法，只做两件事：把<b>三条现代 MPM 路线</b>并排放进一张对照表，再把 MPM 放回 FEM、VBD、IPC 组成的算法地图。这是 MPM 路线的阶段性收束；下一 Part 将从算法横向比较转入二阶结构与质量几何的回望，并从 <a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1 Hessian 的局部能量几何</a> 起步。</p>
 
         <h2 id="three-routes">三条现代 MPM 路线总对照</h2>
         <p>经典 MPM（<a href="13-2-mpm-cycle.html">13.2</a>–<a href="13-5-implicit-mpm.html">13.5</a>）通用、强壮，但贵：宽核 stencil、每格多粒子的求积、隐式大方程。三条现代路线各从一个不同的口子去攻这份「贵」——而且攻的口子<b>互不重叠</b>，所以它们正交、甚至可叠加。</p>
@@ -86,8 +86,8 @@
           <p>和 <a href="../12-ipc/12-11-three-roads.html">12.11</a> 的「penalty/AVBD/IPC 没有银弹」一样：三条现代 MPM 路线是<b>一组取舍与正交改造</b>，不是高下排名。要实时上游戏，PB-MPM 的 position-based 体质最对路；要砍隐式开销又保通用，MPM Lite 的去粒子求积最直接；要在传输基函数上一次性兼顾窄与光滑，CK-MPM 的紧核最优雅。按场景选，甚至混着用。</p>
         </div>
 
-        <h2 id="mpm-vs-family">MPM 与 FEM / VBD / IPC：同一条主线的不同切面</h2>
-        <p>MPM 是全书第一个真正跳出「网格/mesh」的范式，但它和前面三大块的关系，恰恰能把整本书串成一条线。逐一接回：</p>
+        <h2 id="mpm-vs-family">MPM 与 FEM / VBD / IPC：在算法地图上定位</h2>
+        <p>MPM 跳出了「材料始终绑定 mesh 单元」的离散方式，但它仍与前面的本构、优化和接触模块共享接口。逐一放回算法地图：</p>
 
         <div class="bridge fem">
           <div class="c-h"><span class="tag">MPM ↔ FEM</span> 同一个本构 ψ，不同的离散</div>
@@ -96,7 +96,7 @@
 
         <div class="bridge vbd">
           <div class="c-h"><span class="tag">MPM ↔ VBD</span> 同一个 min G(x)，不同的 DOF</div>
-          <p>隐式 MPM（<a href="13-5-implicit-mpm.html">13.5</a>）和 <a href="../03-vbd/3-1-block-descent.html">VBD</a>（Part 3）要解的是<b>同一个</b>变分问题——最小化一步的 incremental potential $G(\mathbf x)$，牛顿步、线搜索、SPD 投影全都回来。差别<b>只在 DOF 是谁</b>：VBD 的 DOF 是<b>网格顶点</b>位置，MPM 的 DOF 是<b>背景网格节点</b>的速度/位置增量（本构来自粒子上携带的 $F$）。换了自由度的身份，没换那个要被最小化的 $G$。</p>
+          <p>隐式 MPM（<a href="13-5-implicit-mpm.html">13.5</a>）和 <a href="../03-vbd/3-1-block-descent.html">VBD</a>（Part 3）都可写成最小化一步的 incremental potential $G(\mathbf x)$，牛顿方向、线搜索与 PSD/modified Hessian 等工具会再次出现。差别<b>只在 DOF 是谁</b>：VBD 的 DOF 是<b>网格顶点</b>位置，MPM 的 DOF 是<b>背景网格节点</b>的速度/位置增量（本构来自粒子上携带的 $F$）。换了自由度的身份，没换这条隐式变分路线的目标结构。</p>
         </div>
 
         <div class="bridge ipc">
@@ -104,8 +104,8 @@
           <p><a href="../12-ipc/12-1-why-ipc.html">IPC</a>（Part 12）告诉你接触不过是往 $G(\mathbf x)$ 里加一个 $E_{\text{contact}}$ 项（log-barrier / penalty / AVBD，见 <a href="../12-ipc/12-11-three-roads.html">12.11</a>）。这件事和离散范式正交：隐式 MPM 既然也是在网格 DOF 上 $\min G$，就同样能把接触项<b>叠加</b>进去——MPM 与刚体/边界/自接触的耦合，本质就是在那个 $G$ 上再加一项接触能量，再一起解。接触不是 MPM 的对立面，是它 $\min G$ 里又一个加号。</p>
         </div>
 
-        <h2 id="the-whole-journey">收线：从 PBD 到 MPM，全程一个 min G(x)</h2>
-        <p>退到最远处看整本书，你会发现它其实自始至终只讲了一件事——<b>把一个时间步的动力学，写成最小化一个 incremental potential $G(\mathbf x)$</b>：</p>
+        <h2 id="the-whole-journey">收线：变分 / 隐式路线中的 min G(x)</h2>
+        <p>退到算法地图层面看，VBD、隐式 FEM 与隐式 MPM 反复使用同一个组织方式：<b>把一个时间步写成最小化 incremental potential $G(\mathbf x)$</b>。PBD/XPBD 等约束路线可以与它对照，但不必把每一种算法都强行说成完全相同的优化器：</p>
 
         <div class="math-block">$$\mathbf x^{t+1}=\arg\min_{\mathbf x}\,G(\mathbf x),\qquad G(\mathbf x)=\underbrace{\tfrac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_{\mathbf M}^2}_{\text{惯性}}+\underbrace{E_{\text{elastic}}(\mathbf x)}_{\psi(F)\text{：FEM/MPM 共用}}+\underbrace{E_{\text{contact}}(\mathbf x)}_{\text{接触，可选}}$$</div>
 
@@ -118,18 +118,18 @@
           <li><b>IPC</b>（Part 12）：给 $G$ 加上严格无穿透的接触项 $E_{\text{contact}}$。</li>
           <li><b>MPM</b>（Part 13）：把同一个 $G$ 搬到<b>粒子载状态 + 背景网格借力</b>的混合离散上，让它能扛巨形变、断裂、沙雪泥——隐式 MPM 仍是网格 DOF 上的 $\min G$，三条现代路线只是从求积/求解器/核三个口子让它更快更稳。</li>
         </ul>
-        <p>范式从「掰位置」走到「物质点 + 背景网格」，DOF 从弹簧端点换到网格节点，离散从 mesh 单元换到自由飞行的粒子——但那个被最小化的 $G(\mathbf x)$，从第一根 strand 到最后一团 MPM 沙子，<b>一字未改</b>。这就是这本书想留给你的那把钥匙：不是十几套互不相干的算法，而是<b>一条主线、一个 $\min G(\mathbf x)$</b>，看穿每一种范式只是它的不同切面。</p>
+        <p>范式从「掰位置」走到「物质点 + 背景网格」，DOF 从弹簧端点换到网格节点，离散从 mesh 单元换到自由飞行的粒子。对能写成 incremental potential 的隐式方法，惯性、弹性与接触仍以 $G(\mathbf x)$ 中各项的形式反复出现；对 position-based 或显式路线，则应比较它们怎样近似、替换或绕开这一步。算法地图的价值不是把所有方法抹成同一个名字，而是看清<b>本构、离散、DOF 与求解器</b>分别在哪里变化。</p>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 你从一根 strand 出发，走到了这里</div>
-          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触都没有。但正是从它身上，你学会了把动力学读成 $\min G(\mathbf x)$、读成 per-vertex 的 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$。这把钥匙一路开过 XPBD、VBD、Newton、FEM、IPC，开到了 MPM——MPM 再「跳出 mesh」、再现代化，骨子里还是「往 $G$ 里写对项、再把它解出来」。全书到此闭合：一条主线，许多切面，同一个 $\min G(\mathbf x)$。</p>
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> MPM 路线收束，下一步回看二阶结构</div>
+          <p>回到最开始那根 strand：它的 <code>solve()</code> 里只有惯性 + 弹簧，连接触都没有。从它出发，我们依次换过约束处理、本构、接触、离散与自由度，最后走到 MPM。这里收束的是这条<b>算法路线</b>，不是内容终点：下一 Part 会把镜头从「选哪条算法」拉回「局部能量面与质量度量长什么样」，从 <a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a> 的 Hessian 几何开始，再进入弹簧曲率、buckling 与 consistent/lumped mass。</p>
         </div>
 
         <h2 id="further-reading">进一步阅读</h2>
         <p>MPM 篇是概念/算法篇，刻意没碰那些只有读原文才能落实的细节（精确核解析式、隐式装配的全套公式、三条现代路线的原文数字与证明）。要往下走，从原始论文进——经典 MPM（Sulsky 1994、APIC/Jiang 2015、MLS-MPM/Hu 2018、隐式 MPM）与三条现代路线（MPM Lite、PB-MPM、CK-MPM）都整理在附录 <a href="../appendix/a-9-mpm-references.html">a-9：MPM 参考文献</a>，每条附一句中文告诉你值不值得点进去。术语见 <a href="../appendix/a-1-glossary.html">术语表</a>，公式见 <a href="../appendix/a-2-cheatsheet.html">公式速查</a>。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 三条现代 MPM 路线<b>动的是流水线上三个不同零件</b>——MPM Lite 去粒子求积、PB-MPM 换成 position-based 约束求解（接回 <a href="../02-family/2-1-pbd.html">PBD/XPBD</a>）、CK-MPM 换成 $C^2$ 紧支撑核，口子互不重叠、可正交叠加，是取舍而非排名；(2) MPM 与全书三大块各是同一主线的一个切面——与 <b>FEM</b> 同本构 $\psi$、异离散（粒子 vs 单元），与 <b>VBD</b> 同 $\min G(\mathbf x)$、异 DOF（网格节点 vs 网格顶点），与 <b>IPC</b> 则是接触项可直接叠进 $G$；(3) 从 1.2 变分欧拉到这里，整本书只讲了一件事——把一步动力学写成 $\arg\min_{\mathbf x}G(\mathbf x)$，惯性 + 弹性（$\psi(F)$）+（可选）接触，范式与 DOF 一路在变，<b>那个 $G$ 一字未改</b>。这是全书当前的最后一章；参考文献入口 → <a href="../appendix/a-9-mpm-references.html">a-9</a>。</p>
+        <p>三句话：(1) 三条现代 MPM 路线<b>动的是流水线上三个不同零件</b>——MPM Lite 去粒子求积、PB-MPM 换成 position-based 约束求解（接回 <a href="../02-family/2-1-pbd.html">PBD/XPBD</a>）、CK-MPM 换成 $C^2$ 紧支撑核，口子互不重叠、可正交叠加，是取舍而非排名。(2) MPM 与 <b>FEM</b> 共享本构但改变离散，与隐式 <b>VBD</b> 共享 incremental-potential 结构但改变 DOF，与 <b>IPC</b> 则在接触能量接口上相遇；比较时要分清本构、离散与求解器三个层次。(3) MPM 算法路线在此收束；参考文献入口是 <a href="../appendix/a-9-mpm-references.html">a-9</a>，下一 Part 从 <a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a> 转入二阶结构与质量几何。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

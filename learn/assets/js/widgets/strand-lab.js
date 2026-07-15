@@ -1,5 +1,5 @@
 /* strand-lab — 一个真正在浏览器里跑 VBD 的 strand 仿真器。
-   求解器来自 vbd-core.js（忠实移植 TinyVBD 的 solve()/forwardStep()）。
+   求解器来自 vbd-core.js（与 TinyVBD 数学装配对应的 2D 教学缩减版）。
    可调 stiffness / 末端质量比 / 迭代数 / Chebyshev / skip spring；可用鼠标拖动顶点。 */
 (function () {
   window.VBWidgets["strand-lab"] = function (root) {

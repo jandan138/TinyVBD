@@ -34,6 +34,13 @@
         <div class="math-block">$$\mathbf y=\mathbf x^t+h\,\mathbf v^t+h^2\,\mathbf a_{ext}$$</div>
         <p>其中 $\mathbf a_{ext}$ 是重力等外部加速度。$\nabla G=0$ 等价于隐式欧拉方程 $M(\mathbf x-\mathbf y)=h^2\mathbf f(\mathbf x)$。</p>
 
+        <h2 id="hessian-spectrum">Hessian、方向曲率与谱</h2>
+        <p>在当前点沿方向 $q$ 切一条曲线 $\phi(s)=E(x+s q)$（<a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a>）：</p>
+        <div class="math-block">$$E(x+\delta x)=E(x)+g^\top\delta x+\tfrac12\delta x^\top H\delta x+O(\lVert\delta x\rVert^3),\qquad \phi''(0)=q^\top Hq.$$</div>
+        <p>去掉方向尺度后的 Rayleigh quotient 及其最小值：</p>
+        <div class="math-block">$$R_H(q)=\frac{q^\top Hq}{q^\top q},\qquad \lambda_{\min}=\min_{q\ne0}R_H(q).$$</div>
+        <p>极值分类前必须先满足一阶驻点条件；有约束时只在允许切空间检查二次型。$\lambda=0$ 只表示二阶信息不足，不自动表示能量恒定。</p>
+
         <h2 id="per-vertex">每个顶点的 f_i 与 H_i</h2>
         <p>VBD 一次只优化顶点 $i$ 的局部能量（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）：</p>
         <div class="math-block">$$G_i(\mathbf x)=\frac{m_i}{2h^2}\lVert\mathbf x_i-\mathbf y_i\rVert^2+\sum_{j\in\mathcal F_i}E_j(\mathbf x)$$</div>
@@ -50,6 +57,26 @@
         <p>Hessian 块（代码里的 <code>h_1_1</code> 形式）：</p>
         <div class="math-block">$$\mathbf H_{aa}=k\left[\mathbf I-\frac{l_0}{l}\!\left(\mathbf I-\frac{\mathbf d\,\mathbf d^\top}{l^2}\right)\right]$$</div>
         <p>它的特征值：沿弹簧方向 $=k$；垂直方向 $=k\!\left(1-\dfrac{l_0}{l}\right)$。压缩（$l&lt;l_0$）时垂直方向特征值<b>为负</b> → $\mathbf H$ 不定（<a href="../03-vbd/3-6-stability.html">3.6</a>）。</p>
+        <p>用单位方向 $u=d/l$ 与投影 $\Pi_\parallel=uu^\top$、$\Pi_\perp=I-uu^\top$，同一公式可读成（<a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a>）：</p>
+        <div class="math-block">$$H_{aa}=k\Pi_\parallel+k\left(1-\frac{l_0}{l}\right)\Pi_\perp,\qquad H_{\mathrm{spring}}=\begin{bmatrix}H_{aa}&amp;-H_{aa}\\-H_{aa}&amp;H_{aa}\end{bmatrix}.$$</div>
+        <p>$H=\nabla^2E$ 是能量 gradient 的 Jacobian；因 $f=-\nabla E$，force Jacobian 为 $-H$。完整两端矩阵含共同平移零模态，固定一端后的 $H_{aa}$ 不含该自由方向。</p>
+
+        <h2 id="fem-mass">FEM consistent mass 与 row-sum lumping</h2>
+        <p>速度插值 $v_h=\sum_iN_iv_i$ 代入连续动能，得到（<a href="../14-curvature-mass/14-4-consistent-mass.html">14.4</a>）：</p>
+        <div class="math-block">$$M_{ij}=\int_{\Omega_0}\rho N_iN_j\,dV,
+        \qquad T=\tfrac12v^\top Mv.$$</div>
+        <p>常密度、厚度 $t$、面积 $A$ 的 P1 三角形标量矩阵及二维向量矩阵：</p>
+        <div class="math-block">$$\bar M_e=\frac{\rho tA}{12}\begin{bmatrix}2&amp;1&amp;1\\1&amp;2&amp;1\\1&amp;1&amp;2\end{bmatrix},\qquad M_e=\bar M_e\otimes I_2.$$</div>
+        <p>row-sum 集中利用 $\sum_jN_j=1$（<a href="../14-curvature-mass/14-5-mass-lumping.html">14.5</a>）：</p>
+        <div class="math-block">$$(M_L)_{ii}=\sum_jM_{ij}=\int\rho N_i\left(\sum_jN_j\right)dV=\int\rho N_i\,dV.$$</div>
+        <p>P1 三角形每节点得到 $\rho tA/3$。这不是只保留原矩阵对角；高阶 P2 三角形直接 row-sum 会给顶点零质量，需要专门的正权 mass-lumped quadrature 或保留 consistent mass。</p>
+
+        <h2 id="mass-metric-modes">质量度量与物理模态</h2>
+        <p>在自由 DOF 上 SPD 的质量矩阵定义动能内积；在平衡点 $x_*$（$\nabla E(x_*)=0$，有约束时用同一允许切空间）把势能 Hessian 记为 $K$，增量势 Hessian 为（<a href="../14-curvature-mass/14-6-mass-metric-modes.html">14.6</a>）：</p>
+        <div class="math-block">$$\langle u,v\rangle_M=u^\top Mv,\qquad K=\nabla^2E(x_*),\qquad H_G=\frac{M}{h^2}+K.$$</div>
+        <p>物理小振动不是普通 $Kq=\lambda q$，而是质量加权的广义特征问题：</p>
+        <div class="math-block">$$K\phi=\omega^2M\phi,\qquad \omega^2=\frac{\phi^\top K\phi}{\phi^\top M\phi},\qquad \phi_i^\top M\phi_j=\delta_{ij}.$$</div>
+        <p>Newton 解 $H_Gp=-\nabla G$，回答“本次优化怎么修”；广义模态回答“平衡附近偏爱怎样振”，两者共享矩阵但不是同一问题。</p>
 
         <h2 id="newton-step">每个顶点的一步牛顿</h2>
         <p>解一个 3×3 系统、就地更新该顶点（<a href="../04-code/4-3-solve.html">4.3</a>）：</p>
@@ -112,7 +139,9 @@
           <thead><tr><th>符号</th><th>含义</th></tr></thead>
           <tbody>
             <tr><td>$h$</td><td>时间步 dt（代码 <code>dt</code>，默认 $1/60$；substep 后 $h$ 再除以子步数）</td></tr>
-            <tr><td>$M$</td><td>对角质量矩阵；$m_i$ 是顶点 $i$ 的质量</td></tr>
+            <tr><td>$M$</td><td>质量矩阵；在正密度、非退化单元、独立基函数且每个自由 DOF 有正质量支撑时，FEM consistent mass 在自由空间是稀疏 SPD；TinyVBD 使用的 lumped 特例为对角</td></tr>
+            <tr><td>$K$</td><td>平衡附近的势能 Hessian / tangent stiffness，$K=\nabla^2E$</td></tr>
+            <tr><td>$\phi,\omega$</td><td>物理模态位移场与角频率，满足 $K\phi=\omega^2M\phi$</td></tr>
             <tr><td>$\mathbf x$</td><td>位置（未知量，$\mathbf x:=\mathbf x^{t+1}$）；$\mathbf x_i$ 是第 $i$ 个顶点</td></tr>
             <tr><td>$\mathbf y$</td><td>预测位置 / 惯性目标 $=\mathbf x^t+h\mathbf v^t+h^2\mathbf a_{ext}$（代码 <code>inertia</code>）</td></tr>
             <tr><td>$\mathbf v$</td><td>速度；$\mathbf v^t$ 是上一帧速度</td></tr>
@@ -124,8 +153,8 @@
             <tr><td>$l_0$</td><td>弹簧 rest length / 自然长度（代码 <code>orgLengths</code>）</td></tr>
             <tr><td>$k$</td><td>弹簧 stiffness 刚度（代码 <code>edgesStiffness</code>）</td></tr>
             <tr><td>$m_i$</td><td>顶点 $i$ 的质量（代码 <code>vertexMass</code>）</td></tr>
-            <tr><td>$\rho$</td><td>迭代矩阵谱半径的估计（代码 <code>accelerationRho</code>，论文常用 $0.93$–$0.95$）</td></tr>
-            <tr><td>$\omega$</td><td>Chebyshev 外推系数（代码 <code>getAcceleratorOmega</code>）</td></tr>
+            <tr><td>$\rho_{\mathrm{mass}}$ / $\rho_{\mathrm{iter}}$</td><td>质量密度 / Chebyshev 使用的迭代矩阵谱半径估计；正文按上下文常都简写为 $\rho$</td></tr>
+            <tr><td>$\omega$ / $\omega_n$</td><td>物理角频率 / 第 $n$ 次 Chebyshev 外推系数（代码 <code>getAcceleratorOmega</code>）</td></tr>
             <tr><td>$\alpha$</td><td>compliance 柔度 $=1/k$（XPBD）；$\tilde\alpha=\alpha/h^2$</td></tr>
             <tr><td>$\lambda$</td><td>Lagrange multiplier 拉格朗日乘子 / 约束力对偶变量（XPBD）</td></tr>
             <tr><td>$d$</td><td>无符号距离（一对接触 primitive 间最近距离，barrier 自变量，IPC）</td></tr>

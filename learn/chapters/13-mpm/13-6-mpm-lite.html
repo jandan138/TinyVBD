@@ -96,19 +96,21 @@ def mpm_lite_step(particles, grid, dt):
     # 2) 隐式 grid solve：在网格节点 DOF 上 min G(x)（同 13-5 的变分骨架）
     #    关键：能量/力的求积【不再逐粒子】，而按网格(线性核)组织 → 摘掉 PPC 放大
     def assemble_GHf(xg):                           # ← 第一刀：去粒子求积
-        f, H = inertia_terms(grid)                 # 惯性项：网格节点质量，恒正定
+        f, H = inertia_terms(grid)                 # 正质量 active 自由节点上正定
         for q in grid_quadrature(grid):            # 按网格求积，规模 ~ 格数（非 粒子数）
             Fq = deformation_at(q, xg, particles)  # F 仍源自粒子携带的 F_p（13-4）
             P  = dpsi_dF(Fq)                        # 本构复用 FEM 篇 9-3/9-4，多材料不变
-            Hq = spd_project(d2psi_dF2(Fq))        # SPD 投影（10-2）保下降方向
+            Hq = psd_project(d2psi_dF2(Fq))        # 可选 PSD modified Hessian：负特征值截到 0
             scatter_to_grid(f, H, P, Hq, linear_grad)  # 用线性核梯度散到网格节点
         return f, H
 
     xg = grid.x0
     while not converged:                           # 牛顿迭代（同 12-8 的装配→解→线搜）
         f, H = assemble_GHf(xg)
-        p_dir = sparse_solve(H, f)                 # H 因线性核更稀疏 → 解更便宜
-        alpha = line_search(xg, p_dir)             # Armijo 式能量下降线搜索
+        H, f = restrict_to_active_free_dofs(H, f)  # 去掉零质量 / 固定 / 约束自由度
+        H = positive_shift_if_needed(H)             # 普通 Cholesky / inverse 前确保总 H SPD
+        p_dir = sparse_solve(H, f)                  # f=-∇G；SPD 时为严格下降方向
+        alpha = line_search(xg, p_dir)              # Armijo 决定是否接受 full step
         xg += alpha * p_dir
     grid.v = (xg - grid.x0) / dt                   # 由位移增量回出网格速度
 
@@ -124,13 +126,13 @@ def mpm_lite_step(particles, grid, dt):
         <p>逐段对回机制，重点盯两刀落在哪：</p>
         <ul>
           <li><b>① P2G（线性核）</b>——<code>linear_neighbors</code>/<code>linear_weight</code> 就是<b>第二刀</b>：每粒子只触及 $2^d$ 个节点，散布便宜、stencil 窄。对照 <a href="13-2-mpm-cycle.html">13.2</a> 经典 MPM 这里用的是二次 B-spline 的 $3^d$ 邻域。</li>
-          <li><b>② 隐式 grid solve（去粒子求积）</b>——<code>grid_quadrature</code> 那行是<b>第一刀</b>的题眼：求积<b>不再逐粒子</b>（不是 <code>for p in particles</code>），而按网格组织、规模随格数而非粒子数，于是 PPC 这个放大因子被摘掉。但循环骨架——<code>assemble → sparse_solve → line_search</code>——和 <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 的 IPC 外迭代、和隐式 MPM（<a href="13-5-implicit-mpm.html">13.5</a>）<b>一模一样</b>，连 SPD 投影（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）都在原位。变的是求积怎么组织、核多宽，不变的是 $\min G(x)$ 的牛顿求解骨架。</li>
+          <li><b>② 隐式 grid solve（去粒子求积）</b>——<code>grid_quadrature</code> 那行是<b>第一刀</b>的题眼：求积<b>不再逐粒子</b>，而按网格组织、规模随格数而非粒子数，于是 PPC 这个放大因子被摘掉。伪代码选择了可选的 elementwise <code>psd_project</code> modified-Hessian 策略；负特征值截到 $0$ 只得 PSD，之后还要处理 active / constrained DOF，并在需要时 positive shift 使总系统 SPD。它不是 MPM Lite 的必要定义，也不保证 inversion-free 或 static stability；严格下降方向与 full-step 接受分别依赖总 SPD 和 line search。</li>
           <li><b>③ G2P + $F_p$ 更新</b>——粒子收速度、$F_p^{n+1}=(I+\Delta t\,\nabla v_p)F_p$ 完全是 <a href="13-4-F-update-constitutive.html">13.4</a> 那套，只是插值核换成线性。粒子作为运动状态载体的本分一点没少。</li>
           <li><b>④ advect</b>——粒子按新速度移动，和 <a href="13-2-mpm-cycle.html">13.2</a> 标准循环的第四步相同。</li>
         </ul>
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 还是那个 $\min G(x)$，只是把求积和核做轻了</div>
-          <p>把这段伪代码和 <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 的 IPC 外迭代、<a href="../04-code/4-3-solve.html">4.3</a> 的 VBD <code>solve()</code> 并排：<b>目标完全相同</b>，都在最小化同一个增量势能 $G$；牛顿装配、解方向、线搜索、SPD 投影都在。MPM Lite 没有改写「优化什么」，它改写的是「<b>怎么把这个优化的能量项更省地求积、用多宽的核散到网格</b>」——把求积从「逐粒子 × 宽核」减负成「按网格 × 线性核」。<b>主线一句话再次兑现：一切都是 $\min G(x)$，MPM Lite 只是让解这个 $\min G(x)$ 的每一步更轻。</b></p>
+          <p>把这段伪代码和 <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 的 IPC 外迭代、<a href="../04-code/4-3-solve.html">4.3</a> 的 VBD <code>solve()</code> 并排：目标都在最小化增量势能 $G$；牛顿装配、总系统 SPD 处理、解方向与 line search 的职责仍然分开。MPM Lite 没有改写「优化什么」，它改写的是「<b>怎么把这个优化的能量项更省地求积、用多宽的核散到网格</b>」——把求积从「逐粒子 × 宽核」减负成「按网格 × 线性核」。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>

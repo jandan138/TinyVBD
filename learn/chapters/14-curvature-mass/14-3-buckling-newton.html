@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>负曲率何时才是屈曲：稳定性边界与 Newton · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-3">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-3</div>
+        <h1>负曲率何时才是屈曲：稳定性边界与 Newton</h1>
+        <p class="lede">受压弹簧的横向 Hessian 特征值会变负，但“看到负特征值”还不足以宣布 buckling。稳定性是平衡态、外载、约束与允许扰动共同定义的性质。本节先沿一条横向路径把负曲率算出来，再把它放回总势能与 Euler 柱的临界问题，最后说明临界附近的谱如何让 Newton 变得敏感。</p>
+
+        <h2 id="sideways-energy">横向路径：侧移为何能降低受压弹簧能量</h2>
+        <p>固定弹簧一端，让当前端到端向量为 $lu$，再沿单位横向 $t\perp u$ 移动另一端 $st$。新长度不是 $l+s$，而是直角三角形的斜边</p>
+        <div class="math-block">$$L(s)=\sqrt{l^2+s^2},\qquad
+E(s)=\frac12k\left(\sqrt{l^2+s^2}-l_0\right)^2.$$</div>
+        <p>在 $s=0$ 附近展开长度：</p>
+        <div class="math-block">$$\sqrt{l^2+s^2}=l+\frac{s^2}{2l}-\frac{s^4}{8l^3}+O(s^6).$$</div>
+        <p>横移没有一次项，这与上一节 $\delta l=u^\top\delta d$ 完全一致：纯横向位移在一阶不改长度，但在二阶一定增加长度。把展开代回能量，二次项是</p>
+        <div class="math-block">$$E(s)=E(0)+\frac12k\left(1-\frac{l_0}{l}\right)s^2+O(s^4),\qquad
+E''(0)=k\left(1-\frac{l_0}{l}\right).$$</div>
+        <p>若 $l&lt;l_0$，弹簧已经被压短。侧移虽然增加几何长度，却让当前长度更接近 rest length，所以弹性能下降，$E''(0)&lt;0$。若 $l&gt;l_0$，侧移让已经拉长的弹簧更长，能量上升，横向曲率为正。这个解释只说清某条路径的局部曲率，还没有判断当前构形是不是平衡。</p>
+
+        <h3 id="rest-fourth-order">rest 横移是四阶增长，不是平底</h3>
+        <p>在 $l=l_0$ 时，二阶结果恰好为零，但不能据此说横向移动完全不花能量。此时</p>
+        <div class="math-block">$$L(s)-l_0=\frac{s^2}{2l_0}+O(s^4),\qquad
+E(s)=\frac{k}{8l_0^2}s^4+O(s^6).$$</div>
+        <p>沿这条<b>直线横移路径</b>，能量以四阶增长；但单根长度弹簧还有保持长度的旋转路径 $d(\theta)=l_0(\cos\theta\,u+\sin\theta\,t)$，沿它始终有 $E=0$。所以这根弹簧没有弯曲刚度：零特征值既可能需要看高阶项，也可能对应真正的对称零能流形。这里的四阶结果只说明“沿直线切片并非平底”，不能推广成所有横向曲线路径都受约束。</p>
+
+        <h2 id="equilibrium-first">先问是否平衡，再谈 saddle 或 buckling</h2>
+        <p>单根弹簧若一端固定、另一端自由，受压状态的轴向 gradient 是</p>
+        <div class="math-block">$$\nabla_{x_a}E=k(l-l_0)u\ne0\qquad(l&lt;l_0).$$</div>
+        <p>它会直接沿轴向把自由端推开。当前点连 stationary point 都不是，因此不能因为横向 Hessian 为负，就把它称作 saddle，更不能把它直接叫作 buckling。鞍点、局部极小与分岔都是驻点附近的分类；若一阶坡度尚未消失，系统首先只是顺坡运动。</p>
+        <p>真正的静力稳定对象，是包含弹性势与<b>保守外载</b>势的总势能 $\Pi(x)$。例如 dead load 可写成 $\Pi=U-W_{\mathrm{ext}}$。无约束平衡先要求</p>
+        <div class="math-block">$$\nabla\Pi(x_*)=0.$$</div>
+        <p>有约束 $C(x)=0$ 时，还要把扰动限制在平衡点的可行切空间 $T=\{q:DC(x_*)q=0\}$。严格地说，应先用约束乘子组成 $\mathcal L=\Pi+\mu^\top C$，满足 $\nabla_x\mathcal L=0$，再检验</p>
+        <div class="math-block">$$\delta^2\Pi[q]=q^\top\nabla^2_{xx}\mathcal L(x_*,\mu_*)q,\qquad q\in T.$$</div>
+        <p>若支承是线性位置约束，$\nabla^2C=0$，这才简化成 $q^\top\nabla^2\Pi q$；非线性约束的曲率也会贡献二阶项。换言之，“投到切空间”与“先处理约束反力”缺一不可。</p>
+        <p>在 LICQ（约束梯度线性无关）等正则条件下，若它对所有非零允许方向都为正，二阶充分条件给出严格稳定的局部极小；这是一条充分条件，不是必要条件。出现零方向时要看载荷参数与高阶项；出现负允许方向则说明这个平衡态不稳定。边界约束会删掉某些方向，也可能提供平衡所需的反力，所以“同一块材料 Hessian”在不同支承下可以有不同稳定结论。对 follower force（方向会随构形追随）一类非保守载荷，未必存在标量总势能，此时还要回到线性化动力系统，不能硬套势能判据。</p>
+
+        <h3 id="symmetric-two-spring">双弹簧：先让轴向力真正抵消</h3>
+        <p>一个最小的平衡玩具是：把质点放在原点，两根相同弹簧分别连到 $(a,0)$ 与 $(-a,0)$，两根的 rest length 都是 $l_0&gt;a$。中心点处两股轴向压力大小相等、方向相反，所以 gradient 相消，原点确实是驻点。让质点横移到 $(0,s)$，总能量为</p>
+        <div class="math-block">$$U(s)=k\left(\sqrt{a^2+s^2}-l_0\right)^2,\qquad
+U''(0)=2k\left(1-\frac{l_0}{a}\right)&lt;0.$$</div>
+        <p>沿轴向的小位移曲率是两根弹簧的 $k$ 相加，即 $2k&gt;0$；沿横向却为负。现在一阶条件成立、允许横向扰动又确实降能，原点才是一个不稳定平衡，可视作对称分支失稳的离散原型。关键不是把两根换成一根，而是先由对称支承建立平衡，再对允许方向检查二阶变化。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 3：负曲率能预测多少真实降能？</div>
+          <p>取 $a=0.8\,\mathrm m$、$l_0=1\,\mathrm m$、$k=100\,\mathrm{N/m}$。中心点的两根压力互相抵消，且</p>
+          <div class="math-block">$$U(0)=100(0.8-1)^2=4\,\mathrm J,\qquad U''(0)=200\left(1-\frac1{0.8}\right)=-50\,\mathrm{N/m}.$$</div>
+          <p>横移 $s=0.1\,\mathrm m$ 后，精确能量是 $U(0.1)=100(\sqrt{0.8^2+0.1^2}-1)^2\approx3.7548\,\mathrm J$，实际下降约 $0.2452\,\mathrm J$。二阶模型预测 $\tfrac12(-50)(0.1)^2=-0.25\,\mathrm J$，已经很接近。与此同时轴向曲率仍为 $2k=200\,\mathrm{N/m}$：同一个驻点可以沿一条方向变硬、沿另一条方向失稳，这正是 saddle 的几何。</p>
+          <p>若额外约束质点只能沿 $x$ 轴运动，负的横向方向被禁止，允许空间里只剩正曲率；一旦释放横向自由度，稳定结论随允许空间一起改变。</p>
+        </div>
+
+        <h2 id="buckling-threshold">从离散玩具到 Euler 临界载荷</h2>
+        <p>经典 pinned-pinned Euler column 把这套逻辑写成连续形式。设直柱长 $L$、弯曲刚度 $EI$，承受保守轴向压力 $P$，横向位移为 $w(x)$。直线构形 $w=0$ 是平衡；对满足铰支边界的允许扰动，其二次变分是</p>
+        <div class="math-block">$$\delta^2\Pi[w]=EI\int_0^L(w'')^2\,dx-P\int_0^L(w')^2\,dx.$$</div>
+        <p>第一项是弯曲储能，总为正；第二项来自压力做功，会削弱横向刚度。取最低允许模态 $w(x)=\alpha\sin(\pi x/L)$，两个积分可以直接算成</p>
+        <div class="math-block">$$\int_0^L(w')^2dx=\frac{\alpha^2\pi^2}{2L},\qquad
+\int_0^L(w'')^2dx=\frac{\alpha^2\pi^4}{2L^3}.$$</div>
+        <p>因此</p>
+        <div class="math-block">$$\delta^2\Pi=\frac{\alpha^2\pi^2}{2L}\left(\frac{\pi^2EI}{L^2}-P\right),$$</div>
+        <p>括号第一次变成零时得到</p>
+        <div class="math-block">$$P_{\mathrm{cr}}=\frac{\pi^2EI}{L^2}.$$</div>
+        <p>当 $P&lt;P_{\mathrm{cr}}$，所有允许模态的二次变分为正，直柱稳定；在 $P=P_{\mathrm{cr}}$，最低切向特征值恰好到零；继续增载后它变负，直线平衡越过临界。这就是 onset 的谱定义：沿平衡分支追踪<b>最小允许 tangent eigenvalue</b>，它第一次过零的位置才是临界点，负值表示已经越过临界，而不是仅仅“某个元件块有负数”。</p>
+        <p>边界条件决定允许模态，因此也决定临界载荷。工程上常写 $P_{\mathrm{cr}}=\pi^2EI/(K_{\mathrm{eff}}L)^2$：理想铰支两端 $K_{\mathrm{eff}}=1$，固支两端约 $K_{\mathrm{eff}}=0.5$，一端固支一端自由约 $K_{\mathrm{eff}}=2$。有效长度不是材料参数，而是支承对形状空间的限制；换边界就换最小特征模态与临界值。</p>
+        <p>载荷控制与位移控制还会影响越过临界后的可跟踪分支：前者可能在极限点突然跳转，后者往往能继续追踪一段软化路径。但 onset 的局部诊断仍以相应控制条件下的允许切空间和切线谱为准，不能把求解器是否“跳走”当作临界定义。</p>
+
+        <h3 id="zero-mode-taxonomy">看到零模态，先辨认它的身份</h3>
+        <ul>
+          <li><b>刚体零模态：</b>整体平移或旋转不产生应变，是物理对称性；加支承或做 gauge fixing 后应被移除。</li>
+          <li><b>机构零模态：</b>铰链或连接拓扑允许无应变运动，表示结构本来就是 mechanism，不需要等载荷到临界。</li>
+          <li><b>hourglass 零模态：</b>欠积分没有看见某些非刚体变形，是离散和求积造成的数值伪模态。</li>
+          <li><b>临界零模态：</b>原本为正、随载荷连续下降并在非零临界载荷处过零，其形状给出初始 buckling mode。</li>
+        </ul>
+        <p>所以只打印一个“最小特征值约为零”仍不够。要看对应 eigenvector、约束、应变能，以及该值是否随载荷路径过零。刚体、机构、hourglass 与临界模态的数值外观可能相似，物理含义完全不同。</p>
+
+        <h3 id="dynamic-warning">动力学负特征值只是失稳预告</h3>
+        <p>在平衡点附近线性化动力学可写成 $M\ddot q+K_Tq=0$。解 generalized eigenvalue 问题</p>
+        <div class="math-block">$$K_T\phi=\lambda M\phi.$$</div>
+        <p>若某个 $\lambda&lt;0$，对应模态振幅满足 $\ddot a-|\lambda|a=0$，含 $e^{\sqrt{|\lambda|}t}$ 的指数增长项。这只是下一条“质量线”的预告；<a href="14-6-mass-metric-modes.html#generalized-modes">14-6</a> 会从头解释为什么必须把 $M$ 放进特征问题。它预告线性化<b>平衡</b>会放大扰动，但不替代完整屈曲分析：初始缺陷、阻尼、接触、材料非线性与载荷控制会决定是否进入哪条 post-buckling 分支。在非驻点上只能报告某一瞬间 frozen tangent 的负曲率；参考轨迹本身还在加速，不能据此作持续指数增长或稳定性结论。</p>
+
+        <div class="callout warn">
+          <div class="c-h">数值“修正为正”不等于结构静态稳定</div>
+          <p>PSD clamp 会把原始负特征值截到零或正数，适合构造稳健下降方向，却可能隐藏真正的临界模态，甚至让迭代留在本应失稳的对称分支。隐式时间步中的 $M/h^2$ 也会把增量 Hessian 变成 $M/h^2+K_T$；它为“这一时间步的优化问题”提供惯性正则化，不代表静态总势能的 $K_T$ 已经稳定。做屈曲诊断应检查未 clamp、去除刚体模式并限制到切空间后的物理切线矩阵。</p>
+        </div>
+
+        <h2 id="newton-model">临界谱如何进入 Newton 二次模型</h2>
+        <p>在当前位置 $x$，Newton 用总势能的局部二次模型</p>
+        <div class="math-block">$$m(p)=\Pi(x)+g^\top p+\frac12p^\top Hp,\qquad
+g=\nabla\Pi(x),\quad H=\nabla^2\Pi(x),$$</div>
+        <p>并解 $Hp=-g$。若 $Hq_i=\lambda_iq_i$ 且 $g_i=q_i^\top g$，在 eigenbasis 中每个分量都是</p>
+        <div class="math-block">$$p_i=-\frac{g_i}{\lambda_i}.$$</div>
+        <p>这行把临界附近的数值困难说尽了：小的正 $\lambda_i$ 会把微小残差放大成巨大步长，系统在临界模态上条件很差；负 $\lambda_i$ 则会让该分量对 $g^\top p=-\sum_i g_i^2/\lambda_i$ 作正贡献，Newton 方向可能不是下降方向。即使 $H$ 可逆，二次模型也可能是马鞍，解线性方程本身并不会选择下坡。</p>
+        <p>还有一个看似反常但重要的事实：若算法恰好位于完美对称的不稳定平衡，$g=0$，Newton 给出 $p=0$。它是找 stationary point 的方法，不是自动逃离 unstable stationary point 的方法。实际屈曲计算通常需要微小几何缺陷、扰动、load continuation，或单独追踪临界 eigenmode，才能选择离开对称分支的方向。</p>
+
+        <h3 id="newton-safeguards">方向、步长与可逆性是三件事</h3>
+        <p><b>SPD modified Hessian，或 PSD clamp 再加正定偏置，负责构造方向；line search 负责步长。</b>单纯把负特征值截到 0 只得到可能奇异的 PSD 矩阵，并不自动给出可逆的严格下降系统。实际优化器会把过小或负的特征值抬到正阈值，或在 PSD 块上加入正定惯性/damping，也可使用 trust region，使 $-\widetilde H^{-1}g$ 成为下降方向；随后 line search 再缩短步长，防止真实非线性能量偏离局部二次模型。若方向本来上坡，单纯把步长缩小并不能保证下降。</p>
+        <p>检查 $\det H\ne0$ 只说明线性系统可逆，不说明 $H$ 是 SPD。最简单的反例是 $\operatorname{diag}(-1,1)$：行列式为 $-1$、逆存在，却明显不定；甚至 $\operatorname{diag}(-1,-1)$ 的行列式为正，也仍是负定。对称矩阵是否 SPD 要看全部特征值、Sylvester 条件或 Cholesky 是否成功，不能只看 determinant。</p>
+        <p>最后，<b>full Newton 没有单调保证</b>。即便当前位置的 $H$ 为正定，$\alpha=1$ 的整步也可能走出二次近似可信区域而使 $\Pi$ 上升；若 $H$ 不定，方向本身还可能错误。modified Hessian、trust region 与 line search 不是重复保险：前者修方向或模型，后者决定沿好方向实际走多远。</p>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">一分钟自测：可逆 Hessian 为什么仍会给上坡方向？</div>
+          <p>取 $H=\operatorname{diag}(-1,2)$、$g=(1,1)^\top$，解 $Hp=-g$。你应得到 $p=(1,-1/2)^\top$，于是 $g^\top p=1/2&gt;0$。足够小的正步长会让能量先上升，所以“线性方程解得出来”不等于“方向可接受”；这正是 modified Hessian 修方向、line search 再选步长的分工。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>四句话：(1) 直线横向路径 $\sqrt{l^2+s^2}$ 给出 $E''(0)=k(1-l_0/l)$；受压时侧移增大长度却降低弹性能，rest 状态沿该直线是四阶增长，但沿保持长度的旋转曲线仍可零能。(2) 稳定性必须先满足 $\nabla\Pi=0$，再在约束切空间检查总势能二次变分；单根非驻点受压弹簧的负横向曲率不能直接命名为屈曲。(3) Euler 柱在 $P_{\mathrm{cr}}=\pi^2EI/L^2$ 处由最小允许特征值过零定义 onset，且边界条件、刚体/机构/hourglass 模态必须分清。(4) 临界小特征值让 Newton 步放大，负特征值可能给出上坡方向；SPD modified Hessian（或 PSD 加正定偏置）、line search 与物理稳定性诊断各管不同问题。</p>
+        <p>上一页 <a href="14-2-spring-projectors.html">14-2</a> 推出了弹簧的投影谱；下一页 <a href="14-4-consistent-mass.html">14-4</a> 将从动能积分推导 consistent mass，并说明质量如何成为广义特征值问题中的度量。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

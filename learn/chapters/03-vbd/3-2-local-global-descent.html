@@ -25,11 +25,11 @@
       <article class="article">
         <div class="eyebrow">Part 3 · Vertex Block Descent · 3-2</div>
         <h1>为什么局部下降 = 全局下降</h1>
-        <p class="lede">上一节我撂了一句没证的话：每个顶点的局部牛顿步，都让<b>全局</b> $G$ 单调下降。这句话是 VBD 全部稳定性的根。它听起来该是显然的——但其中有一个容易绊倒人的细节：$G$ 并不等于各个 $G_i$ 之和。这一节把这件事说清楚。</p>
+        <p class="lede">上一节把两件事混在了一句话里。无条件成立的是：<b>只移动 block $i$ 时，$\Delta G=\Delta G_i$</b>；需要额外条件的才是：这次更新有没有让二者下降。$G$ 并不等于各个 $G_i$ 之和，而一次 raw full Newton 也不保证 $\Delta G_i\le0$。这一节先把恒等式精确证完，再说明从相等走到单调、收敛分别还缺什么。</p>
 
         <h2 id="not-a-sum">陷阱：G 不是 ΣG_i</h2>
-        <p>先拆掉一个想当然。你可能以为「既然每个顶点优化自己的 $G_i$，那把所有 $G_i$ 加起来就是 $G$」。<b>不对。</b>原因是：一条弹簧 $E_j$ 连着两个顶点 $a$ 和 $b$，它同时出现在 $G_a$ 的求和里、也出现在 $G_b$ 的求和里。如果把所有 $G_i$ 加起来，每条内部弹簧的能量都被<b>数了两遍</b>。所以</p>
-        <div class="math-block">$$\sum_i G_i(\mathbf x)\;\neq\;G(\mathbf x)\qquad(\text{共享的弹簧被重复计数})$$</div>
+        <p>先拆掉一个想当然。你可能以为「既然每个自由顶点优化自己的 $G_i$，那把这些 $G_i$ 加起来就是 $G$」。<b>不对。</b>令 $\mathcal V_{\mathrm{free}}$ 为实际参与 block 更新的顶点集合。一条两端都自由的弹簧会同时出现在两个局部能量里，因而被数两遍；一端固定的边则只出现在自由端的局部块里。所以</p>
+        <div class="math-block">$$\sum_{i\in\mathcal V_{\mathrm{free}}} G_i(\mathbf x)\;\neq\;G(\mathbf x)\qquad(\text{free-free 弹簧会被重复计数})$$</div>
         <p>这意味着我们不能用「$\sum G_i$ 下降所以 $G$ 下降」这种偷懒的方式论证。好在我们根本不需要它——真正成立的是一个更精确、也更漂亮的等式。</p>
 
         <h2 id="the-key-equality">关键：动一个顶点时，ΔG_i = ΔG</h2>
@@ -39,13 +39,20 @@
           <li>与 $i$ 相邻的弹簧 $E_j,\ j\in\mathcal F_i$ —— 会变（它们的一个端点是 $i$）。</li>
           <li>所有<b>不</b>碰 $i$ 的项——别的顶点的惯性项、不含 $i$ 的弹簧——全是常数，纹丝不动。</li>
         </ul>
-        <p>而「会变的那些项」加起来，<b>恰好就是 $G_i$ 的定义</b>。于是：只移动 $\mathbf x_i$ 时，$G$ 的改变量等于 $G_i$ 的改变量，二者一字不差：</p>
-        <div class="math-block">$$G(\ldots,\mathbf x_i+\Delta\mathbf x_i,\ldots)-G(\ldots,\mathbf x_i,\ldots)\;=\;G_i(\mathbf x_i+\Delta\mathbf x_i)-G_i(\mathbf x_i)$$</div>
-        <p>注意这<b>并不</b>要求 $G=\sum G_i$。重复计数的问题在这里根本不出现——因为别的顶点没动，它们那些「被数第二遍」的弹簧此刻是常数，进不了改变量。所以哪怕 $G\neq\sum G_i$，单顶点移动这件事仍然让「局部改变量」与「全局改变量」严格相等。这就是 VBD 名字里 <span class="term-i">block</span> 的全部底气。</p>
+        <p>而「会变的那些项」加起来，<b>恰好就是 $G_i$ 的定义</b>。把变量写成 $\mathbf x=(\mathbf x_i,\mathbf x_{-i})$，固定 $\mathbf x_{-i}$ 后可以逐项重排为</p>
+        <div class="math-block">$$G(\mathbf x_i,\mathbf x_{-i})=G_i(\mathbf x_i;\mathbf x_{-i})+C_i(\mathbf x_{-i}),$$</div>
+        <p>其中 $C_i$ 收集所有不含 $\mathbf x_i$ 的项。对任意候选新位置 $\mathbf x_i'$（不要求它来自 Newton，也不要求它下降），常数项严格抵消：</p>
+        <div class="math-block">$$\begin{aligned}
+        \Delta G
+        &=G(\mathbf x_i',\mathbf x_{-i})-G(\mathbf x_i,\mathbf x_{-i})\\
+        &=G_i(\mathbf x_i';\mathbf x_{-i})-G_i(\mathbf x_i;\mathbf x_{-i})
+        =\Delta G_i.
+        \end{aligned}$$</div>
+        <p>注意这<b>并不</b>要求 $G=\sum G_i$。重复计数的问题在这里根本不出现：别的顶点没动，所有不含 $i$ 的项都进了同一个常数 $C_i$。所以 $\Delta G=\Delta G_i$ 是对<b>任意单 block 位移</b>成立的恒等式，和候选步最后是下降、持平还是上升无关。</p>
 
         <div class="callout note">
           <div class="c-h">形式化的一句话</div>
-          <p>固定除 $i$ 外的所有顶点，把 $G$ 视为 $\mathbf x_i$ 的函数，记为 $G|_{\mathbf x_i}$。则 $G|_{\mathbf x_i}$ 与 $G_i$ <b>至多相差一个与 $\mathbf x_i$ 无关的常数</b>（那个常数正是所有不含 $i$ 的项之和）。因此二者有<b>相同的梯度、相同的 Hessian、相同的下降方向</b>：$\nabla_{\mathbf x_i}G=\nabla_{\mathbf x_i}G_i=-\mathbf f_i$，$\nabla^2_{\mathbf x_i}G=\nabla^2_{\mathbf x_i}G_i=\mathbf H_i$。所以对 $G_i$ 做的那一步牛顿，就是对 $G$（限制在 $\mathbf x_i$ 方向上）做的那一步牛顿。</p>
+          <p>固定除 $i$ 外的所有顶点，把 $G$ 视为 $\mathbf x_i$ 的函数，记为 $G|_{\mathbf x_i}$。则 $G|_{\mathbf x_i}$ 与 $G_i$ <b>只相差一个与 $\mathbf x_i$ 无关的常数</b>。因此二者有相同的梯度与 Hessian：$\nabla_{\mathbf x_i}G=\nabla_{\mathbf x_i}G_i=-\mathbf f_i$，$\nabla^2_{\mathbf x_i}G=\nabla^2_{\mathbf x_i}G_i=\mathbf H_i$；任一方向对 $G_i$ 是下降方向，当且仅当它对受限的 $G$ 也是下降方向。这里仍没有说 raw Newton 方向必定下降——$\mathbf H_i$ 不定时，它可能朝上坡。</p>
         </div>
 
         <h2 id="worked">手算验证：3 顶点 strand 上 ΔG = ΔG₁</h2>
@@ -87,30 +94,35 @@
 
         <div class="callout warn">
           <div class="c-h">对照：偷懒用 ΣΔGᵢ 会错</div>
-          <p>若按「$G=\sum G_i$」去加，共享弹簧 $E_{12}$ 会被<b>数两遍</b>：它在 $G_1$ 里算了一次（贡献 $+0.5$），在 $G_2$ 里又算一次（$G_2$ = 顶点 2 惯性 + $E_{12}$，而顶点 2 惯性不变贡献 0，故 $\Delta G_2=+0.5$）。于是 $\sum_i\Delta G_i=\Delta G_1+\Delta G_2=-53+0.5=-52.5\neq\Delta G=-53$。多出来的 $0.5$ 正是被重复计数的那条共享弹簧。<b>所以我们绝不用 $\sum\Delta G_i$，只用「单顶点移动时 $\Delta G=\Delta G_i$」这条精确等式。</b></p>
+          <p>这里 block 集合只含自由顶点 $\mathcal V_{\mathrm{free}}=\{1,2\}$；pinned 顶点 0 不定义参与求和的更新块。若按「$G=\sum_{i\in\mathcal V_{\mathrm{free}}}G_i$」去加，free-free 弹簧 $E_{12}$ 会被<b>数两遍</b>：它在 $G_1$ 里算一次（贡献 $+0.5$），在 $G_2$ 里又算一次，而 fixed-free 边 $E_{01}$ 只进 $G_1$。于是 $\sum_{i\in\mathcal V_{\mathrm{free}}}\Delta G_i=\Delta G_1+\Delta G_2=-53+0.5=-52.5\neq\Delta G=-53$。多出来的 $0.5$ 正是被重复计数的 free-free 弹簧。<b>所以我们不用局部改变量求和，只用「单顶点移动时 $\Delta G=\Delta G_i$」这条精确等式。</b></p>
         </div>
 
-        <h2 id="descent">从「相等」到「单调下降」</h2>
-        <p>有了上面的等式，逻辑链就闭合了。VBD 给顶点 $i$ 走的那一步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，是沿着 $G_i$（因而也是 $G$）的下降方向走的——只要这一步确实降低了 $G_i$（步长得当时成立，<a href="../03-vbd/3-6-stability.html">3.6</a> 讨论为何这里几乎总成立、且不需要 line search），它就<b>同样幅度地</b>降低了 $G$。把一次 sweep 里的每一步串起来：</p>
-        <div class="math-block">$$G^{(0)}\;\ge\;G^{(1)}\;\ge\;G^{(2)}\;\ge\;\cdots$$</div>
-        <p>每动一个顶点，$G$ 要么下降、要么持平，<b>从不上升</b>。这就是上一节 <span class="term-i">vbd-sweep</span> 部件里你看到的那条只跌不涨的曲线背后的道理。</p>
+        <h2 id="descent">从「相等」到「单调下降」：必须补接受条件</h2>
+        <p>恒等式只负责传递改变量，不负责决定改变量的符号。要得到 $\Delta G\le0$，还必须先得到 $\Delta G_i\le0$。常见的两条充分路径是：</p>
+        <ul>
+          <li><b>精确 block minimizer</b>：在固定 $\mathbf x_{-i}$ 时取 $\mathbf x_i'\in\arg\min G_i$，自然有 $G_i(\mathbf x_i')\le G_i(\mathbf x_i)$。</li>
+          <li><b>下降方向 + backtracking/Armijo 接受</b>：对候选方向 $\mathbf p$ 缩短 $\alpha$，直到 $G_i(\mathbf x_i+\alpha\mathbf p)\le G_i(\mathbf x_i)$（或满足更强的 Armijo 充分下降条件）才写回。</li>
+        </ul>
+        <p>在这两种情况下，$\Delta G=\Delta G_i$ 才把局部验收原封不动传成全局验收，并可把所有<b>已接受</b>的 block 步串成</p>
+        <div class="math-block">$$G^{(0)}\;\ge\;G^{(1)}\;\ge\;G^{(2)}\;\ge\;\cdots.$$</div>
+        <p>反过来，一次 raw Newton 候选 $\mathbf p=\mathbf H_i^{-1}\mathbf f_i$ 可能因 $\mathbf H_i$ 不定而不是下降方向，也可能在方向正确时因 $\alpha=1$ 走太远而让 $\Delta G_i&gt;0$；此时恒等式告诉我们的恰恰是<b>全局 $G$ 也上升同样多</b>。具体机制见 <a href="../03-vbd/3-4-line-search.html">3.4 line search</a>；负曲率、可逆性与 full Newton 的更深分析见 <a href="../14-curvature-mass/14-3-buckling-newton.html#newton-safeguards">Part 14：方向、步长与可逆性</a>。</p>
 
-        <h2 id="convergence">为什么这就是无条件稳定</h2>
-        <p>把单调下降和一个简单的事实放在一起，稳定性就出来了。$G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$ 这个能量是<b>下有界</b>的（惯性项 $\ge0$，弹性势能 $\ge0$）。一个单调不增、又有下界的序列，必然收敛到一个有限值——它不可能跑到 $-\infty$，更不可能震荡着飞到 $+\infty$。</p>
-        <p>「不会飞到 $+\infty$」这句翻译成物理就是：<b>系统不会爆炸</b>。无论时间步 $h$ 多大、每帧只迭代几次，每一步 sweep 都只会让能量更低或不变，于是位置、速度都被这个有界的能量牢牢摁住。这正是 <a href="../00-orientation/0-1-where-we-go.html">0.1</a> 里你拖着末端 1000× 质量、把迭代数压到很低也炸不掉那根 strand 的根本原因：稳定性不是靠调参调出来的，是这条单调下降链<b>从数学上</b>保证的。这就是为什么人们说 VBD <span class="term-i">unconditionally stable</span>。</p>
+        <h2 id="convergence">单调能量值能推出什么，不能推出什么</h2>
+        <p>若每个 block 步都经过上述下降验收，且 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$ 下有界，那么标量序列 $\{G^{(k)}\}$ 单调不增且有下界，因此<b>能量值</b>收敛到某个有限数。这是严格但有限的结论。</p>
+        <p>它<b>不自动等价于</b>位置迭代 $\mathbf x^{(k)}$ 收敛、收敛到驻点或全局最小值，更不直接推出跨时间步定义的速度收敛。要得到这些结论，还需强凸/唯一解、迭代点紧性、充分下降与梯度控制等额外假设。对 TinyVBD 的 <code>main.cpp</code> 更不能直接套用这条单调链：它用 QR 解 raw full step 后立即写回，没有 line search、显式 det guard 或 PSD 修正；可选 Chebyshev 外推也可能再次抬高 $G$。因此这里不能把能量值定理改写成该精简实现的无条件稳定保证。</p>
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 投影没有这把尺子</div>
-          <p>对照 PBD 就看得很清楚它缺了什么。PBD 的约束投影把粒子掰到约束流形上，但它<b>不盯着任何标量目标</b>——没有一个像 $G$ 这样的能量在背后单调下降。所以它<b>给不出</b>「这一步让某个全局量变小」的保证：不同约束的投影会互相打架，迭代多了刚度还会漂（<a href="../02-family/2-1-pbd.html">2.1</a>）。PBD 的「稳」是工程经验上的稳，VBD 的稳是<b>有下界的单调序列必收敛</b>这条定理给的稳。一个是没散，一个是证明了不会散。这是这两类方法最根本的分水岭。</p>
+          <p>PBD 的约束投影不以这里的标量 $G$ 为验收目标，因此不能直接使用 $\Delta G=\Delta G_i$ 这把尺子。能量式 block 方法的优势是：一旦精确最小化局部块或显式做下降验收，局部检查就同时成为全局检查。这个优势来自<b>可验证的接受条件</b>，不是「Newton」三个字本身；不做验收的 TinyVBD raw full step 仍属于经验性取舍。</p>
         </div>
 
         <div class="callout">
-          <div class="c-h">和 1.2 那把「下降的尺子」对上了</div>
-          <p>还记得 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 说把 root-finding 换成 minimization「带来了一把下降的尺子」吗？这一节就是在兑现那句话。正因为隐式欧拉的真身是 $\min G$，我们才有一个标量 $G$ 可以盯着下降；也正因为单顶点移动让局部下降严格等于全局下降，这把尺子才能被 block coordinate descent 一节一节地用下去。变分视角不是装饰，它是稳定性证明的地基。</p>
+          <div class="c-h">有下降的尺子，还要真的量过再接受</div>
+          <p>还记得 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 说把 root-finding 换成 minimization「带来了一把下降的尺子」吗？$\Delta G=\Delta G_i$ 说明只需重算顶点邻域的 $G_i$，就能知道全局 $G$ 的真实改变量，验收可以很局部、很便宜。但尺子只提供判据，不会让未经检查的 full step 自动合格；变分视角与接受机制必须配套使用。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) $G\neq\sum G_i$（共享弹簧被双重计数），但这不碍事；(2) <b>只移动一个顶点时</b>，$G$ 的改变量与 $G_i$ 的改变量严格相等——因为别的项都是常数——所以局部下降 = 全局下降；(3) 于是每步 sweep 让有下界的 $G$ 单调不增 → 必收敛 → <span class="term-i">unconditional stability</span>，而 PBD 的投影没有这种全局能量保证。</p>
+        <p>三句话：(1) $G\neq\sum G_i$，但固定其余 block 后有精确分解 $G=G_i+C_i$，所以任意单 block 位移都满足 $\Delta G=\Delta G_i$；(2) 只有精确 block minimizer 或经 backtracking/Armijo 接受的步先保证 $\Delta G_i\le0$，恒等式才推出全局单调，raw full Newton 可能上升；(3) 有下界的单调序列只保证能量值收敛，不能不加条件地等同于位置、速度收敛或具体精简实现的无条件稳定。</p>
         <p>下一节，我们把这个局部牛顿步真正拆开：$\mathbf f_i$ 和 $\mathbf H_i$ 各由哪些项装配而成，弹簧的力与 Hessian 怎么塞进去，那个 $3\times3$ 系统长什么样。</p>
       </article>
     </main>

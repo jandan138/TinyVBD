@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FEM 质量矩阵：从连续动能手算一个三角形 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-4">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-4</div>
+        <h1>FEM 质量矩阵：从连续动能手算一个三角形</h1>
+        <p class="lede"><a href="14-3-buckling-newton.html">上一页 14-3</a> 讨论同一位移场储存多少二次势能，也就是 $\phi^\top K\phi$；这一页转向离散动力学的另一半：同一运动搬动多少质量，也就是 $\phi^\top M\phi$。连续薄片的质量明明铺满材料，为什么离散以后会变成矩阵？我们不背结论，而是拿一枚线性三角形，从材料坐标里的速度插值出发，把连续动能逐项积分。到 14-6，两者的比值才成为频率平方。</p>
+
+        <h2 id="shape-functions">先给材料点一组三角形坐标</h2>
+        <p>质量属于材料，而不属于某一帧中偶然出现的 world 形状。因此积分放在未变形的 <span class="term">reference domain</span>，也叫 <span class="term">material domain</span>。记参考材料三角形为 $\bar T$，面积为 $A$。本节假设参考体密度 $\rho$ 与参考厚度 $t$ 在单元内为常数，于是面密度（areal density）是 $\mu=\rho t$，单元总质量为</p>
+        <div class="math-block">$$m_e=\rho tA.$$</div>
+        <p>这里的 $A$、$\rho$、$t$ 都是参考材料量。若改用当前面积，却仍把密度与厚度当常数，薄片拉伸一次便会凭空增重。薄膜程序也常直接输入面密度 $\mu$，此时只需把下文每个 $\rho t$ 换成 $\mu$；三维体单元则没有厚度，改为对参考体积积分。</p>
+
+        <p>为了手算，把标准母单元（master triangle）取为 $0\le\xi\le1$、$0\le\eta\le1-\xi$。P1 指“一次/线性、三节点的 Lagrange triangle”；它的三个重心形函数是</p>
+        <div class="math-block">$$N_1=1-\xi-\eta,\qquad N_2=\xi,\qquad N_3=\eta.$$</div>
+        <p>三个标准节点依次是 $(0,0)$、$(1,0)$、$(0,1)$。把它们逐个代入上式，就会得到权重向量 $(1,0,0)$、$(0,1,0)$、$(0,0,1)$；这比只背“重心坐标”更可靠，也把后面的节点编号与矩阵行列顺序固定下来。</p>
+        <p>这三条函数不是随手挑的直线。第一，在节点 $j$ 处有 $N_i=\delta_{ij}$，即 Kronecker delta 性质：自己的节点取 1，另外两个节点取 0，所以插值精确经过节点值。第二，处处有 $N_1+N_2+N_3=1$，这叫 <span class="term">partition of unity</span>，三个权重总能把同一个材料点完整地分完。第三，在三角形内部 $N_i\ge0$，所以可把它们读成三个顶点对该材料点的非负参与份额。非负性只在单元内成立，向三角形外外推时权重可以变负。</p>
+        <p>它们还是面积坐标：$N_i$ 等于材料点与顶点 $i$ 对边围出的子三角形面积占比。靠近顶点 1，$N_1$ 大；走到它的对边，$N_1$ 降为零。几何上连续变化的份额，正是把三个离散节点与整片连续材料接起来的桥。</p>
+
+        <div class="callout note">
+          <div class="c-h">速度场不是三块常值拼图</div>
+          <p>给三个节点速度 $\boldsymbol v_1,\boldsymbol v_2,\boldsymbol v_3$，P1 单元内部使用同一组形函数插值：$\boldsymbol v_h(\xi,\eta)=\sum_{i=1}^3N_i(\xi,\eta)\boldsymbol v_i$。它不是按“最近节点”把材料切成三块；一个内部点通常由三个节点共同搬运，只是份额不同。只要三个节点速度相同，partition of unity 又保证整片速度严格相同，不会因网格位置产生起伏。</p>
+        </div>
+        <p>这套速度插值也可从位置插值直接得到。材料点的当前位置写成 $\boldsymbol x_h=\sum_iN_i\boldsymbol x_i$；形函数固定在 material domain 上，不随时间改标签，因此对时间求导就是 $\dot{\boldsymbol x}_h=\sum_iN_i\dot{\boldsymbol x}_i$。换句话说，同一组重心权重既说明材料点在哪里，也说明它此刻怎样运动。若位置用一套权重、速度却另用一套，离散运动学与动能便不再一致，后面得到的也不能称为这组有限元空间的 consistent mass。</p>
+        <p>单位也提供一项最便宜的自检：$\rho$ 的单位是质量每体积，$t$ 是长度，$A$ 是面积，因此 $\rho tA$ 确实是质量；形函数没有单位，所以每个 $\bar M_{ij}$ 也必须具有质量单位。公式里若只剩 $\rho A$ 或多出一个 $A$，即使矩阵形状漂亮，物理量纲也已经报警。</p>
+
+        <h2 id="kinetic-to-mass">从连续动能展开出 M<sub>ij</sub></h2>
+        <p>连续薄片的动能就是把每一小片材料的 $\tfrac12mv^2$ 加起来。参考面积 $dA$ 带着质量 $\rho t\,dA$，局部速度是刚才的 $\boldsymbol v_h$，因此</p>
+        <div class="math-block">$$T=\frac12\int_{\bar T}\rho\lVert\boldsymbol v_h\rVert^2t\,dA.$$</div>
+        <p>现在只做代入和展开。速度内积产生一个双重求和：</p>
+        <div class="math-block">$$T=\frac12\sum_{i=1}^3\sum_{j=1}^3(\boldsymbol v_i\cdot\boldsymbol v_j)\int_{\bar T}\rho tN_iN_j\,dA.$$</div>
+        <p>于是标量节点质量矩阵不是另加的假设，而是被动能自己“挤”出来的：</p>
+        <div class="math-block">$$\boxed{\bar M_{ij}=\int_{\bar T}\rho tN_iN_j\,dA}.$$</div>
+        <p>它叫 consistent mass，是因为速度用什么形函数插值，动能离散就一致地使用同一组形函数并对乘积积分。对角项 $\bar M_{ii}$ 是一个形函数与自身重叠的份额；非对角项 $\bar M_{ij}$ 是两个形函数支持域的重叠。在线性三角形中，三个 $N_i$ 都覆盖几乎整个单元，因此不同节点会共同搬运同一批材料，非对角项自然不为零。这不是数值污染，而是连续速度插值留下的惯性耦合。</p>
+        <p>换一种物理读法：若节点 $i$ 与 $j$ 同向运动，交叉项增加动能；若它们反向运动，点积变负，交叉项会抵消一部分。矩阵记录的不只是“每个点有多重”，还记录了一个线性速度场内部如何协同运动。</p>
+        <p>把三个形函数排成列向量 $N=(N_1,N_2,N_3)^\top$，标量矩阵还可紧凑写成 $\bar M=\int\rho tNN^\top dA$。任取节点标量 $q$，都有</p>
+        <div class="math-block">$$q^\top\bar Mq=\int_{\bar T}\rho t\left(\sum_iN_iq_i\right)^2dA\ge0.$$</div>
+        <p>所以质量矩阵的半正定性就是“速度平方积分不可能为负”。当密度、厚度为正且三个形函数线性无关时，只有 $q=0$ 才能让插值在整个单元上为零，单元矩阵因而正定。这项几何事实以后保证动能确实定义一个长度，而不是一张可能给出负动能的任意对称表。</p>
+
+        <h2 id="triangle-integrals">在 reference triangle 上逐项积分</h2>
+        <p>下面把九个数真正算出来。标准三角形面积为 $1/2$。若实际参考材料顶点是 $X_1,X_2,X_3$，从 $(\xi,\eta)$ 到材料三角形的仿射映射与 Jacobian 是</p>
+        <div class="math-block">$$X(\xi,\eta)=X_1+\xi(X_2-X_1)+\eta(X_3-X_1),\qquad J=[\,X_2-X_1\;\;X_3-X_1\,].$$</div>
+        <p>面积缩放满足 $|\det J|=2A$，所以</p>
+        <div class="math-block">$$\int_{\bar T}f\,dA=2A\int_0^1\int_0^{1-\xi}f(\xi,\eta)\,d\eta\,d\xi.$$</div>
+        <p>这里的 $2A$ 很容易漏掉：标准三角形只有半个单位正方形的面积，二维内禀仿射映射要把它的 $1/2$ 放大到 $A$，故面积 Jacobian 为 $|\det J|=2A$。若顶点顺序反向，$\det J$ 可为负，但质量积分使用绝对值，质量不能随朝向变号；若三角形嵌在三维中，$J$ 是 $3\times2$，对应面积缩放应写成 $\sqrt{\det(J^\top J)}=2A$，而不是对非方阵取 determinant。</p>
+
+        <p>先算平方项。由三角形对称性，三个 $\int N_i^2dA$ 相等，挑最容易的 $N_3=\eta$：</p>
+        <div class="math-block">$$\int_{\bar T}N_3^2dA=2A\int_0^1\int_0^{1-\xi}\eta^2d\eta\,d\xi=\frac{2A}{3}\int_0^1(1-\xi)^3d\xi=\frac{A}{6}.$$</div>
+        <p>再算交叉项。三个 $\int N_iN_jdA$（$i\ne j$）也相等，取 $N_2N_3=\xi\eta$：</p>
+        <div class="math-block">$$\int_{\bar T}N_2N_3dA=2A\int_0^1\int_0^{1-\xi}\xi\eta\,d\eta\,d\xi=A\int_0^1\xi(1-\xi)^2d\xi=\frac{A}{12}.$$</div>
+        <p>因此 $\int N_i^2dA=A/6$，而 $\int N_iN_jdA=A/12$。乘回常数面密度，九项一次排好：</p>
+        <div class="math-block">$$\boxed{\bar M=\frac{\rho tA}{12}\begin{pmatrix}2&amp;1&amp;1\\1&amp;2&amp;1\\1&amp;1&amp;2\end{pmatrix}}.$$</div>
+        <p>为什么对角恰好更大？$N_i^2$ 在自己的顶点附近可以让两个因子同时接近 1；$N_iN_j$ 要求两个不同权重同时大，而一个权重趋近 1 时另外两个必然趋近 0，所以重叠积分较小。但交叉项不会消失：沿顶点 $i$、$j$ 之间的一整片区域，两者都为正，两个节点确实在共同搬同一片材料。</p>
+        <p>用两个速度实验可以直接读出这些系数。若只有节点 1 以 $\boldsymbol c$ 运动，另外两点静止，动能是 $\tfrac12(\rho tA/6)\lVert\boldsymbol c\rVert^2$，对应对角项。若节点 1、2 同以 $\boldsymbol c$ 运动，节点 3 静止，二次型除两个对角外还出现两份 $\bar M_{12}$，对这条未归一化速度形状合计成 $\rho tA/2$ 的有效质量。这不是单元总质量变成了一半，也不是重复计数，而是两节点同向搬运重叠材料产生了正的交叉动能项；若两者反向，点积变号，同一项便改为抵消。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 4：把密度、厚度、面积和速度全部代成数</div>
+          <p>取 $\rho=1200\,\mathrm{kg/m^3}$、$t=0.02\,\mathrm m$、$A=0.5\,\mathrm{m^2}$，单元总质量是</p>
+          <div class="math-block">$$m_e=\rho tA=12\,\mathrm{kg},\qquad
+\bar M=\begin{pmatrix}2&amp;1&amp;1\\1&amp;2&amp;1\\1&amp;1&amp;2\end{pmatrix}\mathrm{kg}.$$</div>
+          <p>只看一个速度分量。若 $q=(2,0,0)\,\mathrm{m/s}$，则 $q^\top\bar Mq=8\,\mathrm J$，动能还要乘 $1/2$，所以 $T=4\,\mathrm J$。若三个节点一起以 $q=(2,2,2)\,\mathrm{m/s}$ 平移，则 $q^\top\bar Mq=48\,\mathrm J$、$T=24\,\mathrm J$，也正好等于 $\tfrac12(12)(2^2)$。后一条把矩阵计算与“12 kg 整体以 2 m/s 平移”的常识严丝合缝地接上了。</p>
+        </div>
+        <p>还可以看到一个仿射三角形特有的简洁性：固定 $\rho,t$ 后，矩阵只依赖面积 $A$，不依赖三角形在平面里的朝向，也不依赖把它剪成何种长宽比例。原因是重心坐标会随仿射映射一起变化，而积分中的几何缩放只剩常数 $2A$。这不表示瘦长单元在所有方面都无害；刚度矩阵仍会强烈感受边长和角度，只是这张 P1 质量表恰好只看总面积。</p>
+
+        <div class="callout note">
+          <div class="c-h">三次不靠记忆的验算</div>
+          <p>第一，$\bar M$ 对称，对应 $\boldsymbol v_i\cdot\boldsymbol v_j=\boldsymbol v_j\cdot\boldsymbol v_i$。第二，令 $\boldsymbol 1=(1,1,1)^\top$，则 $\boldsymbol 1^\top\bar M\boldsymbol 1=\rho tA$，也就是所有标量元素之和恰好等于总质量；每一行的和为 $\rho tA/3$。第三，若三个节点刚体平移，$\boldsymbol v_i=\boldsymbol c$，离散动能成为 $T=\tfrac12\rho tA\lVert\boldsymbol c\rVert^2$，与整片材料作为一个刚体移动完全相同。</p>
+        </div>
+
+        <h2 id="vector-dofs">从 3×3 标量表到 6×6 向量矩阵</h2>
+        <p>上面的 $\bar M$ 只描述节点之间的关系，空间方向还没有展开。二维三角形每个节点有两个速度分量。若自由度顺序是</p>
+        <div class="math-block">$$\boldsymbol v_e=(v_{1x},v_{1y},v_{2x},v_{2y},v_{3x},v_{3y})^\top,$$</div>
+        <p>每个标量 $\bar M_{ij}$ 都要同时作用于 $x,y$，又不能把 $x$ 混进 $y$。这正是 Kronecker 积：</p>
+        <div class="math-block">$$\boxed{M_e=\bar M\otimes I_2=\frac{\rho tA}{12}\begin{pmatrix}2I_2&amp;I_2&amp;I_2\\I_2&amp;2I_2&amp;I_2\\I_2&amp;I_2&amp;2I_2\end{pmatrix}\in\mathbb R^{6\times6}}.$$</div>
+        <p>于是 $T=\tfrac12\boldsymbol v_e^\top M_e\boldsymbol v_e$。若代码采用 $(v_{1x},v_{2x},v_{3x},v_{1y},v_{2y},v_{3y})$ 的按分量顺序，同一算子会显示为 $\operatorname{diag}(\bar M,\bar M)$；两者只差一次置换，不能把一种排列下的矩阵直接乘到另一种排列的向量上。三维时同理换成 $\bar M\otimes I_3$。</p>
+        <p>整张网格中，每个三角形先算自己的 $M_e$，再按局部到全局的索引装配：</p>
+        <div class="math-block">$$M=\sum_eP_e^\top M_eP_e.$$</div>
+        <p>$P_e$ 只负责抽取该单元的自由度。共享顶点会收到所有相邻单元的贡献；两个从未同属一个单元的顶点之间没有质量项，所以全局 $M$ 虽非对角，仍是稀疏矩阵。若密度/厚度为正、单元非退化、全局基函数线性无关，且每个保留自由度都有正质量支撑，装配后的自由空间矩阵才是 SPD；孤立零质量节点、退化或不合适的欠积分会破坏这些前提。固定自由度可在求解时消元或跳过，但这与单元质量如何积分是两回事。</p>
+        <p>想象两个三角形共享一条边：共享边的两个顶点各自收到两枚单元的对角贡献，它们之间的非对角块也收到两次相加；只属于左、右两个三角形的对顶点从未共同支撑一片材料，所以彼此块仍为零。这个小例子把“全局稀疏”说得更具体：稀疏图来自单元共现关系，而每个非零块的数值来自所有相关材料片的累积。边界顶点邻接材料较少，所得质量通常也比内部顶点小。</p>
+
+        <div class="callout warn">
+          <div class="c-h">这张闭式表有清楚的适用边界</div>
+          <p>$A/6$ 与 $A/12$ 属于常密度、常厚度的 P1 affine triangle。若 $\rho$ 或 $t$ 随材料位置变化，它们必须留在积分里；若使用曲边映射、高阶形函数、四边形或四面体，形函数乘积与 Jacobian 也会改变，通常要换合适的数值求积。推导套路仍是“插值速度、展开连续动能、积分 $N_iN_j$”，但不能照抄这九个数。</p>
+        </div>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">两分钟自测：自己从顶点算出质量表</div>
+          <p>给材料三角形 $X_1=(0,0)$、$X_2=(2,0)$、$X_3=(0,1)$。先由上面的列向量写出 $J$，再算 $|\det J|$ 与面积 $A$。你应得到 $J=\operatorname{diag}(2,1)$、$|\det J|=2$、$A=1$。若面密度 $\rho t=12\,\mathrm{kg/m^2}$，总质量仍是 12 kg，因此 $\bar M$ 正是手算例中的整数矩阵。两例的面积和面密度并不相同；矩阵相同的直接原因是总质量 $m_e=(\rho t)A$ 都等于 12 kg。固定面密度与面积（等价地固定总质量）时，P1 affine 质量表才不依赖三角形的长宽比或朝向。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>连续质量变成矩阵，不是 FEM 人为发明了节点间耦合，而是一个材料点的速度由多个节点共同插值。P1 三角形用 $N_1,N_2,N_3$ 把节点速度延拓到参考材料域，代入连续动能后自然得到 $\bar M_{ij}=\int\rho tN_iN_jdA$。reference triangle 的面积 Jacobian 是 $2A$，逐项积分给出对角 $A/6$、非对角 $A/12$，最终为 $\rho tA/12$ 乘以“对角 2、其余 1”的矩阵；二维自由度再扩成 $\bar M\otimes I_2$，逐单元装配为全局稀疏质量矩阵。</p>
+        <p>矩阵对称、元素总和等于单元质量、刚体平移动能正确，是三把随手可用的检查尺。下一页 <a href="14-5-mass-lumping.html">14-5</a> 从每一行的和出发：怎样把这张有耦合的 consistent mass 变成对角矩阵而不丢总质量，以及这种便利究竟保留了什么、牺牲了什么。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -25,10 +25,10 @@
       <article class="article">
         <div class="eyebrow">Part 4 · Code Walkthrough · 4-4</div>
         <h1>Chebyshev 加速：omega 与 applyAccelerator</h1>
-        <p class="lede">Gauss-Seidel 收敛是线性的——一遍遍 sweep 稳稳逼近，但有点慢。<span class="term">Chebyshev semi-iterative acceleration</span>（Wang 2015）用一个几乎免费的小技巧把收敛曲线压陡：每次完整迭代后，沿着「这次和上上次之差」的方向<b>外推一步</b>。代码里就是 <code>getAcceleratorOmega</code> 加 <code>applyAccelerator</code> 两个函数。</p>
+        <p class="lede">在适用的局部线性收敛区间里，Gauss-Seidel 往往一遍遍 sweep 缓慢逼近。<span class="term">Chebyshev semi-iterative acceleration</span>（Wang 2015）用一个几乎免费的小技巧把这类收敛曲线压陡：每次完整迭代后，沿着「这次和上上次之差」的方向<b>外推一步</b>。代码里就是 <code>getAcceleratorOmega</code> 加 <code>applyAccelerator</code> 两个函数；这层外推没有能量验收，也可能把 $G$ 抬高。</p>
 
         <h2 id="idea">直觉：往前一步多踩一脚</h2>
-        <p>普通迭代每次只走到 $\bar{\mathbf x}^{(n)}$（这一遍 sweep 的输出）。Chebyshev 的想法：迭代的误差是<b>一路朝同一方向缩</b>的，那不如顺势多推一点。具体地，用一个随迭代变化的系数 $\omega_n$，把当前结果沿「与上上次 $\mathbf x^{(n-2)}$ 的差」放大：</p>
+        <p>普通迭代每次只走到 $\bar{\mathbf x}^{(n)}$（这一遍 sweep 的输出）。Chebyshev 的想法是：若误差已由稳定的线性模态主导、谱估计也合适，就可以顺着历史趋势多推一点。具体地，用一个随迭代变化的系数 $\omega_n$，把当前结果沿「与上上次 $\mathbf x^{(n-2)}$ 的差」放大：</p>
         <div class="math-block">$$\mathbf x^{(n)} = \omega_n\big(\bar{\mathbf x}^{(n)} - \mathbf x^{(n-2)}\big) + \mathbf x^{(n-2)}$$</div>
         <p>$\omega_n&gt;1$ 时这是<b>外推</b>（overshoot 一点点，抵消掉慢慢爬的尾巴）；$\omega_n=1$ 时就退回普通迭代。系数靠一条递推生成：</p>
         <div class="math-block">$$\omega_1 = 1,\quad \omega_2 = \frac{2}{2-\rho^2},\quad \omega_n = \frac{4}{4-\rho^2\,\omega_{n-1}}$$</div>
@@ -68,7 +68,7 @@
             <tr><td>4</td><td>$\dfrac{4}{4-\rho^2\omega_3}$</td><td>$\dfrac{4}{4-0.9025\times1.698}=\dfrac{4}{4-1.533}$</td><td>$\approx 1.621$</td></tr>
           </tbody>
         </table>
-        <p>读这串数：$\omega$ 第二项一下冲到 $1.822$（外推最猛），随后回落、<b>稳定收敛到一个 $>1$ 的定值</b>（这里约 $1.6$ 上下）。$\omega>1$ 才外推、$\rho$ 越大冲得越高——这正好和上面 warn callout 的「推到 0.99 翻车」形成定量对照：$\rho=0.95$ 时 $\omega$ 收敛得很温和，再往 1 推就会把 $\omega$ 抬到外推过猛、开始振荡。</p>
+        <p>读这串数：$\omega$ 第二项一下冲到 $1.822$（外推最猛），随后回落、递推系数趋向一个 $>1$ 的定值（这里约 $1.6$ 上下）。这只说明<b>系数递推</b>本身的数值形状，不证明非线性位置迭代收敛，更不证明能量单调。$\omega>1$ 才外推、$\rho$ 越大通常越激进；谱估计不合适时，即使系数有限，位置和能量仍可能振荡。</p>
 
         <h2 id="apply">applyAccelerator：外推那一步</h2>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · applyAccelerator()</span><button class="cp">复制</button></div><pre><code>void applyAccelerator(FloatingType omega) {
@@ -94,11 +94,11 @@ for (iter = 0; iter &lt; params.numIterations; iter++)
         strand.prevprevPos = prevIterPos;
     }
 }</code></pre></div>
-        <p>读这个时序：每轮<b>先</b>把当前位置存进 <code>prevIterPos</code>，<b>再</b> <code>solve()</code> 做一遍 Gauss-Seidel sweep。若开了加速，就 (1) 用 <code>iter+1</code> 当 order、把上轮 <code>omega</code> 喂回去算新 <code>omega</code>，(2) <code>applyAccelerator</code> 外推，(3) <b>把 <code>prevprevPos</code> 更新成这一轮 sweep 前的 <code>prevIterPos</code></b>。于是下一轮里的 <code>prevprevPos</code> 恰好是再上一轮的位置——也就是 $\mathbf x^{(n-2)}$，递推链就此闭合。</p>
+        <p>读这个时序：每轮<b>先</b>把当前位置存进 <code>prevIterPos</code>，<b>再</b> <code>solve()</code> 做一遍 Gauss-Seidel sweep。若开了加速，就 (1) 用 <code>iter+1</code> 当 order、把上轮 <code>omega</code> 喂回去算新 <code>omega</code>，(2) <code>applyAccelerator</code> 外推，(3) <b>把 <code>prevprevPos</code> 更新成这一轮 sweep 前的 <code>prevIterPos</code></b>。于是下一轮里的 <code>prevprevPos</code> 恰好是再上一轮的位置——也就是 $\mathbf x^{(n-2)}$，递推链就此闭合。注意第 (2) 步之后没有重算 $G$ 或 $G_i$：即使前面的 sweep 恰好降能，外推也可能把这次下降抵消甚至变成升能。</p>
 
         <div class="callout warn">
           <div class="c-h">ρ 太大 → overshoot 振荡甚至发散</div>
-          <p>$\rho$ 是个<b>估计值</b>，调对了能把几十次迭代的活儿压到十几次；调过头就翻车。$\rho$ 越接近 1，$\omega_n$ 冲得越高、外推越猛——一旦超过实际谱半径，外推就从「抄近路」变成「冲过头再荡回来」，收敛曲线开始<b>上下振荡</b>，再大直接<b>发散</b>。这就是为什么它叫 semi-iterative「加速」而不是「保证」：它假设了误差谱的形状，假设错了要付代价。下面的部件让你亲手把 $\rho$ 推到 0.99 看它怎么抖。</p>
+          <p>$\rho$ 是个<b>估计值</b>，调得合适时可能把几十次迭代的活儿压到十几次；调过头就翻车。$\rho$ 越接近 1，$\omega_n$ 通常越激进——一旦与实际误差谱不匹配，外推就从「抄近路」变成「冲过头再荡回来」，$G$ 可能先上升，位置迭代也可能<b>上下振荡</b>乃至<b>发散</b>。这就是为什么它叫 semi-iterative「加速」而不是「保证」：若要保住单调链，必须对外推结果另做能量验收。下面的部件让你亲手把 $\rho$ 推到 0.99 看它怎么抖。</p>
         </div>
 
         <div class="lab">
@@ -114,11 +114,11 @@ for (iter = 0; iter &lt; params.numIterations; iter++)
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 同一个加速器，也能套在别的迭代器上</div>
-          <p>Chebyshev semi-iterative 不是 VBD 专属——它是给<b>任何线性收敛的不动点迭代</b>提速的通用外壳（Wang 2015 最早就是套在 Projective Dynamics 的 local/global 上）。它不改你每步在算什么（这里还是 <a href="4-3-solve.html">4.3</a> 那遍 Gauss-Seidel sweep），只在外面加一层「沿历史方向外推」。代价是引入一个要手调的 $\rho$ 和翻车风险。所以 TinyVBD 把它做成可选开关、默认关掉——基线 VBD 不靠它也已经无条件稳定。</p>
+          <p>Chebyshev semi-iterative 不是 VBD 专属——它是在满足谱假设时给线性收敛不动点迭代提速的通用外壳（Wang 2015 最早就是套在 Projective Dynamics 的 local/global 上）。它保留内部 <a href="4-3-solve.html">4.3</a> 那遍 Gauss-Seidel sweep，却会改变最终写回的迭代点；代价是引入一个要手调的 $\rho$、升能与翻车风险。TinyVBD 因此把它做成默认关闭的可选开关。关闭 Chebyshev 只移除了这层额外外推，并不能替无 PSD、det guard 或 line search 的 C++ raw QR full step 补出无条件稳定定理。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三件事：(1) Chebyshev 加速 = 每遍 sweep 后做一次外推 $\mathbf x^{(n)}=\omega_n(\bar{\mathbf x}^{(n)}-\mathbf x^{(n-2)})+\mathbf x^{(n-2)}$，<code>getAcceleratorOmega</code> 跑递推 $\omega_1{=}1,\omega_2{=}\frac{2}{2-\rho^2},\omega_n{=}\frac{4}{4-\rho^2\omega_{n-1}}$，<code>applyAccelerator</code> 在 $\omega&gt;1$ 时落地，<code>prevprevPos</code> 存 $\mathbf x^{(n-2)}$；(2) $\rho$ 是谱半径估计，越大越激进，太大则 overshoot 振荡/发散；(3) TinyVBD 默认 <code>useAcceleration=false</code>、<code>accelerationRho=0.5</code>，加速是关着的可选项。</p>
+        <p>三件事：(1) Chebyshev 加速 = 每遍 sweep 后做一次外推 $\mathbf x^{(n)}=\omega_n(\bar{\mathbf x}^{(n)}-\mathbf x^{(n-2)})+\mathbf x^{(n-2)}$，<code>getAcceleratorOmega</code> 跑递推 $\omega_1{=}1,\omega_2{=}\frac{2}{2-\rho^2},\omega_n{=}\frac{4}{4-\rho^2\omega_{n-1}}$，<code>applyAccelerator</code> 在 $\omega&gt;1$ 时落地，<code>prevprevPos</code> 存 $\mathbf x^{(n-2)}$；(2) $\rho$ 是谱半径估计，越大越激进，外推可能抬高 $G$、overshoot、振荡或发散，除非另做验收，否则不属于单调保证；(3) TinyVBD 默认 <code>useAcceleration=false</code>、<code>accelerationRho=0.5</code>，加速是关着的可选项。</p>
         <p>所有零件都讲完了。下一节把它们串成主循环：<code>simulate()</code> 怎么一帧帧、一 substep 一 substep 地跑，速度怎么反算，结果怎么写盘可视化（以及一个 Windows 路径的小坑）。</p>
       </article>
     </main>

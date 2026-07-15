@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 5 · Experiments · 5-3</div>
         <h1>skip spring = 弯曲，与迭代数的影响</h1>
-        <p class="lede">这一节调两个旋钮，都不改求解器、只改「问题」本身。一个是 <b>skip spring</b>——一根连 i 与 i+2 的弹簧，给本来软趴趴的链一点抗弯刚度；另一个是 <b>numIterations</b>——每帧解多少次，决定你离隐式欧拉真解有多近。</p>
+        <p class="lede">这一节调两个旋钮。一个是 <b>skip spring</b>——一根连 i 与 i+2 的弹簧，改变问题本身、给软趴趴的链一点抗弯刚度；另一个是 <b>numIterations</b>——不改目标 $G$，但改变有限预算下的求解误差。迭代正常收敛时，多做 sweep 通常更接近该 substep 的离散解，却不是逐次靠近的无条件保证。</p>
 
         <h2 id="no-bending">纯距离弹簧的链没有弯曲刚度</h2>
         <p>一条只有相邻距离弹簧（i 连 i+1）的链，有一个你可能没注意到的问题：它<b>完全不抵抗弯折</b>。每根距离弹簧只在乎两端的<i>长度</i>，对「链拐了个弯」没有任何意见。于是这种链在重力下会瘫成一团、卷曲、自己折叠——因为把它对折，所有距离弹簧的长度都没变，能量一点没涨，求解器没有任何力去把它撑开。一根真实的头发或绳子不会这样，它有<b>弯曲刚度（bending stiffness）</b>。</p>
@@ -74,30 +74,30 @@ if (addSkipSpring &amp;&amp; i &lt; lengthes.size() - 1)
           <p>$0.029$、$41.4$ 这些数都用本实验真实的 <code>dis=0.05</code>、<code>stiffnessSkipSpring=100</code> 直接代出来、可拿计算器复算；但「折 90°」是为讲解挑的一个干净角度，真实仿真里链各处折角连续变化。<b>要记的趋势是</b>：直链 $\to$ 力为 0；越折 $\to$ $l$ 越小 $\to$ 回复力越大、方向永远是把链扳直。具体某个力的小数会随折角和 $k$ 变，因果方向不变。</p>
         </div>
 
-        <h2 id="iterations">迭代数：离真解多近，与「数值阻尼」</h2>
-        <p>第二个旋钮是 <code>numIterations</code>（默认 100）。回忆主循环（<a href="../04-code/4-5-main-loop.html">4.5</a>）：每个 substep 里，VBD 把 <code>solve()</code> 这个 Gauss-Seidel sweep 重复 <code>numIterations</code> 次。每多迭代一次，当前位形就更接近增量势能 $G$ 的真正最小值，也就是<b>更接近隐式欧拉的真解</b>。</p>
+        <h2 id="iterations">迭代数：欠收敛误差与「看起来像阻尼」</h2>
+        <p>第二个旋钮是 <code>numIterations</code>（默认 100）。回忆主循环（<a href="../04-code/4-5-main-loop.html">4.5</a>）：每个 substep 里，TinyVBD 把 <code>solve()</code> 这个 Gauss-Seidel sweep 重复 <code>numIterations</code> 次。设计目标是更充分地逼近增量势能 $G$ 的极小点；在给定 demo 的正常收敛区间里，多做 sweep 往往会减小求解误差，但当前 raw full step 没有验收，不能保证「每多一次都更接近」。</p>
         <ul>
-          <li><b>迭代多</b>：更贴近真解，链更「绷」、更硬挺，人为的能量损耗少；</li>
-          <li><b>迭代少</b>：还没走到谷底就停了，表现为系统偏软、像是被加了一层<b>数值阻尼（numerical damping）</b>——运动被悄悄吃掉一点，看起来更黏、更慢。</li>
+          <li><b>迭代多</b>：若迭代正在收敛，通常更接近该 substep 的离散解，链更「绷」、欠收敛误差更小；</li>
+          <li><b>迭代少</b>：有限预算常让结果偏软、偏迟钝，外观看起来像多了一层阻尼，但这首先是<b>求解器欠收敛</b>，不要和 backward Euler 本身的时间离散数值阻尼混为一谈。</li>
         </ul>
-        <p>但无论迭代多少，有一条铁律：<b>VBD 不会爆炸</b>。因为每个局部牛顿步都让 $G$ 单调下降（Part 3），哪怕只迭代 1 次，能量也只降不升——结果是「软一点、阻尼大一点」，绝不会是「发散」。这正是 VBD 招牌的无条件稳定：你可以为了省算力把迭代压到很低，最坏情况只是损失精度和一点弹性，换不来一次爆炸。</p>
+        <p>这里没有「无论迭代多少都不爆」的 raw 代码铁律。无条件成立的是单 block 恒等式 $\Delta G=\Delta G_i$；只有精确 block minimizer，或先构造下降方向再经 backtracking/Armijo 验收的步，才保证已接受更新使 $G$ 不升。TinyVBD C++ 用 QR 解出候选后直接走 $\alpha=1$，没有 PSD、显式 det guard 或 line search，所以 1 次迭代也可能升能或失败。给定 demo 在低迭代下常只是变软而未爆，这是工程观察；精确 backward Euler 在线性测试方程上的 A-stability 也不能替这份有限迭代 raw 实现补出保证。</p>
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 同样是「迭代越多越硬」，含义却不同</div>
-          <p>PBD 里「迭代越多越硬」是个<b>病</b>：有效刚度随迭代数漂移，stiffness 成了 solver 设置的产物而非物理量（<a href="../02-family/2-1-pbd.html">2.1</a>）。VBD 里「迭代越多越接近真解」是个<b>特性</b>：它收敛到的是一个良定义的目标——隐式欧拉解。刚度是你设的物理量 $k$，迭代只决定你离那个固定的解有多近，不会改变解本身。</p>
+          <p>PBD 里「迭代越多越硬」是个<b>病</b>：有效刚度随迭代数漂移，stiffness 成了 solver 设置的产物而非物理量（<a href="../02-family/2-1-pbd.html">2.1</a>）。VBD 的区别是目标 $G$ 与物理刚度 $k$ 不随迭代预算改变；在求解器满足收敛条件时，增加迭代是在减小对这个固定离散目标的求解误差。有限次 raw sweep 的结果当然仍会随预算变化，而且不保证逐次靠近。</p>
         </div>
 
         <h2 id="substeps">迭代 vs substeps：另一种花预算的方式</h2>
-        <p>除了在一个时间步内多迭代，你还能把时间步切细：主循环开头 <code>params.dt /= params.substeps</code>，把一帧拆成多个 substep，每个 substep 用更小的 $h$ 跑一遍完整的 forwardStep + 迭代 + updateVelocity。更小的 $h$ 让惯性项 $m/h^2$ 的系数更大、$G$ 更「凸」更好解，也让每个子步的运动更短、更线性。所以你手里其实有两种花算力的方式：<b>同一个 $h$ 多迭代</b>，或<b>把 $h$ 切细成多 substep</b>。两者都让结果更接近真解，权衡在于哪种对你的场景更划算——这也是 <a href="5-4-experiment-menu.html">5.4</a> 实验菜单里值得亲手试的旋钮（比如源码注释里那个 <code>10substeps</code> 变体）。</p>
+        <p>除了在一个时间步内多迭代，你还能把时间步切细：主循环开头 <code>params.dt /= params.substeps</code>，把一帧拆成多个 substep，每个 substep 用更小的 $h$ 跑一遍完整的 forwardStep + 迭代 + updateVelocity。更小的 $h$ 让惯性项 $m/h^2$ 的正曲率偏置更大，也让每个子步的运动更短；它通常有助于条件与时间精度，但不保证总 Hessian 凸或 raw 步下降。两种预算的含义不同：<b>同一个 $h$ 多迭代</b>是在近似同一个离散目标，<b>把 $h$ 切细成多 substep</b>则改变了时间离散与目标序列，不能说二者只是通往同一个 $\arg\min G$ 的两条等价路线。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">把玩 skip spring 与迭代数：弯曲怎么来、迭代怎么影响软硬</span></div>
           <div class="lab-body" data-widget="strand-lab"></div>
-          <div class="lab-cap">拖动链、调迭代滑块：关掉弯曲（skip spring）时链如何卷起来自折叠，开启后又如何被那根跨节点弹簧（上面算过的回复力）撑直；把迭代数压低时链如何变软、像被加了数值阻尼——但无论怎么调，它<b>稳不发散</b>。这就是本节两个旋钮的现场版。</div>
+          <div class="lab-cap">拖动链、调迭代滑块：关掉弯曲（skip spring）时链如何卷起来自折叠，开启后又如何被那根跨节点弹簧（上面算过的回复力）撑直；把迭代数压低时链如何因欠收敛而变软、看起来更黏。在这个 widget 的给定参数范围内运行通常保持有限；这不是 raw C++ 在任意刚度、步长或构形下稳不发散的证明。</div>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) skip spring 连 i 与 i+2、rest length 取两段之和、用很软的 <code>stiffnessSkipSpring</code>（默认 100），是一种最便宜的弯曲能量——没有它，纯距离弹簧的链会自折叠卷曲；(2) numIterations 越多越接近隐式欧拉真解、越硬挺，越少越软、数值阻尼越大，但 VBD 哪怕 1 次迭代也<b>稳不发散</b>；(3) 切 substep（<code>dt/=substeps</code>）是另一种逼近真解的方式。下一节 <a href="5-4-experiment-menu.html">5.4</a> 给你一张完整的实验菜单，把所有旋钮和 <code>main.cpp</code> 的 config 对上号。</p>
+        <p>三句话：(1) skip spring 连 i 与 i+2、rest length 取两段之和、用很软的 <code>stiffnessSkipSpring</code>（默认 100），是一种最便宜的弯曲能量——没有它，纯距离弹簧的链会自折叠卷曲；(2) 在收敛正常的给定 demo 中，更多 iteration 往往减小欠收敛误差，低迭代则常显得偏软，但 TinyVBD 的 raw QR full step 没有「1 次也必不发散」的保证；(3) 切 substep 会改变时间离散并增强惯性偏置，不等同于在同一个 $G$ 上多迭代。下一节 <a href="5-4-experiment-menu.html">5.4</a> 给你一张完整的实验菜单，把所有旋钮和 <code>main.cpp</code> 的 config 对上号。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

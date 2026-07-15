@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Appendix · Reference · a-8</div>
         <h1>FEM / 连续介质 参考文献</h1>
-        <p class="lede">「FEM 篇」（<a href="../09-fem/9-1-why-fem.html">Part 9</a>）把弹性项从弹簧的 $\tfrac12k(l-l_0)^2$ 推广到连续介质的 $\int_\Omega \psi(F)\,\mathrm dV$：形变梯度 <span class="term">deformation gradient</span> $F$、应变能密度 <span class="term">strain energy density</span> $\psi(F)$、第一 Piola-Kirchhoff 应力 $P=\partial\psi/\partial F$，再装配回每顶点的 $f_i/H_i$。这一页把这条路的源头列清楚：一个标准的、可读性最好的入门 course，本书 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1</a> 实际用的那篇 stable Neo-Hookean，一本严谨的连续介质教材，以及 co-rotational 与现代超弹性的若干路标。每条都附一句中文，告诉你它值不值得点进去、该带着什么问题去读。</p>
+        <p class="lede">「FEM 篇」（<a href="../09-fem/9-1-why-fem.html">Part 9</a>）把弹性项从弹簧推广到连续介质；Part 14 又补上 <a href="../14-curvature-mass/14-4-consistent-mass.html">consistent mass 的动能推导</a>、<a href="../14-curvature-mass/14-5-mass-lumping.html">mass lumping</a> 与 <a href="../14-curvature-mass/14-6-mass-metric-modes.html">modal analysis / 质量度量</a>。这一页把两条路的源头并在一起：一边是 $F\to\psi\to P\to f/H$ 的非线性弹性，另一边是 $T\to M$ 与 $K\phi=\omega^2M\phi$ 的结构动力学。每条都附一句中文，告诉你该带着什么问题去读。</p>
 
         <h2 id="papers">论文与教程 <span class="term">Papers &amp; Courses</span></h2>
         <ul>
@@ -36,7 +36,7 @@
           </li>
           <li>
             <b>Stable Neo-Hookean Flesh Simulation.</b> Breannan Smith, Fernando de Goes, Theodore Kim. ACM <span class="term">TOG</span> 37(2)（2018）。
-            <b>本书 10-1 用的就是它那一族能量。</b>经典 Neo-Hookean 在压缩 / 接近反转（$J\to0$）时数值会崩；这篇重写出一个<b>抗反转、处处良定义</b>的 stable 版本 $\psi=\tfrac\mu2(I_C-3)+\tfrac\lambda2(J-\alpha)^2-\mu\ln$-类项，并给出干净的力与 Hessian。想弄清 <a href="../09-fem/9-3-strain-energy.html">9-3</a> 里为什么选 stable NH、以及它怎么躲开 StVK 的「压穿不回弹」灾难，读它。
+            <b>本书 10-1 用的就是它那一族能量。</b>经典 Neo-Hookean 在压缩 / 接近反转（$J\to0$）时数值会崩；这篇重写出更适合处理极端形变的 stable 版本，并给出干净的力与 Hessian。这里的「抗反转」描述材料能量在极端形变下的行为，不等于任意离散 full step 自动 inversion-free；后者仍需可行域与步长控制。想弄清 <a href="../09-fem/9-3-strain-energy.html">9-3</a> 里为什么选 stable NH、以及它怎么躲开 StVK 的「压穿不回弹」灾难，读它。
             DOI：<a href="https://doi.org/10.1145/3180491" target="_blank" rel="noopener">10.1145/3180491</a> ·
             PDF（作者页）：<a href="https://www.tkim.graphics/" target="_blank" rel="noopener">tkim.graphics</a>。
           </li>
@@ -46,13 +46,18 @@
             出版页：<a href="https://www.cambridge.org/core/books/nonlinear-continuum-mechanics-for-finite-element-analysis/" target="_blank" rel="noopener">cambridge.org · Bonet &amp; Wood</a>。
           </li>
           <li>
+            <b>The Finite Element Method: Linear Static and Dynamic Finite Element Analysis.</b> Thomas J. R. Hughes. Dover（textbook）。
+            <b>查 consistent mass、mass lumping 与 modal analysis，从这本进。</b>它把半离散动力系统 $M\ddot u+Ku=f$、质量矩阵的 Galerkin 来历、结构振动的广义特征问题与时间积分放在同一套有限元语言里。对照 <a href="../14-curvature-mass/14-4-consistent-mass.html">14.4</a>–<a href="../14-curvature-mass/14-6-mass-metric-modes.html">14.6</a> 阅读，重点看“同一组 shape functions 如何同时进入刚度与质量”“为什么模态正交是 $M$-orthogonal”，而不是只背三角形那张 $[2,1,1]$ 表。
+            出版页：<a href="https://store.doverpublications.com/products/9780486411811" target="_blank" rel="noopener">Dover · ISBN 9780486411811</a>。
+          </li>
+          <li>
             <b>Co-rotational FEM（co-rotated linear elasticity）.</b> Müller et al.（warped stiffness / stiffness warping）一系 + Stomakhin 等的 co-rotational 处理。
             <a href="../09-fem/9-3-strain-energy.html">9-3</a> 的「模型谱」里，co-rotational 介于线弹性与全非线性之间：<b>先用极分解 $F=RS$ 抽掉旋转 $R$、只线性惩罚拉伸 $S-I$</b>，于是大转动稳、压缩比 StVK 好，又比全 Neo-Hookean 便宜。想理解「为什么要先除掉旋转」，从这一族读起。注意这是一个方法家族而非单篇定论，具体公式以你选用的那篇为准。
             参考实现 / 综述见下方 Kim &amp; Eberle course。
           </li>
           <li>
             <b>Dynamic Deformables: Implementation and Production Practicalities（Optional）.</b> Theodore Kim &amp; David Eberle. SIGGRAPH course。
-            想更进一步——<b>现代超弹性的统一视角 + 特征分解 / PSD 投影</b>（即 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 里那步「把单元 Hessian 的负特征值钳到 $\ge0$」的系统化做法）——这份 production 取向的 course 把各家能量、它们的 eigensystem、以及如何保证 Hessian SPD 讲得很全。属于「读完地基想吃透工程细节」的进阶入口。
+            想更进一步——<b>现代超弹性的统一视角 + 特征分解 / PSD projection</b>（即 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 里把单元 Hessian 的负特征值截到 $0$、构造 modified Hessian 的系统化做法）——这份 production 取向的 course 把各家能量、eigensystem 与鲁棒二阶模型讲得很全。截零得到的是可能奇异的 PSD；普通 inverse / Cholesky 与严格下降还需要正质量惯性、约束消元或 positive shift 使总系统 SPD，full step 再由 line search 控制。这种 elementwise 策略不是所有 FEM 的必经工序，也不单独保证 inversion-free 或 static stability。
             课程页：<a href="https://www.tkim.graphics/DYNAMIC_DEFORMABLES/" target="_blank" rel="noopener">tkim.graphics/DYNAMIC_DEFORMABLES</a>。
           </li>
         </ul>
@@ -67,14 +72,17 @@
             <b>再 Smith 2018</b> 对照 <a href="../09-fem/9-3-strain-energy.html">9-3</a> 的模型谱（StVK 的反转灾难 → co-rotational → stable NH）与 <a href="../09-fem/9-4-piola-assembly.html">9-4</a> 的 $P=\partial\psi/\partial F$、单元力 $=V_0\,P\,D_m^{-\top}$ 装配。
           </li>
           <li>
-            <b>想严谨推导</b>翻 Bonet &amp; Wood；<b>想吃透 PSD 投影与工程细节</b>翻 Kim &amp; Eberle，正对应 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影与 <a href="../09-fem/9-5-worked-tet.html">9-5</a> 的手算。
+            <b>想严谨推导</b>翻 Bonet &amp; Wood；<b>想吃透 PSD modified-Hessian 与工程细节</b>翻 Kim &amp; Eberle，正对应 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 eigenvalue clamp 与 <a href="../09-fem/9-5-worked-tet.html">9-5</a> 的手算。
+          </li>
+          <li>
+            <b>想补质量与模态</b>翻 Hughes：先对照 <a href="../14-curvature-mass/14-4-consistent-mass.html">14.4</a> 的 $M_{ij}=\int\rho N_iN_jdV$，再读 <a href="../14-curvature-mass/14-5-mass-lumping.html">14.5</a> 的 row-sum 边界，最后用 <a href="../14-curvature-mass/14-6-mass-metric-modes.html">14.6</a> 把 $K\phi=\omega^2M\phi$、质量正交和 Newton 区分开。
           </li>
         </ul>
 
         <div class="callout note">
           <div class="c-h">关于事实与数字的诚实声明</div>
           <p>本页把<b>连续介质力学的标准公式</b>（$F=D_sD_m^{-1}$、$E=\tfrac12(F^TF-I)$、$P=\partial\psi/\partial F$、Lamé 与 $E,\nu$ 互换等）当作成熟领域的定论引用，这部分可信。但<b>各论文 / 课程的具体版本号、确切发表年份与卷期</b>，以及任何性能 / 收敛数字，本教程<b>没有</b>逐一核对原始 PDF——上面凡是没把握的年份与卷期都按「SIGGRAPH course」「textbook」这样的笼统说法给出，请以各课程页 / DOI / 出版社页面为准。<a href="../09-fem/9-5-worked-tet.html">9-5</a> 的手算是「为讲解构造的自洽示例」，绝对能量量级随 $\mu,\lambda$ 与单位缩放，只对符号、方向、$J$ / 不变量的趋势较真。</p>
-          <p><b>配套入口：</b>术语含义见 <a href="a-1-glossary.html">术语表</a>，公式与符号见 <a href="a-2-cheatsheet.html">公式速查</a>，<a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1</a> 是这套地基在 Newton 里的落地，<a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 是单元 Hessian 的 SPD 投影。原书主线参考见 <a href="a-3-references.html">a-3</a>，Newton / VBD / AVBD 一侧见 <a href="a-6-newton-references.html">a-6</a>，IPC 一侧见 <a href="a-7-ipc-references.html">a-7</a>，MPM 一侧见 <a href="a-9-mpm-references.html">a-9</a>。</p>
+          <p><b>配套入口：</b>术语含义见 <a href="a-1-glossary.html">术语表</a>，公式与符号见 <a href="a-2-cheatsheet.html">公式速查</a>，<a href="../10-elasticity-collision/10-1-elastic-elements.html">10-1</a> 是这套地基在 Newton 里的落地，<a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 是单元 Hessian 的 PSD clamp / modified-Hessian 策略。原书主线参考见 <a href="a-3-references.html">a-3</a>，Newton / VBD / AVBD 一侧见 <a href="a-6-newton-references.html">a-6</a>，IPC 一侧见 <a href="a-7-ipc-references.html">a-7</a>，MPM 一侧见 <a href="a-9-mpm-references.html">a-9</a>。</p>
         </div>
       </article>
     </main>

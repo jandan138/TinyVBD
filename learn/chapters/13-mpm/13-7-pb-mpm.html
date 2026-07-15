@@ -48,14 +48,14 @@
         </div>
 
         <h2 id="why-position-based">为什么 position-based 在这里管用</h2>
-        <p>把 PB-MPM 和经典隐式 MPM 并排看，差别和当年 PBD 之于隐式欧拉如出一辙。隐式 MPM 求的是网格 DOF 上那个真正的 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>）——精确，但每步要解大方程、对病态敏感。PB-MPM 像 PBD 一样，<b>用一串便宜的局部投影去近似那个解</b>：每次投影把某个约束朝满足方向推一点，扫几遍就收敛到一个「看起来对、不炸」的状态。</p>
+        <p>把 PB-MPM 和经典隐式 MPM 并排看，差别和当年 PBD 之于隐式欧拉如出一辙。隐式 MPM 直接最小化网格 DOF 上明确写出的 $G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>），但每步要解大方程、对病态敏感。PB-MPM 选择另一种数学对象：把材料行为组织成 position-based constraints，再用一串便宜的局部投影修正状态。它追求相近的动力学效果，但不能仅凭「也在更新位置」就称为那份固定 $G$ 的迭代优化器。</p>
         <p>这换来的正是 PBD 的三大好处，原样落到 material point 上：</p>
         <ul>
           <li><b>大步长不炸</b>：position-based 投影是几何操作，不放大「力 → 速度」的不稳定，所以能吃比显式 MPM 大得多的步长——这是显式 MPM 的老痛点（<a href="13-5-implicit-mpm.html">13.5</a>）被直接绕过。</li>
           <li><b>便宜、好并行</b>：一串局部投影天然适合 GPU，迭代次数可调、可早停，符合游戏的帧预算。</li>
           <li><b>好实现、好调</b>：没有全局稀疏矩阵、没有线搜索 + SPD 投影那套 Newton 机器（对比 <a href="../03-vbd/3-1-block-descent.html">Part 3</a> 的 VBD / <a href="../12-ipc/12-9-solver-cost.html">12.9</a> 的全局 Newton），上手与维护成本低。</li>
         </ul>
-        <p>当然，代价也和 PBD 同源：position-based 投影是对真解的<b>近似</b>，刚度/收敛对迭代与步长的依赖需要小心（这正是 XPBD 在 <a href="../02-family/2-2-xpbd.html">2.2</a> 处理的那类问题）。PB-MPM 站在「实时、稳、通用」这一侧，把「精确收敛到物理 $\min G$」让给隐式 MPM——这是一组取舍，不是高下。</p>
+        <p>当然，代价也和 PBD 同源：position-based 投影是一条<b>近似路线</b>，刚度/收敛对迭代与步长的依赖需要小心（这正是 XPBD 在 <a href="../02-family/2-2-xpbd.html">2.2</a> 处理的那类问题）。PB-MPM 站在「实时、稳、通用」这一侧，并不承诺迭代到隐式 MPM 那份 $G$ 的极小点；要直接求那份变分解，应回到 implicit MPM——这是一组取舍，不是高下。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">回看 PBD：刚度随迭代漂移——position-based 的体质与代价</span></div>
@@ -66,12 +66,12 @@
         <p>用这个 widget 体会 PB-MPM 的「人设」：它要的是左图那种<b>实时、稳、随便调迭代都不炸</b>，而不是右图那条曲线背后「收敛到唯一物理解」的严格性。游戏要的就是前者；要后者，回隐式 MPM。</p>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从全书看</span> 又是同一个 min G(x)，只是换了求解侧</div>
-          <p>别被「position-based」三个字带偏：PB-MPM 没有逃出全书主线。它要逼近的，仍是 MPM 那个网格 DOF 上的 $\min G(\mathbf x)$（<a href="13-5-implicit-mpm.html">13.5</a>）——只是它选择像 PBD 一样在<b>位置 / 约束侧</b>做便宜的局部投影来近似它，而不是像隐式 MPM 那样在<b>对偶 / Newton 侧</b>精确解它。这和 <a href="../02-family/2-2-xpbd.html">2.2</a> 里「XPBD、PBD、VBD 解的是同一个 $\min G$、分歧只在怎么解」是一模一样的句式。MPM 的现代化，又一次落回这条主线。</p>
+          <div class="c-h"><span class="tag">从全书看</span> 共享动力学目标，不等于同一个 min G(x)</div>
+          <p>PB-MPM 没有逃出全书的能量-约束视角：它仍要让惯性预测后的材料状态满足合理的本构响应。但它采用的是 PBD 式 position-based 近似，直接对象是一组约束与位置修正；implicit MPM 才是在网格 DOF 上直接最小化明确的 incremental potential（<a href="13-5-implicit-mpm.html">13.5</a>）。两者可以比较同一 time step 想实现的动力学效果，<b>不能据此断言 PB-MPM 也在迭代同一个固定 $G$</b>。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) <b>PB-MPM</b>（EA SEED，SIGGRAPH 2024，Chris Lewin）把 MPM 重写成 <b>position-based 约束求解</b>——保留粒子载状态 + 网格借力 + APIC 式传输，但把「网格上求新速度」从 Newton 换成 PBD/XPBD 式的「掰状态满足约束」投影；(2) 这<b>明确接回 Part 2 的 PBD/XPBD</b>：同一个「预测—投影—反推速度」哲学搬到 material point 上，换来大步长、不炸、便宜可并行、好实现，正合游戏物理，代价是和 PBD 同源的近似性（刚度/收敛对迭代与步长敏感）；(3) 它仍没逃出全书主线——要逼近的还是 MPM 网格 DOF 上的同一个 $\min G(\mathbf x)$，只是选在<b>位置/约束侧</b>便宜近似，而非 Newton 侧精确求解。</p>
+        <p>三句话：(1) <b>PB-MPM</b>（EA SEED，SIGGRAPH 2024，Chris Lewin）把 MPM 重写成 <b>position-based 约束求解</b>——保留粒子载状态 + 网格借力 + APIC 式传输，但把「网格上求新速度」从 Newton 换成 PBD/XPBD 式的「掰状态满足约束」投影；(2) 这<b>明确接回 Part 2 的 PBD/XPBD</b>：同一个「预测—投影—反推速度」哲学搬到 material point 上，换来大步长、不炸、便宜可并行、好实现，正合游戏物理，代价是和 PBD 同源的近似性（刚度/收敛对迭代与步长敏感）；(3) PB-MPM 与 implicit MPM 共享增量动力学 / 本构目标，但数学路线不同：前者做 position-based 近似，后者直接最小化网格 DOF 上明确写出的 incremental potential，不能统称为同一个固定优化器。</p>
         <p>下一节 <a href="13-8-ck-mpm.html">13.8</a>，我们看第二条现代路线 <span class="term">CK-MPM</span>：不动求解器、改动「核」本身——用一个 $C^2$ 连续的紧支撑核，在稳定性、精度、效率之间找新平衡，每粒子触及的网格节点数远少于经典二次 B-spline。</p>
       </article>
     </main>

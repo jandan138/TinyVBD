@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hessian 是局部能量地图：曲率、特征对与百万自由度 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-1">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-1</div>
+        <h1>Hessian 是局部能量地图：曲率、特征对与百万自由度</h1>
+        <p class="lede"><a href="../13-mpm/13-9-closing.html">MPM 篇</a>把粒子、网格与连续材料接回了同一个能量视角。现在我们把镜头拉近到能量面上的一个点：gradient 告诉你坡往哪边斜，Hessian 告诉你这片坡面沿每个方向怎样弯。它不是一堆二阶偏导的仓库，而是一张<b>局部能量地图</b>。本节会从一条直线上的二阶导出发，走到 Rayleigh quotient、特征空间，再解释一张有百万自由度的网格上所谓「一个特征向量」究竟长什么样、又该怎样算。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">Part 14 路线图</span> 两条支线，最后在物理模态处会合</div>
+          <p><b>曲率线：</b>$H$ 的几何 $\rightarrow$ 弹簧投影谱 $\rightarrow$ 平衡、屈曲与 Newton；<b>质量线：</b>连续动能 $\rightarrow$ consistent mass $\rightarrow$ mass lumping。到 14-6，再把两条线放进同一个比值 $\tfrac{\text{刚度}}{\text{质量}}$，得到 $K\phi=\omega^2M\phi$。因此 14-3 后转向质量不是换题，而是在补物理频率的分母。</p>
+        </div>
+
+        <h2 id="directional-curvature">沿一个方向切开能量面：$q^\top Hq$</h2>
+        <p>设所有位置摞成向量 $x\in\mathbb R^n$，能量为 $E(x)$。在当前构型 $x$ 附近走一个小位移 $\delta x$，二阶 Taylor 展开是</p>
+        <div class="math-block">$$E(x+\delta x)=E(x)+g^\top\delta x+\frac12\delta x^\top H\,\delta x+o(\!\lVert\delta x\rVert^2),\qquad g=\nabla E(x),\quad H=\nabla^2E(x).$$</div>
+        <p>第一项是当前位置的高度，$g^\top\delta x$ 是切平面预测的升降，二次项才描述切平面没有表达出来的「弯」。要看某个方向 $q$，不必盯着整张矩阵；沿直线路径</p>
+        <div class="math-block">$$\phi(s)=E(x+s q)$$</div>
+        <p>把高维地形切成一条一维曲线。链式法则立刻给出</p>
+        <div class="math-block">$$\phi'(0)=g^\top q,\qquad \phi''(0)=q^\top Hq.$$</div>
+        <p>因此 $q^\top Hq$ 就是能量沿 $q$ 的<span class="term">directional curvature</span>（方向曲率）：正值表示曲线局部向上弯，负值表示向下弯，零表示二阶近似在这个方向上是平的。这个解释也给出一个实用的 Hessian 检查法：用中心差分 $[E(x+\varepsilon q)-2E(x)+E(x-\varepsilon q)]/\varepsilon^2$，应当在合适的 $\varepsilon$ 下逼近 $q^\top Hq$。</p>
+        <p>把它放回仿真更容易形成直觉。$q$ 可以只移动一个顶点，也可以让整块布协同弯曲；Hessian 没有改变，改变的是我们拿哪一种位移场去「探路」。若某个全局弯曲方向只增加很少能量，它的方向曲率就小；若一个局部拉伸立刻把材料扯紧，读数就大。矩阵条目是坐标语言，二次型才是可观察的能量响应。</p>
+        <div class="callout note">
+          <div class="c-h">比较方向时，先把 $q$ 归一化</div>
+          <p>若把 $q$ 换成 $cq$，曲率读数会变成 $c^2q^\top Hq$。这只是因为同一个参数步长 $s$ 现在走了 $|c|$ 倍距离，并不表示地形突然变硬。因此谈「每单位位移的曲率」时取 $\lVert q\rVert=1$；任意非零向量则用下一节的商把尺度除掉。</p>
+        </div>
+
+        <h2 id="rayleigh-quotient">Rayleigh quotient：找最软与最危险的方向</h2>
+        <p>把向量长度除掉，得到 <span class="term">Rayleigh quotient</span>：</p>
+        <div class="math-block">$$R_H(q)=\frac{q^\top Hq}{q^\top q},\qquad q\ne0.$$</div>
+        <p>对二次连续可微的标量能量，$H$ 是对称矩阵，可以取一组正交特征向量 $v_i$，满足 $Hv_i=\lambda_i v_i$。把单位方向写成 $q=\sum_i a_i v_i$，且 $\sum_i a_i^2=1$，便有</p>
+        <div class="math-block">$$q^\top Hq=\sum_i a_i^2\lambda_i,\qquad \lambda_{\min}=\min_{q\ne0}R_H(q),\qquad \lambda_{\max}=\max_{q\ne0}R_H(q).$$</div>
+        <p>这幅图像很直观：任意方向的曲率都是各主曲率的加权平均。若 $H\succ0$，最小<b>正</b>特征值对应最软方向，最大特征值对应最硬方向，此时二范数条件数是 $\kappa_2(H)=\lambda_{\max}/\lambda_{\min}$，刻画这只「碗」在不同方向上窄宽多悬殊。若 $H$ 已不定，$\lambda_{\min}&lt;0$ 应读作最负曲率方向，而不是通常意义的软模态；可逆不定矩阵的条件数要按特征值绝对值计算。</p>
+        <p>例如主轴坐标里的 $H=\operatorname{diag}(1,9)$，单位方向 $q=(\cos\theta,\sin\theta)$ 给出 $R_H(q)=\cos^2\theta+9\sin^2\theta$。沿第一轴曲率是 1，沿第二轴是 9，中间方向只会落在两者之间。所谓「求特征向量」，就是不用把所有角度试一遍，也能直接找到这两条主轴。</p>
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 1：一条斜方向到底有多硬？</div>
+          <p>仍取 $H=\operatorname{diag}(1,9)$，但这次不用抽象角度，直接取单位向量 $q=(3/5,4/5)$。先乘矩阵再点回来：</p>
+          <div class="math-block">$$Hq=\begin{pmatrix}3/5\\36/5\end{pmatrix},\qquad q^\top Hq=\frac9{25}+9\frac{16}{25}=\frac{153}{25}=6.12.$$</div>
+          <p>答案 6.12 位于主曲率 1 与 9 之间。若改用未归一化的 $q'=(3,4)=5q$，二次型会放大为 $q'^\top Hq'=153$，但 Rayleigh quotient 再除以 $q'^\top q'=25$，仍回到 6.12。由此可以亲眼看见：二次型会随向量长度变，Rayleigh quotient 比较的才是同一方向本身。</p>
+        </div>
+        <div class="callout warn">
+          <div class="c-h">先满足一阶驻点条件，再用二阶曲率判极值</div>
+          <p>若 $g\ne0$，足够小的位移首先由 $g^\top\delta x$ 支配；此时看到负曲率，并不能把当前点叫作鞍点。无约束问题应先有 $\nabla E=0$：$H\succ0$ 给出严格局部极小，$H\prec0$ 给出严格局部极大，$H$ 同时有正负特征值则是鞍点。二阶判别是在<b>一阶已经安静下来以后</b>听曲率说话。</p>
+        </div>
+        <table>
+          <thead><tr><th>驻点处的谱</th><th>局部几何</th><th>二阶结论</th></tr></thead>
+          <tbody>
+            <tr><td>全部 $\lambda_i&gt;0$</td><td>每个方向都向上弯</td><td>严格局部极小</td></tr>
+            <tr><td>全部 $\lambda_i&lt;0$</td><td>每个方向都向下弯</td><td>严格局部极大</td></tr>
+            <tr><td>既有正又有负</td><td>一边上坡、一边下坡</td><td>鞍点，不稳定方向由负特征对指出</td></tr>
+            <tr><td>存在零值且其余同号</td><td>二阶模型有平方向</td><td>信息不足，必须看更高阶或对称性</td></tr>
+          </tbody>
+        </table>
+        <p>「零特征值」尤其不能翻译成「沿这个方向能量恒定」。一维函数 $E(x)=x^4$ 在 $x=0$ 有 $E'(0)=E''(0)=0$，但原点仍是严格极小；$-x^4$ 则是严格极大。零只说二次放大镜没看见变化，变化可能从四阶才开始，也可能来自刚体对称或真正的平坦族。</p>
+        <p>数值计算里也很少遇到机器意义上恰好为零的值。网格尺度、单位与舍入会把理论零模态算成 $10^{-10}$ 或 $-10^{-9}$，所以「零」应相对最大曲率和问题尺度设 tolerance。先判断它是否随网格、精度与约束处理稳定，再决定这是对称性、退化，还是一个真实的微弱负方向。</p>
+        <p>有约束时，「任何方向」要改成「任何允许方向」。例如等式约束 $c(x)=0$ 的一阶可行方向满足 $J_cq=0$，也就是约束流形的切空间。线性约束下可直接检查 reduced Hessian；一般非线性约束在 constrained stationary point 应检查 Lagrangian Hessian $\nabla^2_{xx}(E+\lambda^\top c)$ 在该切空间上的二次型。一个在被禁止方向上的负值，不构成可实现的失稳。</p>
+
+        <h2 id="repeated-eigenvalues">特征向量不是带身份证的箭头</h2>
+        <p>特征对常被画成一根箭头配一个数，但箭头没有唯一的符号或尺度。若 $Hv=\lambda v$，那么任意非零 $cv$ 仍是特征向量；即便规定 $\lVert v\rVert=1$，$v$ 与 $-v$ 也表示同一条轴。因此两次计算得到相反颜色的位移图，并不代表模态改变了。</p>
+        <p>重根时自由度更大。若 $H=\operatorname{diag}(2,2,5)$，前两个坐标张成的平面里，每个非零向量都有特征值 2；数值算法可以返回 $(e_1,e_2)$，也可以返回旋转后的任意正交基。此时唯一的是整个 <span class="term">eigenspace</span>（特征子空间），不是其中某一根基向量。近重根也会让基向量对微小扰动十分敏感，所以比较两个结果时，应比较子空间或投影算子，而不是执着于逐分量对齐。</p>
+        <p>这种现象常由对称性制造：圆盘上方向不同但等价的弯曲，可能共享同一特征值。离散网格稍微不对称，就会把重根劈成两个很近的数，返回的两根箭头也随网格朝向旋转；真正稳健的结论仍是「这个二维子空间整体很软」。</p>
+        <div class="callout note" id="exercise">
+          <div class="c-h">一分钟自测：旋转基以后，特征空间变了吗？</div>
+          <p>对 $H=\operatorname{diag}(2,2,5)$，验证 $w_1=(e_1+e_2)/\sqrt2$、$w_2=(-e_1+e_2)/\sqrt2$ 都满足 $Hw_i=2w_i$。再算 $w_1w_1^\top+w_2w_2^\top$。你应得到 $\operatorname{diag}(1,1,0)$，恰好与 $e_1e_1^\top+e_2e_2^\top$ 相同：基向量转了，投影到的二维平面没有变。</p>
+        </div>
+        <div class="bridge g103">
+          <div class="c-h"><span class="tag">从数值线性代数看</span> 特征值是曲率，特征向量是主轴坐标</div>
+          <p>对称分解 $H=V\Lambda V^\top$ 只是把局部二次模型旋到主轴上：令 $z=V^\top\delta x$，就有 $\tfrac12\delta x^\top H\delta x=\tfrac12\sum_i\lambda_i z_i^2$。这不是给系统添加新物理，而是找一个让各方向二次项彼此解耦的观察坐标。</p>
+        </div>
+
+        <h2 id="million-dof">百万 DOF：不看矩阵墙，看位移场</h2>
+        <p>一张有 $N$ 个三维节点的网格，$x\in\mathbb R^{3N}$，全局 Hessian 是 $3N\times3N$。所谓一个全局特征向量 $q$，并不是要逐个阅读的百万个数字；把它 reshape 成 $N\times3$，每一行就是一个节点的小位移。把箭头画回网格，或用位移幅值着色，它就成为一片弯曲、扭转、局部褶皱或接触失稳的<b>位移场</b>。</p>
+        <p>这里必须分清全局 $H$ 与 per-vertex block。VBD 更新顶点 $i$ 时使用的 $3\times3$ 块 $H_{ii}$，只描述「其他顶点暂时固定」时该顶点的局部曲率；全局矩阵还含 $H_{ij}$，记录相邻顶点怎样耦合。每个对角块都正定，并不推出全局正定：矩阵 $\begin{psmallmatrix}1&amp;2\\2&amp;1\end{psmallmatrix}$ 的两个标量对角块都为正，特征值却是 $3$ 与 $-1$。局部块适合做更新，全局谱才回答整张网格能否协同沿某个方向变软。</p>
+        <p>幸好局部 force element 只连接少数节点，所以全局 $H$ 是稀疏的；更进一步，许多谱算法只需要 Hessian-vector product（HVP）$q\mapsto Hq$。它可由稀疏矩阵乘法、逐单元累加或自动微分得到，不必存下密集矩阵。工程上也几乎从不求全部百万个特征对，而是用 <span class="term">Lanczos</span> 或 <span class="term">LOBPCG</span> 反复调用 HVP，只取最小的几个特征值与对应低模态，用来找软方向、近零对称性和负曲率。</p>
+        <p>数量级说明了为什么：$n=10^6$ 时，密集 $H$ 有 $10^{12}$ 个条目，仅 double 存储就约 8 TB，完整特征分解更不可行；有限元或弹簧装配却通常只有与邻接数同量级的非零元。一次 HVP 的成本是 $O(\operatorname{nnz}(H))$；在局部支撑、每个节点邻接数有界的常见网格上，这才近似为线性成本。求十几个低特征对也只需保存少量搜索向量。这正是「百万」并不等于「把百万阶矩阵完整对角化」。</p>
+        <div class="callout note">
+          <div class="c-h">拿到一张模态图，按这个顺序读</div>
+          <p>先看它是不是整体平移/旋转；再看变形集中在哪些区域；不要比较整体正负号，因为 $q$ 与 $-q$ 是同一模态；若多个特征值几乎相同，就比较整个子空间而非逐根箭头；最后确认这是普通 Hessian 谱还是带质量的广义谱，只有后者才能直接谈物理频率。</p>
+        </div>
+        <div class="callout note">
+          <div class="c-h">普通谱方向还不是物理振动模态</div>
+          <p>本节的标准问题 $Hq=\lambda q$ 用的是欧氏长度 $q^\top q$。它很好地回答「坐标空间里能量怎样弯」，却把轻节点与重节点的一单位位移看成同样长，因此不能把 $\lambda$ 直接读成频率平方，也不要把普通 $H$ eigenvector 直接叫物理模态。质量如何改变「单位方向」，以及为什么真正的小振动满足广义特征问题，将在 <a href="14-6-mass-metric-modes.html">14-6</a> 完成。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>Hessian 的几何含义可以压成一条链：Taylor 二次项给出局部模型；沿 $x+s q$ 切一刀，二阶导就是 $q^\top Hq$；除以 $q^\top q$ 得 Rayleigh quotient，其极值由最小、最大特征对取得。极值分类必须先满足驻点条件，有约束则只看允许切空间；零特征值只表示二阶信息不足。特征向量的符号与尺度任意，重根时只有 eigenspace 唯一。</p>
+        <p>到了百万 DOF，全局特征向量应 reshape 成节点位移场；全局 Hessian 不能被一个 per-vertex block 代替。稀疏性、HVP 与 Lanczos/LOBPCG 让我们只求少量低谱成为可能。下一页 <a href="14-2-spring-projectors.html">14-2：投影矩阵与弹簧 Hessian</a> 会把这套方向曲率落到一根弹簧上；等走到 14-6，再把质量放进度量，才得到真正的物理频率与模态。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

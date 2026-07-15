@@ -69,9 +69,9 @@
 
         <p>右图是这一节的核心证据：横轴是迭代次数，纵轴是链在重物下的稳态伸长率（间接读出「有效刚度」）。PBD 那条线随迭代一路爬升——迭代越多越硬，正是上一节那个病；XPBD 那条线几乎平贴——无论迭代几次，伸长率（也就是刚度）稳定在同一个由 $\alpha$ 决定的物理值上。你给 PBD 喂的迭代次数本质上是在悄悄改材料；给 XPBD 喂迭代次数，只是让它把同一个材料算得更准。</p>
 
-        <h2 id="ties-back">它其实在解隐式欧拉的 KKT 系统</h2>
-        <p>退一步看全局：XPBD 这套 $\Delta\lambda$/$\Delta\mathbf x$ 的交替，并不是某个孤立的技巧，而是隐式欧拉那个 $\min G(\mathbf x)$ 写成<b>带约束优化</b>后、其 <span class="term">KKT</span> 系统的一次 <span class="term">Gauss-Seidel</span> 求解。把弹性能 $E$ 视作约束 $C=0$ 加上柔度 $\alpha$ 的惩罚，引入对偶变量 $\lambda$，最优性条件（KKT）就长成「$\Delta\lambda$ 那一行 + $\Delta\mathbf x$ 那一行」的样子；$\tilde\alpha$ 里的 $1/h^2$ 正是惯性项 $\frac{1}{2h^2}\lVert\cdot\rVert_M^2$ 留下的时间步缩放。</p>
-        <p>所以请记住这本书反复敲的那句话：<b>XPBD 和 PBD、和后面的 VBD，要解的是同一个 $\min G(\mathbf x)$</b>，分歧只在「怎么解」。XPBD 选择在<b>对偶</b>侧（约束力 $\lambda$）做 Gauss-Seidel；这是它的优雅，也埋下了它的局限。</p>
+        <h2 id="ties-back">它迭代求解的是 compliant constraints 的离散 KKT 系统</h2>
+        <p>退一步看全局：XPBD 这套 $\Delta\lambda$/$\Delta\mathbf x$ 的交替，并不是某个孤立的技巧。它从带 compliance 的时间离散约束动力学出发，把位置 $\mathbf x$ 与 Lagrange multiplier $\lambda$ 放进同一组 <span class="term">KKT</span> 方程，再对每条线性化约束的 KKT block 做 <span class="term">nonlinear Gauss-Seidel</span>。$\tilde\alpha=\alpha/h^2$ 正是材料柔度进入离散方程后的时间步缩放。</p>
+        <p>当约束与某个弹性能相对应、迭代也充分收敛时，这组 KKT 方程可以给出相应的 compliant implicit response；但算法直接处理的是 $(\mathbf x,\lambda)$ 上的约束方程残差，<b>不是对任意固定 $G(\mathbf x)$ 做通用的直接最小化</b>。这正是它和 VBD 的关键分层：XPBD 逐约束迭代 KKT block，VBD 则在位置变量上直接下降一份明确写出的 incremental potential。</p>
 
         <div class="callout warn">
           <div class="c-h">治好了刚度，但还有别的账没算</div>
@@ -79,7 +79,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) XPBD 引入 compliance $\alpha=1/k$ 和累积的 Lagrange multiplier $\lambda$，核心是 $\Delta\lambda=\frac{-C-\tilde\alpha\lambda}{\sum_j w_j\lVert\nabla_j C\rVert^2+\tilde\alpha}$、$\Delta\mathbf x_i=w_i\nabla_i C\,\Delta\lambda$、$\lambda\mathrel{+}=\Delta\lambda$，其中 $\tilde\alpha=\alpha/h^2$；(2) 分母的 $\tilde\alpha$ 当刹车、分子的 $-\tilde\alpha\lambda$ 当回拉锚，把 PBD 丢掉的物理信息塞回来，使刚度时间步/迭代无关，$\alpha\to0$ 退回 PBD；(3) 它本质是隐式欧拉 KKT 系统的对偶侧 Gauss-Seidel，仍在解同一个 $\min G(\mathbf x)$。</p>
+        <p>三句话：(1) XPBD 引入 compliance $\alpha=1/k$ 和累积的 Lagrange multiplier $\lambda$，核心是 $\Delta\lambda=\frac{-C-\tilde\alpha\lambda}{\sum_j w_j\lVert\nabla_j C\rVert^2+\tilde\alpha}$、$\Delta\mathbf x_i=w_i\nabla_i C\,\Delta\lambda$、$\lambda\mathrel{+}=\Delta\lambda$，其中 $\tilde\alpha=\alpha/h^2$；(2) 分母的 $\tilde\alpha$ 当刹车、分子的 $-\tilde\alpha\lambda$ 当回拉锚，把 PBD 丢掉的物理信息塞回来，使刚度时间步/迭代无关，$\alpha\to0$ 退回 PBD；(3) 它本质上对 compliant constraints 的离散 KKT 系统做逐约束 Gauss-Seidel，而不是把 PBD、XPBD、VBD 都视为同一固定 $G$ 的不同优化器。</p>
         <p>下一节 <a href="2-3-projective-dynamics.html">2.3</a>，我们看家族里走另一条路的成员 Projective Dynamics——它不在对偶侧做文章，而是把能量写成一种特殊二次型，靠一个可预分解的常数矩阵把求解拆成 local/global 两步，换来惊人的速度。</p>
       </article>
     </main>

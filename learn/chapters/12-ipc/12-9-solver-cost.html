@@ -29,9 +29,10 @@
 
         <h2 id="one-global-newton">一次迭代 = 一个全局稀疏 Newton 步</h2>
         <p>先把 IPC 求解器的骨架一句话讲清：它不是把每个顶点拆开各解各的，而是把<b>整个系统</b>当成一个大优化问题，每次迭代组装出全场的梯度和 Hessian，解一个<b>全局</b>线性系统，求出全场顶点的位移方向，再交给 line search 截步。这和 VBD「每顶点一个 3×3 牛顿步、按 color 扫一遍」是<b>两种世界观</b>——一个全局、一个局部。</p>
-        <p>这一步的 Hessian 怎么来？回想 IPC 还是在最小化那个 incremental potential $G(\mathbf x)$，它的 Hessian 自然分成两大块：<b>弹性</b>项的 Hessian，和接触 <b>barrier</b> 项的 Hessian。两者各自都先做 <span class="term">PSD projection</span>（半正定投影）——这正是你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 见过的同源思想：把 Hessian 的负特征值压掉，保证解出来的是一个货真价实的<b>下降方向</b>，Newton 不会被非凸局部曲率带沟里去。</p>
+        <p>这一步的 Hessian 怎么来？IPC 仍在最小化 incremental potential $G(\mathbf x)$：正质量自由度上的<b>惯性</b> Hessian 提供正曲率，弹性与 barrier 局部 Hessian 则可采用 <span class="term">PSD projection</span> 构造 modified model，把负特征值截到 $0$。这是一种常见鲁棒策略，不是把原始 Hessian 变成 SPD，也不是所有 FEM / IPC 实现的唯一选择。</p>
 
-        <div class="math-block">$$\mathbf H \,=\, \underbrace{\mathbf H_{\text{elastic}}}_{\text{PSD 投影}} \;+\; \underbrace{\mathbf H_{\text{barrier}}}_{\text{PSD 投影}},\qquad \mathbf H\,\Delta\mathbf x \,=\, -\nabla G(\mathbf x)$$</div>
+        <div class="math-block">$$\mathbf H_{\mathrm{mod}}=\underbrace{\frac{\mathbf M}{h^2}}_{\text{正质量惯性}}+\underbrace{\widetilde{\mathbf H}_{\text{elastic}}}_{\text{局部 PSD model}}+\underbrace{\widetilde{\mathbf H}_{\text{barrier}}}_{\text{局部 PSD model}},\qquad \mathbf H_{\mathrm{free}}\,\Delta\mathbf x_{\mathrm{free}}=-\nabla G_{\mathrm{free}},\quad \mathbf H_{\mathrm{free}}\succ0$$</div>
+        <p>局部 PSD 块可能奇异。固定 / 约束自由度消元后，正质量惯性通常使自由系统 SPD；若仍有零模态或数值退化，就需要 positive shift / regularization。只有到这一步，普通 inverse / Cholesky 才有前提，$-\mathbf H_{\mathrm{free}}^{-1}\nabla G$ 才是严格下降方向；full step 是否真正降低非线性目标仍由 line search 控制。</p>
 
         <p>注意这里的 $\mathbf H$ 是一个<b>全场</b>的大矩阵：它的非零结构由网格的邻接（弹性）和当前的接触对（barrier）共同决定，是一个<b>稀疏</b>矩阵。IPC 把弹性和 barrier 的局部块<b>并行装配</b>进稀疏的 <span class="term">CSR</span>（compressed sparse row）格式，然后——这才是关键——去解 $\mathbf H\,\Delta\mathbf x = -\nabla G$ 这一整个稀疏线性系统。</p>
 
@@ -41,12 +42,12 @@
         </div>
 
         <h2 id="linear-solver">线性求解：CHOLMOD 与多重网格</h2>
-        <p>解那个全局稀疏系统 $\mathbf H\,\Delta\mathbf x = -\nabla G$，IPC 用的是 <span class="term">CHOLMOD</span>——一个做稀疏 <span class="term-i">Cholesky 分解</span>的成熟库，编译时挂上 <span class="term">MKL</span> 的 LAPACK/BLAS 做底层稠密核。它先做一次<b>符号分解</b>（symbolic factorization，分析非零结构、定下消元顺序），再做<b>并行数值分解</b>（numeric factorization）。因为 PSD 投影保证了 $\mathbf H$ 半正定，Cholesky 这条路才走得通。</p>
+        <p>解那个全局稀疏系统 $\mathbf H\,\Delta\mathbf x = -\nabla G$，IPC 用的是 <span class="term">CHOLMOD</span>——一个做稀疏 <span class="term-i">Cholesky 分解</span>的成熟库，编译时挂上 <span class="term">MKL</span> 的 LAPACK/BLAS 做底层稠密核。它先做一次<b>符号分解</b>（symbolic factorization，分析非零结构、定下消元顺序），再做<b>并行数值分解</b>（numeric factorization）。<b>普通 Cholesky 要求自由系统 SPD</b>：局部 PSD modified blocks 只负责消掉负曲率，正质量惯性、约束消元与必要的 positive shift 才补齐可逆性前提。</p>
         <p>除了直接法，IPC 也试过迭代法的路子：用 <span class="term">AMGCL</span> 这个<b>多重网格</b>（algebraic multigrid）预条件的求解器。多重网格的好处是在大规模、条件数不太糟时可能更省内存、更可扩展；但它是预条件迭代，碰到下面要讲的「barrier 把条件数搞坏」时会更吃力。两条路并存，本身就说明了 IPC 在「怎么把这个全局解算快一点」上花了多少心思。</p>
 
         <div class="callout note">
           <div class="c-h">为什么非得全局？局部解不行吗</div>
-          <p>你可能会想：VBD 不是证明了局部下降也能稳吗，IPC 何苦组装全局矩阵？因为 IPC 要的不只是「稳」，而是「在<b>可行域内</b>的稳」。接触力一旦在某处发散（距离趋零、barrier 刚度爆表），这个信息必须<b>一步到位</b>地传遍整个系统，让远处的顶点也立刻「感觉到」该往哪让。局部 Gauss-Seidel 是一圈圈传话，全局解是一声令下——当你要的是<b>每一步都不越界的严格保证</b>，那声令下的全局解就省不掉。</p>
+          <p>全局解能让接触与弹性耦合在一个方向求解中传播到整个系统，而局部 Gauss-Seidel 要靠多圈迭代传递，这是 IPC 选择全局 Newton、也为之付费的原因。要严格区分：<b>全局求解负责方向质量与耦合，不是 intersection-free 的证明</b>；每次接受步都不越界的几何保证来自可行初值与 CCD-filtered line search。</p>
         </div>
 
         <h2 id="why-stable-expensive">稳但贵：代价具体贵在哪三处</h2>
@@ -88,7 +89,7 @@
         <p>所以「IPC 稳但贵」这句话现在有了精确的含义：它的<b>稳</b>是 intersection-free 的严格保证 + 大形变/极端压缩下的鲁棒；它的<b>贵</b>是全局稀疏 Newton（CHOLMOD 分解）+ 每步全局 CCD + barrier 病态带来的多迭代。VBD/AVBD 用局部下降买到了便宜和并行，代价是无穿透只能靠截断兜底或 ramp 逼近。两边谁也没占便宜，只是把成本花在了不同地方。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) IPC 的每一次迭代是一个<b>全局稀疏 Newton 步</b>——弹性与 barrier 的 Hessian 都先做 <span class="term">PSD projection</span>，并行装配进稀疏 <span class="term">CSR</span>，用 <span class="term">CHOLMOD</span>（挂 MKL LAPACK/BLAS）做符号+并行数值分解，也试过 <span class="term">AMGCL</span> 多重网格预条件求解器。(2) 它「贵」在三处具体开销：<b>每步全局 CCD</b>、<b>全局稀疏线性解</b>（不是 VBD 那种 per-vertex 3×3）、以及 <b>$\hat d$ 收紧 / barrier 刚度极大导致条件数坏、Newton 迭代多</b>；换来的是严格 intersection-free 与极端接触下的鲁棒。(3) 对照 VBD/AVBD 的便宜可并行局部下降（累加进 $\mathbf f_i/\mathbf H_i$、color sweep、靠截断或 ramp 防穿），IPC 是用「贵」买「保证」——成本只是花在了不同地方。</p>
+        <p>三句话：(1) IPC 的每一次迭代是一个<b>全局稀疏 Newton 步</b>：局部弹性与 barrier 块可做 PSD modified-Hessian 修正，与惯性装配后经约束处理 / 必要 shift 得到 SPD 自由系统，再用 <span class="term">CHOLMOD</span> 做普通 Cholesky；PSD 本身不推出 Cholesky。(2) 它「贵」在每步全局 CCD、全局稀疏线性解，以及 barrier 导致的坏条件数；严格 intersection-free 来自 CCD-filtered line search，而不是 PSD 或全局解本身。(3) 对照 VBD/AVBD 的便宜可并行局部下降，IPC 是用更多全局工作换方向耦合与可行步长控制。</p>
         <p>下一节 <a href="12-10-abd.html">12.10：ABD——把 IPC 用在近刚体上</a>，我们看 IPC 这套「贵但有保证」的机器怎么被聪明地复用：当物体是<b>近刚体</b>时，用 12 个仿射自由度代替几千个顶点，IPC 的 intersection-free 保证白白继承下来，求解却快上几个数量级。之后 <a href="12-11-three-roads.html">12.11：三条路总对照</a> 再把 penalty / AVBD / IPC 三条路并排成一张大表，给整本书的接触主线画上句号——并诚实地说一句「没有银弹」。</p>
       </article>
     </main>

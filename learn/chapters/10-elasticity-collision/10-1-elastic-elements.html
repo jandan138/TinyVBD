@@ -33,13 +33,15 @@
         <p>惯性项那块谁都一样。变的只是求和里那一项项 $E_j$——它来自哪种 <span class="term">force element</span>。strand 上 $\mathcal F_i$ 全是弹簧；一块布上，$\mathcal F_i$ 可能同时含三角形膜、二面角弯曲、几根加强弹簧。每种元件贡献一个 $3\times3$ 的力块与 Hessian 块，<b>累加进同一个 $\mathbf f_i$ / $\mathbf H_i$</b>。VBD 的好处正在这里：装配口是统一的，加一种材料就是多写一个 <code>evaluate_*_force_hessian</code> 的 <span class="term">@wp.func</span>，主循环一行不用动。</p>
 
         <h2 id="membrane">Neo-Hookean membrane：布的面内能量</h2>
-        <p>一块布最核心的元件是<b>三角形膜</b>。它管的是面内的拉伸与剪切：把三角形拉大、压扁、斜剪，都要花能量。和弹簧不同，它的能量不写在「边长」上，而写在 <span class="term">deformation gradient</span> $\mathbf F$ 上——把 rest 三角形映到当前三角形的那个线性变换。布是个二维面嵌在三维里，所以 $\mathbf F$ 是个 $3\times2$ 矩阵（两列 $\mathbf f_0,\mathbf f_1$）。</p>
+        <p>一块布最核心的元件是<b>三角形膜</b>。它管的是面内的拉伸与剪切：把三角形拉大、压扁、斜剪，都要花能量。和单根轴向弹簧不同，它的能量不只写在一个边长上，而写在 <span class="term">deformation gradient</span> $\mathbf F$ 上——把 rest 三角形映到当前三角形的那个线性变换。布是个二维面嵌在三维里，所以 $\mathbf F$ 是个 $3\times2$ 矩阵（两列 $\mathbf f_0,\mathbf f_1$）。</p>
         <p>Newton 用的是 <span class="term">stable Neo-Hookean</span> 能量（Smith et al. 2018 改写到 shell 上）：</p>
         <div class="math-block">$$\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2,\qquad I_c=\operatorname{tr}(\mathbf F^\top\mathbf F),\quad J_s=\sqrt{\det(\mathbf F^\top\mathbf F)},\quad \alpha=1+\frac{\mu}{\lambda}.$$</div>
         <p>直觉拆开看：$I_c$ 是两列的长度平方之和，惩罚「整体被拉伸」；$J_s$ 是当前三角形与 rest 三角形的<b>面积比</b>，$(J_s-\alpha)^2$ 惩罚「面积变化」。那个 $\alpha=1+\mu/\lambda$ 不是随手写的——它让 rest 状态（$\mathbf F$ 是等距映射）恰好应力为零，省掉「松弛后还有残余张力」的毛病。代码里还要做一道 Lamé 参数转换 $\mu_{NH}=\mu$、$\lambda_{NH}=\lambda+\mu$（Smith 2018 §3.4），这是 stable NH 的标准约定。</p>
         <div class="callout note">
-          <div class="c-h">为什么 Hessian 要 SPD 投影</div>
-          <p>和压缩弹簧一样（<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个变负的 $\lambda_\perp$），膜在被压缩时局部 Hessian 也会出现负特征值。Newton 在这里做 <span class="term">SPD projection</span>：用 <code>s_clamp = max(0, s)</code> 把惹事的那一项的系数夹到非负，保证喂给牛顿步的 $\mathbf H_i$ 正定、$\Delta\mathbf x_i$ 方向可靠。注意这正是 TinyVBD <b>没</b>做的——strand 靠惯性偏置和行列式阈值兜底，cloth 维度更高、更刚，索性把投影做实。下一节 <a href="10-2-spd-damping.html">10.2</a> 专讲它。</p>
+          <div class="c-h">为什么当前实现做 PSD clamp</div>
+          <p>原始局部 Hessian 是否不定取决于<b>材料模型与当前构型</b>。这个 membrane 模型在某些压缩构型下会出现负曲率，但单元负特征值只描述局部二阶几何，不自动等于 buckling；结构屈曲还要满足平衡、外载与约束条件，见 <a href="../14-curvature-mass/14-3-buckling-newton.html">14.3</a>。</p>
+          <p>当前 Newton 实现用 <code>s_clamp = max(0, s)</code> 做 elementwise <span class="term">PSD clamp</span>。截到 0 得到的是半正定近似，不是 SPD 单元块；加入正定惯性项且其余贡献不引入负曲率后，局部总块 $\mathbf H_i$ 才可能成为 SPD。这是当前实现的 robustness strategy，不是所有 FEM 的前置条件；modified Cholesky、trust region、damped Newton 与 line search 都可作为替代或配套手段。投影本身也不保证 inversion-free 或静态稳定，并可能隐藏真实屈曲模态。</p>
+          <p>TinyVBD C++ 是另一条路径：<code>colPivHouseholderQr().solve(f)</code> 后直接接受 raw full step，没有 determinant guard 或能量验收；Newton/Warp 的 determinant heuristic 只在显式求逆前筛近奇异块，不判断 SPD 或下降。下一节 <a href="10-2-spd-damping.html">10.2</a> 会把这些边界拆开。</p>
         </div>
         <p>下面是这块膜元件的核心几行（已删去 damping 与组装样板），看它如何从 $\mathbf F$ 一路算到力与 Hessian：</p>
         <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># Deformation gradient F = [f0, f1]  (3x2，两列向量)
@@ -60,7 +62,7 @@ P_col0 = mu_nh * f0 + s * g0
 P_col1 = mu_nh * f1 + s * g1
 force = -(P_col0 * df0_dx + P_col1 * df1_dx)
 
-# Hessian (per-vertex 3x3, SPD-projected): max(0, s) 是紧的 PSD 夹取
+# Hessian (per-vertex 3x3, PSD-clamped): max(0, s) 是紧的 PSD 夹取
 s_clamp = wp.max(0.0, s)
 hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code></pre></div>
 
@@ -79,7 +81,7 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
               <tr><td><code>dJ_dx</code>, <code>w</code></td><td>$J_s$ 对顶点位置的梯度、以及组装 Hessian 用的辅助向量——它们的<b>外积</b> $\mathbf{vv}^\top$ 拼出 Hessian 的两块。</td><td>$\partial J_s/\partial\mathbf x$ 类</td></tr>
               <tr><td><code>I_coeff</code>, <code>c1</code>, <code>r</code></td><td>三个<b>标量系数</b>（由 $\mu,\lambda,J_s,s$ 组合而来），分别给 Hessian 的单位块、外积块定权重。</td><td>$\mu,\ \lambda$ 的组合</td></tr>
               <tr><td><code>I33</code></td><td>3×3 <b>单位矩阵</b>（Hessian 里那个各向同性的底）。</td><td>$\mathbf I_{3\times3}$</td></tr>
-              <tr><td><code>s</code>, <code>s_clamp</code></td><td><code>s</code> $=\lambda_{NH}(J_s-\alpha)$ 是体积项的应力强度；<code>s_clamp</code>$=\max(0,s)$ 是 <b>SPD 投影</b>那一夹（压缩时夹掉负的，保证 Hessian 半正定）——细节见 <a href="10-2-spd-damping.html">10.2</a>。</td><td>$\max(0,\ \lambda_{NH}(J_s-\alpha))$</td></tr>
+              <tr><td><code>s</code>, <code>s_clamp</code></td><td><code>s</code> $=\lambda_{NH}(J_s-\alpha)$ 是面积项的应力强度；<code>s_clamp</code>$=\max(0,s)$ 是 <b>PSD clamp</b>（把相关负曲率截到 0，使这个近似块半正定）——细节见 <a href="10-2-spd-damping.html">10.2</a>。</td><td>$\max(0,\ \lambda_{NH}(J_s-\alpha))$</td></tr>
               <tr><td><code>lmbd_safe</code></td><td>就是 $\lambda$，加了个防 0 除的小保护（避免 $\lambda=0$ 时 $\mu/\lambda$ 爆掉）。</td><td>$\lambda$</td></tr>
               <tr><td><code>wp.outer(a,b)</code></td><td>Warp 的<b>外积</b> $\mathbf a\mathbf b^\top$（把两个向量拼成一个矩阵）；<code>wp.sqrt/wp.max</code> 就是逐元素开方/取大。</td><td>$\mathbf a\mathbf b^\top$</td></tr>
             </tbody>
@@ -95,7 +97,7 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
         <p>$J_s=1.21$ 就是当前三角形比 rest 大了 $21\%$ 的<b>面积比</b>（$1.1\times1.1$）。取一组示意 Lamé 参数 $\mu=1,\ \lambda=10$，则 $\alpha=1+\mu/\lambda=1.1$，代进能量：</p>
         <div class="math-block">$$\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2=\frac{1}{2}(2.42-2)+\frac{10}{2}(1.21-1.1)^2$$</div>
         <div class="math-block">$$=0.5\times0.42+5\times(0.11)^2=0.21+0.0605\approx0.27$$</div>
-        <p>读出来：两项都为正、都在「储能」——拉伸项 $\frac{\mu}{2}(I_c-2)=0.21$ 罚「两列被拉长」，面积项 $\frac{\lambda}{2}(J_s-\alpha)^2=0.06$ 罚「面积偏离 $\alpha$」。把三角形松回 rest（$\mathbf F$ 为等距、$I_c=2$、$J_s=1$），第一项归零；面积项因为 $\alpha=1.1\neq1$ 不会同时归零，但梯度在 rest 处恰好为零（这正是 $\alpha=1+\mu/\lambda$ 的作用——rest 无应力）。压缩时（$J_s&lt;\alpha$）面积项的系数 $s=\lambda(J_s-\alpha)$ 翻负、Hessian 趋于不定，于是代码里那道 <code>s_clamp = max(0, s)</code> 上场——下一节 <a href="10-2-spd-damping.html">10.2</a> 专讲。</p>
+        <p>读出来：两项都为正、都在「储能」——拉伸项 $\frac{\mu}{2}(I_c-2)=0.21$ 罚「两列被拉长」，面积项 $\frac{\lambda}{2}(J_s-\alpha)^2=0.06$ 罚「面积偏离 $\alpha$」。把三角形松回 rest（$\mathbf F$ 为等距、$I_c=2$、$J_s=1$），第一项归零；面积项因为 $\alpha=1.1\neq1$ 不会同时归零，但梯度在 rest 处恰好为零（这正是 $\alpha=1+\mu/\lambda$ 的作用——rest 无应力）。在这个模型的压缩构型中，系数 $s=\lambda(J_s-\alpha)$ 会翻负，原始局部块可能出现负曲率，于是当前代码用 <code>s_clamp = max(0, s)</code> 构造 PSD 近似——下一节 <a href="10-2-spd-damping.html">10.2</a> 专讲。</p>
 
         <div class="callout note">
           <div class="c-h">这些数是自洽示例，量级随材料/单位变</div>
@@ -103,14 +105,14 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
         </div>
 
         <div class="callout warn">
-          <div class="c-h">误区：膜元件 ≠ 三根边弹簧</div>
-          <p>很容易把三角形膜想成「三条边各挂一根弹簧」——错，而且错得有后果。<b>边弹簧只惩罚三条边的长度</b>，对「面积」「剪切」是瞎的：一个三角形可以三条边长都不变，却被斜剪成扁平的一片（剪切形变），三根边弹簧对此<b>零反应</b>；它也压不住面积塌缩。膜元件写在变形梯度 $\mathbf F$ 上——$I_c$ 抓两列的拉伸、$J_s$ 抓<b>面积比</b>，剪切与面积变化都进了能量。直觉验证：上面那个例子里，就算我把三角形剪成 $\mathbf f_0\cdot\mathbf f_1\neq0$（两列不再正交），$\det(\mathbf F^\top\mathbf F)$ 立刻改变、$J_s$ 跟着变、$\psi$ 报警；三根只认边长的弹簧却可能一点没察觉。所以布要绷得住、剪得动有回弹，必须用膜，不能拿边弹簧凑。</p>
+          <div class="c-h">边弹簧网络与膜元件：不是同一套参数化</div>
+          <p>完整三角形的三条边长在刚体运动与镜像之外决定其形状，并由 Heron 公式决定面积，不能保持三边不变再把它连续剪扁；完整四面体的六条边也决定体积绝对值。真正有零能 shear mechanism 的典型例子，是<b>只连四条边、没有对角线的四边框</b>。加对角线或采用充分连接的 central-force network 后，网络可以响应部分剪切。膜元件仍然更适合作为连续体离散，因为 $\psi(F)$ 能更直接地独立控制剪切与面积/体积参数，减少边方向带来的网格偏置，并显式处理有符号朝向或体积 barrier；简单中心力网络要做到这些，拓扑设计与跨网格标定都更困难。单根弹簧在这里只是 1D truss/bar 的轴向类比，精确 Hessian 结构见 <a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a>。</p>
         </div>
 
         <h2 id="volumetric">Volumetric Neo-Hookean：软体的体积能量</h2>
         <p>把布换成一块软体（橡皮、肌肉、果冻），网格从三角形变成<b>四面体</b> tet。此时 $\mathbf F$ 是堂堂正正的 $3\times3$ 矩阵，能量也升级成体积版 Neo-Hookean：</p>
         <div class="math-block">$$\psi=\frac{\mu}{2}\,(I_1-3-2\ln J)+\frac{\lambda}{2}\,(J-1)^2,\qquad I_1=\operatorname{tr}(\mathbf F^\top\mathbf F),\quad J=\det\mathbf F.$$</div>
-        <p>读法和膜版同构：$I_1$ 项管形变（剪切+拉伸），$(J-1)^2$ 项管体积变化，$J$ 是体积比。那个 $-2\ln J$ 是 Neo-Hookean 的招牌——当 $J\to0$（体积被压到塌缩），$\ln J\to-\infty$，能量爆炸，于是材料<b>天然抗拒翻面/塌陷</b>，这是线性弹性给不了的。元件的角色完全不变：算出力块与 Hessian 块，叠进顶点的 $\mathbf f_i/\mathbf H_i$。从 strand 的弹簧到 tet 的体积能量，变的只是「$E_j$ 长什么样」，装配机理一字未改。</p>
+        <p>读法和膜版同构：$I_1$ 项管形变（剪切+拉伸），$(J-1)^2$ 项管体积变化，$J$ 是有符号体积比。那个 $-2\ln J$ 是 Neo-Hookean 的招牌：它只在 $J&gt;0$ 的定义域内成立，且 $J\to0^+$ 时能量发散，因而形成体积 barrier。要让离散更新始终留在这个定义域，还需要可行步长或其他防反转机制；对 Hessian 做 PSD clamp 本身并不保证 inversion-free。元件的装配角色不变：算出力块与 Hessian 块，叠进顶点的 $\mathbf f_i/\mathbf H_i$。</p>
 
         <h2 id="bending">Dihedral bending：让布不愿意折</h2>
         <p>光有膜，布会像保鲜膜一样软塌塌，没有「抗弯」。<span class="term">dihedral bending</span> 元件补上这点：它盯着共享一条内部边的两个三角形之间的<b>二面角</b> $\theta$，谁想把布折起来就向谁要能量：</p>
@@ -123,7 +125,7 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> spring 元件同形，cloth 只是多叠了几种</div>
-          <p>你已经把 TinyVBD 那根 strand 的单弹簧 Hessian 吃透了：$\mathbf H_{aa}=k\big[\mathbf I-\tfrac{l_0}{l}\big(\mathbf I-\tfrac{\mathbf d\mathbf d^\top}{l^2}\big)\big]$，力 $\mathbf f=k\tfrac{l_0-l}{l}\mathbf d$。Newton 的 <span class="term">spring</span> 元件<b>与它同形</b>（用 <code>spring_rest_length / stiffness / damping</code>，力与 Hessian 是同一套公式）。真正的区别只有一句话：cloth 不过是在这根弹簧之外，又往同一个 $\mathbf f_i/\mathbf H_i$ 里叠加了 membrane、bending、（软体时还有）tet 几种 force element。<b>装配口没变，下降原理没变，变的只是邻接元件的种类</b>。你那根 strand 放大成一块布，就是这么发生的。</p>
+          <p>你已经把 TinyVBD 那根 strand 的单弹簧 Hessian 吃透了：$\mathbf H_{aa}=k\big[\mathbf I-\tfrac{l_0}{l}\big(\mathbf I-\tfrac{\mathbf d\mathbf d^\top}{l^2}\big)\big]$，力 $\mathbf f=k\tfrac{l_0-l}{l}\mathbf d$。Newton 的 <span class="term">spring</span> 元件<b>与它同形</b>（用 <code>spring_rest_length / stiffness / damping</code>，力与 Hessian 是同一套公式），但单弹簧仍只是一维 truss/bar 的轴向类比。cloth 在同一个 $\mathbf f_i/\mathbf H_i$ 装配口里再叠加 membrane、bending、（软体时还有）tet。<b>装配口没变；候选步是否下降，则取决于 Hessian 处理与步长验收，不能由装配形式推出。</b></p>
         </div>
 
         <div class="lab"><div class="lab-h"><span class="lab-tag">interactive · capstone</span><span class="lab-t">一块真在跑 VBD 的 2D cloth</span></div><div class="lab-body" data-widget="cloth-lab"></div><div class="lab-cap">调 stiffness / 迭代数 / bending，拖动顶点，切 show colors 看并行分组。这就是把你那根 strand 放大成一块布。</div></div>
@@ -133,12 +135,12 @@ hessian = I_coeff * I33 + c1 * wp.outer(dJ_dx, dJ_dx) - r * wp.outer(w, w)</code
         <ul>
           <li><b>stiffness</b>：调高，布更绷、抗拉；调低，布更软、垂得更狠。这是膜元件 $\mu,\lambda$ 在起作用。</li>
           <li><b>bending</b>：调高，布抗折、会保持平整甚至打卷；调到零，布软塌得像液面。这是二面角元件在干活。</li>
-          <li><b>show colors</b>：切开看顶点的 graph coloring 分组——同色顶点不共享 force element，可在 GPU 上并行更新（<a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a>）。把迭代数压很低，它依旧不炸——这还是 VBD 那块招牌：单调下降、无条件稳定，只是从一根 strand 长成了一块布。</li>
+          <li><b>show colors</b>：切开看顶点的 graph coloring 分组——同色顶点不共享 force element，可在 GPU 上并行更新（<a href="../08-strand-to-cloth/8-5-coloring-parallel.html">8.5</a>）。把迭代数压低，观察残余形变与收敛速度；不要把某次演示没有发散解读成 raw full step 必然单调或无条件稳定。</li>
         </ul>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) Newton particle VBD 是一<b>谱</b>弹性元件——membrane（布，$\mathbf F$ 为 $3\times2$）、volumetric NH（软体，$\mathbf F$ 为 $3\times3$）、dihedral bending（抗折）、spring（与 TinyVBD 同形）；(2) 每种元件只贡献一个力块与 Hessian 块，<b>叠进 8.4 那个统一的 per-vertex 装配</b>，主循环不变；(3) 高维更刚的膜/体积能量在压缩下 Hessian 会不定，于是 Newton 在这里做实了 <span class="term">SPD projection</span>——这是 strand 没做、cloth 必须做的一步。</p>
-        <p>那道 SPD 投影到底怎么把负特征值拍正、又怎么不破坏物理，还有让布「甩两下就停」的 <span class="term">Rayleigh damping</span> 是怎么挂进力与 Hessian 的——下一节 <a href="10-2-spd-damping.html">10.2</a> 把这两件事讲透。</p>
+        <p>三句话：(1) Newton particle VBD 支持一<b>谱</b>弹性元件——membrane（布，$\mathbf F$ 为 $3\times2$）、volumetric NH（软体，$\mathbf F$ 为 $3\times3$）、dihedral bending（抗折）、spring；单弹簧只在轴向结构上类比 1D truss/bar。(2) 每种元件贡献力块与 Hessian 块，<b>叠进 8.4 那个统一的 per-vertex 装配</b>，但统一装配不附带 raw Newton 单调保证。(3) Hessian 是否不定取决于模型与构型；当前 Newton 对 membrane 使用 elementwise PSD clamp 作为稳健化策略，正定惯性加入后局部总块才可能 SPD，这不是所有 cloth/FEM 必须遵循的唯一方案。</p>
+        <p>PSD clamp 如何处理负曲率、它为何不等于防反转或静态稳定，以及让布「甩两下就停」的 <span class="term">Rayleigh damping</span> 怎么挂进力与 Hessian——下一节 <a href="10-2-spd-damping.html">10.2</a> 把这些边界讲透。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

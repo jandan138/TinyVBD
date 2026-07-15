@@ -24,11 +24,11 @@
     <main>
       <article class="article">
         <div class="eyebrow">Part 1 · The Variational View · 1-2</div>
-        <h1>隐式欧拉的变分真身：一步 = 最小化 G(x)</h1>
-        <p class="lede">这是全书最重要的一节。如果你只记住一个公式，就记住它：<b>一步隐式欧拉，等价于最小化一个能量函数</b>。VBD、PBD、XPBD、Projective Dynamics——后面所有方法，都是在用不同手段解这一个最小化问题。</p>
+        <h1>隐式欧拉的变分真身：从 ∇G=0 到最小化 G(x)</h1>
+        <p class="lede">这是全书最重要的一节。如果你只记住一个对象，就记住增量势 $G$：<b>隐式欧拉方程是 ∇G=0 的驻点条件；变分求解再以最小化 $G$ 从中选择极小点</b>。VBD、PBD、XPBD、Projective Dynamics——后面所有方法，都可以放到这个变分目标附近比较。</p>
 
         <h2 id="recall">先回忆：隐式欧拉那个解不动的方程</h2>
-        <p>上一节我们看到，隐式（backward）欧拉之所以稳，是因为它用<i>下一时刻</i>的力来更新。写成质点系统（位置 $\mathbf x\in\mathbb R^{3N}$，对角质量矩阵 $M$，时间步 $h$，力 $\mathbf f=-\nabla E$ 来自势能 $E$）：</p>
+        <p>上一节我们看到，隐式（backward）欧拉之所以稳，是因为它用<i>下一时刻</i>的力来更新。写成本章 TinyVBD 使用的质点系统（位置 $\mathbf x\in\mathbb R^{3N}$，lumped 对角质量矩阵 $M$，时间步 $h$，力 $\mathbf f=-\nabla E$ 来自势能 $E$）：</p>
         <div class="math-block">$$\mathbf x^{t+1} = \mathbf x^t + h\,\mathbf v^{t+1},\qquad \mathbf v^{t+1} = \mathbf v^t + h\,M^{-1}\mathbf f(\mathbf x^{t+1})$$</div>
         <p>把速度消掉，记未知量 $\mathbf x:=\mathbf x^{t+1}$，并把已知的「如果什么力都不施加、纯靠惯性会漂到哪」记成一个<b>预测位置</b> $\mathbf y$，方程就变成：</p>
         <div class="math-block">$$M(\mathbf x - \mathbf y) = h^2\,\mathbf f(\mathbf x),\qquad \mathbf y = \mathbf x^t + h\,\mathbf v^t + h^2 M^{-1}\mathbf f_{ext}$$</div>
@@ -44,9 +44,9 @@
         <div class="math-block">$$\boxed{\,G(\mathbf x) = \underbrace{\frac{1}{2h^2}\lVert \mathbf x - \mathbf y\rVert_M^2}_{\text{惯性项 (inertia)}} \;+\; \underbrace{E(\mathbf x)}_{\text{弹性势能}}\,}$$</div>
         <p>其中 $\lVert\mathbf a\rVert_M^2 = \mathbf a^\top M\,\mathbf a$ 是质量加权范数。对它求梯度：</p>
         <div class="math-block">$$\nabla G(\mathbf x) = \frac{1}{h^2}M(\mathbf x - \mathbf y) + \nabla E(\mathbf x) = \frac{1}{h^2}M(\mathbf x-\mathbf y) - \mathbf f(\mathbf x)$$</div>
-        <p>令 $\nabla G=0$，乘以 $h^2$，正好回到 $M(\mathbf x-\mathbf y)=h^2\mathbf f(\mathbf x)$——<b>一模一样</b>。于是我们得到这本书的地基：</p>
+        <p>令 $\nabla G=0$，乘以 $h^2$，正好回到 $M(\mathbf x-\mathbf y)=h^2\mathbf f(\mathbf x)$——<b>一模一样</b>。这证明的是一阶<b>驻点条件</b>相同。变分方法进一步作出如下选择：</p>
         <div class="math-block">$$\mathbf x^{t+1} = \arg\min_{\mathbf x}\, G(\mathbf x)$$</div>
-        <p>一步隐式欧拉，<b>不多不少</b>就是去找 $G(\mathbf x)$ 的最小值点。这个 $G$ 有很多名字：<span class="term">incremental potential</span>、<span class="term">variational form of implicit Euler</span>、optimization integrator。它最早被系统地用起来，是 Martin et al. 2011 和 Liu et al. 2013（正是把 mass-spring 隐式欧拉写成最小化问题的那篇）。</p>
+        <p>这里必须分清「根」和「极小」：若 $G$ 非凸，$\nabla G=0$ 的根还可能是局部极大或鞍点；最小化要找的是局部或全局极小，而不是任意一个根（严格的 $\arg\min$ 指全局极小，数值算法通常只能保证找到某个局部极小）。因此隐式欧拉方程与 $G$ 的驻点方程等价，而盒中公式表达的是本书采用的<b>变分极小选择</b>。这个 $G$ 有很多名字：<span class="term">incremental potential</span>、<span class="term">variational form of implicit Euler</span>、optimization integrator。它最早被系统地用起来，是 Martin et al. 2011 和 Liu et al. 2013（正是把 mass-spring 隐式欧拉写成最小化问题的那篇）。驻点、极小与 Newton 的边界可继续看 <a href="../14-curvature-mass/14-3-buckling-newton.html">14-3</a>。</p>
 
         <div class="callout">
           <div class="c-h">一个会反复出现的小困惑：那个 1/(2h²)</div>
@@ -54,17 +54,17 @@
         </div>
 
         <h2 id="two-bowls">这个能量长什么样：两个碗在拔河</h2>
-        <p>$G$ 由两项相加，每一项都是一个「碗」（往最低点拉你的势能），它们的最低点通常<b>不在同一处</b>，于是 $\arg\min$ 落在二者妥协的地方：</p>
+        <p>$G$ 由两项相加：惯性项是一个严格的正曲率「碗」，弹性势能则提供另一股拉回 rest 形状的趋势，但它在位置坐标中不一定全局凸。两者偏好的位置通常<b>不在同一处</b>，于是选中的极小点落在二者妥协的地方：</p>
         <ul>
           <li><b>惯性项</b> $\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2$：一个以预测位置 $\mathbf y$ 为中心的抛物面碗。它说「保持你的动量，漂到 $\mathbf y$ 去」。质量越大、时间步 $h$ 越小，这个碗越陡（系数 $\frac{m}{h^2}$ 越大），越不容许偏离 $\mathbf y$。</li>
-          <li><b>弹性势能</b> $E(\mathbf x)$：对弹簧来说，最低点是「所有弹簧都恰好等于 rest length」的那些位形。它说「别拉伸我，回到 rest 形状」。刚度越大，这个碗越陡。</li>
+          <li><b>弹性势能</b> $E(\mathbf x)$：对弹簧来说，最低点是「所有弹簧都恰好等于 rest length」的那些位形。它说「别拉伸我，回到 rest 形状」。刚度越大，这股趋势越强；受压构型下它也可能出现负曲率，不能一概画成凸碗。</li>
         </ul>
         <p>下面这张图把单个粒子的 $G$ 画成了一片山谷的热力图——你能直接看到惯性碗、弹性环，以及它们拔河的平衡点（也就是 $\arg\min G$）。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">G(x) 是一座山谷：惯性碗 vs 弹性环</span></div>
           <div class="lab-body" data-widget="potential-landscape"></div>
-          <div class="lab-cap">黄点是惯性目标 $\mathbf y$，虚线环是弹簧的 rest length。把 <b>w_I</b>（=$m/2h^2$，惯性权重）调大，最小值被拉向 $\mathbf y$；把 <b>k</b> 调大，最小值被拽回 rest 环。鼠标在图上移动看任意点的 $G$ 值——你会感到它确实是个有唯一谷底的碗。</div>
+          <div class="lab-cap">黄点是惯性目标 $\mathbf y$，虚线环是弹簧的 rest length。把 <b>w_I</b>（=$m/2h^2$，惯性权重）调大，极小点被拉向 $\mathbf y$；把 <b>k</b> 调大，极小点被拽回 rest 环。鼠标在图上移动看任意点的 $G$ 值；这组参数下能看到一个清楚的妥协谷底，但不要把它外推成所有非凸参数下都唯一。</div>
         </div>
 
         <p>这个「拔河」的直觉极其重要，下一节 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 会专门展开：是谁、在什么时候赢。但现在你已经能体会到——隐式欧拉每一步，本质上就是在惯性和弹性之间找一个能量最低的妥协点。</p>
@@ -97,18 +97,18 @@
         <h2 id="why-minimization">为什么「变成最小化」是一步好棋</h2>
         <p>把 root-finding 换成 minimization，不只是换个说法，它带来三个实打实的好处，后面会一一兑现：</p>
         <ol>
-          <li><b>有了「下降」这把尺子。</b>最小化问题天然有个标量目标 $G$。任何让 $G$ 变小的更新都是「好」更新。VBD 就靠这个：它能证明每动一个顶点都让 $G$ 单调下降，于是<b>无条件稳定</b>——不会发散。root-finding 没有这把现成的尺子。</li>
+          <li><b>有了「下降」这把尺子。</b>最小化问题天然有个标量目标 $G$。精确的 block 最小化，或经过验收、只接受 $G$ 下降的 block 步，会让被接受的能量序列单调不增。未经验收的 raw full Newton 步则没有这种保证：Hessian 不定时方向可能不是下降方向，即使方向正确，$\alpha=1$ 也可能走出二次模型的可信区域。root-finding 本身没有这把现成的能量验收尺子。</li>
           <li><b>可以局部地、增量地做。</b>既然目标是把 $G$ 推下去，你不必一次解整个大系统。你可以一次只优化一个顶点（其余固定），只要每次都让 $G$ 下降就行。这就是 <span class="term">block coordinate descent</span>，是 VBD 的全部精髓（Part 3）。</li>
-          <li><b>统一了一整个家族。</b>PBD、XPBD、Projective Dynamics、Newton、VBD——它们的分歧不在「要解什么」（都是这个 $\min G$），只在「怎么解」。有了这把统一的尺子，Part 2 的谱系图才画得出来。</li>
+          <li><b>统一了一整个家族。</b>PBD、XPBD、Projective Dynamics、Newton、VBD 都可以围绕完整目标 $G$ 比较：它们保留哪些项、近似哪些项、怎样更新。目标与求法分开以后，Part 2 的谱系图才画得出来。</li>
         </ol>
 
         <div class="callout note">
-          <div class="c-h">惯性项保证了问题不病态</div>
-          <p>注意惯性项的 Hessian 是 $\frac{1}{h^2}M$，恒为<b>正定</b>。即使弹性能 $E$ 在某些方向上是「不定」的（比如弹簧被压缩时，见 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>），只要 $h$ 不太大，惯性项就能把整个 $G$ 的 Hessian 拉回正定附近。这是 VBD 不需要对 Hessian 做 SPD 投影也能稳的关键之一（<a href="../03-vbd/3-6-stability.html">3.6</a> 详谈）。</p>
+          <div class="c-h">惯性项提供正曲率偏置，但不包办正定</div>
+          <p>在消元后的自由空间上，惯性项的 Hessian $\frac{1}{h^2}M$ 是<b>正定</b>的，所以 $\nabla^2G=\frac{1}{h^2}M+K$（$K=\nabla^2E$）得到一份正曲率偏置。可若弹性 Hessian $K$ 有足够大的负值（比如弹簧被强烈压缩时，见 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>），这份偏置仍可能压不住它，$\nabla^2G$ 依旧不定。它正则化的是<b>当前增量优化问题</b>，也不等同于静态总势能已经稳定；静态判据还要先满足平衡并只检查约束允许方向。详见 <a href="../14-curvature-mass/14-3-buckling-newton.html">14-3</a> 与 <a href="../14-curvature-mass/14-6-mass-metric-modes.html">14-6</a>。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>一个公式，三句话：(1) 一步隐式欧拉 $=\arg\min_\mathbf{x} G(\mathbf x)$，其中 $G=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$；(2) $G$ 是惯性碗和弹性碗的拔河，最小值是二者的妥协；(3) 把问题看成最小化，给了我们「下降」这把尺子，让局部、增量、可证稳定的解法成为可能。</p>
+        <p>一个公式，三句话：(1) 隐式欧拉方程等价于 $\nabla G=0$，而变分写法 $\arg\min_\mathbf{x}G(\mathbf x)$ 从驻点中选择局部或全局极小，其中 $G=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$；(2) $G$ 是惯性趋势和弹性趋势的拔河，选中的极小点是二者的妥协；(3) 最小化视角给了我们「下降」验收尺子，但单调性属于精确或被接受的下降更新，不自动属于 raw Newton full step。</p>
         <p>不过在展开这场拔河之前，有个一直被我们写进公式、却还没正面交代的符号该补课了：那个 $\lVert\mathbf x-\mathbf y\rVert_M^2$ 里的 <b>$M$</b>——质量矩阵。它到底长什么样、那个下标 $M$ 的范数是什么意思？下一节 <a href="../01-foundations/1-3-mass-matrix.html">1.3</a> 先把这块地基补平，再回到 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a> 的拔河：惯性项里的 $\mathbf y$ 到底是什么、质量和时间步如何决定谁赢——为读懂 <code>forwardStep()</code> 做准备。</p>
       </article>
     </main>

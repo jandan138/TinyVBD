@@ -32,13 +32,13 @@
         <p>rigid 这一侧要处理的东西，和粒子很不一样。粒子的状态是位置 $\mathbf x\in\mathbb R^3$；刚体的状态是一个 <span class="term">transform</span>（平移 + 旋转，<code>body_q: wp.array[wp.transform]</code>）和一个 <span class="term">spatial_vector</span> 速度（<code>body_qd</code>）。它们之间要满足的也不再是弹簧 rest length，而是两类典型约束：</p>
         <ul>
           <li><b><span class="term">joint</span>（关节）</b>：把两个刚体（或刚体与世界）按某种自由度铰接起来。Newton 的 AVBD 路径支持一组关节类型——<span class="term">BALL</span>（球铰）、<span class="term">FIXED</span>（固连）、<span class="term">FREE</span>（自由）、<span class="term">REVOLUTE</span>（转动）、<span class="term">PRISMATIC</span>（移动）、<span class="term">D6</span>（六自由度通用）、<span class="term">CABLE</span>（缆绳）。每种关节把哪几个 DOF 锁住、哪几个放开，就决定了它要往能量里加哪些约束项。</li>
-          <li><b><span class="term">contact</span>（接触）</b>：刚体之间、刚体与粒子之间的碰撞，从 collision pipeline（<a href="../10-elasticity-collision/10-3-collision.html">10.3</a>）里来，作为接触约束进入同一个最小化问题。</li>
+          <li><b><span class="term">contact</span>（接触）</b>：刚体之间、刚体与粒子之间的碰撞，从 collision pipeline（<a href="../10-elasticity-collision/10-3-collision.html">10.3</a>）里来，作为接触约束进入 AVBD 当前一轮的 augmented-Lagrangian 子问题。</li>
         </ul>
         <p>无论 joint 还是 contact，AVBD 的处理方式都在上一节见过：每个约束挂一个 penalty 刚度 $k$ 和一个 Lagrange multiplier $\lambda$，按 <b>hard / soft 两种 slot</b> 来管理。soft slot 把约束当作软的惩罚项、封顶在某个刚度；hard slot 则通过 augmented Lagrangian 的对偶变量把约束往「精确满足」上逼。每帧 warm-start 时 penalty 按 $\gamma$ 衰减、迭代内按 $\beta$ 增长——和粒子侧的 penalty ramping 是同一套机制，只是作用在刚体的 transform 上。</p>
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 一根弹簧 → 一个 joint</div>
-          <p>别被「刚体」吓到。回想 TinyVBD 里那根 strand：一条边就是一个约束，<code>solve()</code> 里你给它装一个力 $\mathbf f$ 和一个 $3\times3$ 的 Hessian $\mathbf H$，然后 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$ 把端点往满足 rest length 的方向挪一步。Newton 的 rigid AVBD 做的是同一件事的「升维版」：一个 BALL joint 要求两个锚点重合，就像一根 rest length 为 0 的弹簧；一个 REVOLUTE joint 额外锁住两个角向自由度。区别只在变量从 $\mathbb R^3$ 的位置换成了 transform、力/Hessian 要在平移和旋转上一起装配。<b>骨架没变：还是装力、装 Hessian、解一个局部牛顿步、按下降的方向挪。</b>AVBD 在外面再套一层 $\lambda$，把「软弹簧」升级成「能精确满足的硬约束」。</p>
+          <p>别被「刚体」吓到。回想 TinyVBD 里那根 strand：一条边就是一个约束，<code>solve()</code> 里你给它装一个力 $\mathbf f$ 和一个 $3\times3$ 的 Hessian $\mathbf H$，然后 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$ 把端点往满足 rest length 的方向挪一步。Newton 的 rigid AVBD 复用了这套局部装配的「升维版」：一个 BALL joint 要求两个锚点重合，就像一根 rest length 为 0 的弹簧；一个 REVOLUTE joint 额外锁住两个角向自由度。变量从 $\mathbb R^3$ 的位置换成 transform，力/Hessian 要在平移和旋转上一起装配。<b>共享的是局部 block 骨架，不是固定目标：</b>VBD 下降一份固定的 incremental potential；AVBD 每轮下降当前 $k,\lambda$ 下的 augmented-Lagrangian 子问题，并在更新 $k$ 或 $\lambda$ 后换到下一份子问题。</p>
         </div>
 
         <h2 id="coloring">rigid 也要着色：body_color_groups</h2>
@@ -61,7 +61,7 @@
 
         <div class="callout note">
           <div class="c-h">一图记住这一瞥</div>
-          <p>particle 侧 = VBD：位置变量、弹性/接触力、<code>particle_color_groups</code>。rigid 侧 = AVBD：transform 变量、joint/contact 约束（hard/soft slot）、<code>body_color_groups</code>、penalty ramping（$\gamma$ 衰减、$k_{\text{start}}$ 起步）。两侧共用一个 <code>step()</code>、共用一套着色、共用 <b>$\min G(\mathbf x)$</b> 的下降世界观。</p>
+          <p>particle 侧 = VBD：位置变量、弹性/接触力、<code>particle_color_groups</code>。rigid 侧 = AVBD：transform 变量、joint/contact 约束（hard/soft slot）、<code>body_color_groups</code>、penalty ramping（$\gamma$ 衰减、$k_{\text{start}}$ 起步）。两侧共用一个 <code>step()</code>、共用一套着色，也共享增量动力学与能量-约束视角；但 rigid AVBD 每轮处理变化的 augmented-Lagrangian 子问题，不是 particle VBD 那份固定 $G$。</p>
         </div>
 
         <h3 id="two-sides-table">两侧并排速查表</h3>
@@ -74,7 +74,7 @@
             <tr><td><b>力 &amp; Hessian 装配在什么上</b></td><td>每个顶点的 $\mathbf f_i$ / $\mathbf H_i$（$3\times3$）</td><td>每个刚体的 transform 上（平移 + 旋转一起装）</td></tr>
             <tr><td><b>着色组</b></td><td><code>particle_color_groups</code>（构造时必需）</td><td><code>body_color_groups</code>（有刚体由 VBD 积分时必需）</td></tr>
             <tr><td><b>额外机制（λ / penalty ramp）</b></td><td>无 λ；接触靠 log-barrier + 截断</td><td>augmented Lagrangian：每约束一个 $k$ + $\lambda$，hard/soft slot，penalty ramping（$\gamma$ 衰减、$\beta$ 增长、$k_{\text{start}}$ 起步）</td></tr>
-            <tr><td><b>共用什么</b></td><td colspan="2">同一个 <code>step()</code> 的三段式 · 同一次 <code>builder.color()</code> 着色 · 同一个被最小化的 $\min G(\mathbf x)$ · 同一种「装力 / 装 Hessian / 解局部牛顿步 / 按下降挪」的骨架</td></tr>
+            <tr><td><b>共用什么</b></td><td colspan="2">同一个 <code>step()</code> 的三段式 · 同一次 <code>builder.color()</code> 着色 · 增量动力学 / 能量-约束视角 · 「装力 / 装 Hessian / 解局部 block」的骨架；目标函数是否固定则不同</td></tr>
           </tbody>
         </table>
 
@@ -93,8 +93,8 @@
         <p>你从 <b>TinyVBD</b> 那根 strand 出发——一根「头发」，~400 行 C++，串行扫一遍顶点，每个顶点解一个 $3\times3$ 的牛顿步。然后我们把它搬上 GPU：<b>Newton 的 particle VBD</b> 把同一套局部牛顿步铺成一块布、用 Warp 的 kernel 按颜色并行扫，加上多种弹性元件、自碰撞、penetration-free。再往前一步，<b>AVBD</b> 用 augmented Lagrangian 补上了 VBD 留下的两块短板——硬约束和高刚度比——并把同一台机器开到了刚体的 joint 与 contact 上。</p>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 始终是同一个 min G(x)</div>
-          <p>一路加上去的，全是「机器」（machinery），不是「新物理」。strand → GPU cloth → 硬约束 → rigid，每一步多出来的是并行调度、是图着色、是更多元件类型、是 augmented Lagrangian 这层对偶外壳；但<b>被最小化的东西从头到尾没变</b>——还是那一个增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$，还是「一步隐式欧拉 = 解一个 $\arg\min G$」。TinyVBD 那根 strand 和 Newton 里翻滚堆叠的刚体，解的是同一道题，只是后者带着更多机械臂去解它。你早在原书 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 就握住了这把尺子；这一篇 Newton 之旅，不过是看着同一把尺子把房子盖得更大。</p>
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 共享动力学骨架，不是同一个固定 min G(x)</div>
+          <p>strand → GPU cloth 这一段，particle VBD 可以直接沿用增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$；加入硬约束与 rigid AVBD 后，数学对象多了 multiplier、penalty 和约束残差。AVBD 每轮在当前 $k,\lambda$ 下处理一份 augmented-Lagrangian 子问题，更新这些量后目标也随之变化。TinyVBD 与 rigid AVBD 共享的是一步动力学的惯性 / 能量 / 约束视角、局部 block 装配和着色调度，<b>不是从头到尾同一道固定的 $\arg\min G$</b>。</p>
         </div>
 
         <p>如果你把这两本（原书 + Newton 篇）连起来读完了，那你现在拥有的不是「VBD 怎么实现」这一条知识，而是一种能把任何 position/optimization-based 仿真方法<b>放回谱系</b>的眼光：它在最小化什么？primal 还是 dual？Gauss-Seidel 还是 Jacobi？保留了多少 Hessian？约束是软的惩罚还是硬的 Lagrangian？怎么并行的——着的是顶点图还是约束图？这几个问题，足够你从容地拆解下一个遇到的新方法。</p>

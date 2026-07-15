@@ -80,11 +80,11 @@
           <div class="c-h">TinyVBD 是单线程 CPU，做的是朴素顺序 Gauss-Seidel</div>
           <p>别被上面这套并行叙事误导了去代码里找着色逻辑——<b>找不到</b>。TinyVBD 是个极简的单线程 CPU demo，它的 <code>solve()</code> 就是从 <code>iV=1</code> 一路顺序扫到末端的<b>纯 Gauss-Seidel</b>，没有任何 graph coloring、没有 GPU、没有并行批次。着色是<b>完整版 GPU VBD</b> 用来把这套顺序算法并行化的手段；在一根 20 顶点的 strand 上，顺序扫一遍快得很，根本不需要。这里讲它，是为了让你读懂论文里的并行部分、以及理解 VBD 为何能 scale 到百万顶点——而不是因为这份代码里有它。</p>
         </div>
-        <p>这其实也是 TinyVBD 的价值所在：它把会让人分心的并行工程全剥掉了，只留下算法的数学骨架。等你彻底吃透了「逐顶点牛顿步 + 单调下降」，再回头看完整 VBD 的着色并行，就只是「把这套骨架铺到 GPU 上」的工程细节而已。</p>
+        <p>这其实也是 TinyVBD 的价值所在：它把会让人分心的并行工程全剥掉了，只留下「逐顶点 Newton 候选 + Gauss-Seidel 写回」的数学骨架。若每个 block 被精确最小化或候选经过下降验收，局部变化才会串成单调链；TinyVBD 的精简 raw full step 没做这项验收。吃透这层边界后，再看完整 VBD 的着色并行，才是把同一更新结构铺到 GPU 上。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) Gauss-Seidel 用最新值、快但顺序，Jacobi 用旧值、慢但并行；(2) 给<b>顶点图</b>着色——同色顶点互不相邻、可并行（同色 Jacobi），跨色按序（Gauss-Seidel）——VBD 因此兼得快收敛与并行，且顶点着色比约束/对偶着色省约一个数量级的颜色；(3) <b>TinyVBD 本身是单线程 CPU、朴素顺序 Gauss-Seidel，并不着色</b>，着色是完整 GPU 版本的并行手段。</p>
-        <p>下一节回到一个埋了好几次的伏笔：VBD 解 $\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>强制 $\mathbf H_i$ 正定，也不做 line search——这听起来很危险，为什么它依然稳？</p>
+        <p>下一节回到一个埋了好几次的伏笔：TinyVBD 解 $\mathbf H_i^{-1}\mathbf f_i$ 后直接接受 raw full step，没有 PSD 修改或 line search。它为什么在给定 demo 中常能工作，又为什么这仍不是无条件稳定与单调保证？</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

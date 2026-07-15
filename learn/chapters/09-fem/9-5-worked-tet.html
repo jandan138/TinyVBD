@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 9 · 9-5</div>
         <h1>手把手算一遍：一个单元从 $F$ 到 $\Delta x$</h1>
-        <p class="lede">前四节把零件都讲齐了——形变梯度 $F=D_s D_m^{-1}$（<a href="9-2-deformation-gradient.html">9.2</a>）、应变能密度 $\psi(F)$（<a href="9-3-strain-energy.html">9.3</a>）、Piola 应力 $P=\partial\psi/\partial F$ 与单元力 $-V_0 P D_m^{-\top}$（<a href="9-4-piola-assembly.html">9.4</a>）。这一节把它们在一个具体三角形单元上拼起来，用真实数字算一遍。我们仿照 <a href="../12-ipc/12-7-worked-example.html">12.7</a> 解剖一个接触对的节奏：摆出一组数 → 每一步对一个公式 → 把中间值写出来让你能拿计算器复算 → callout 说明「为什么这样」。算完你得到的不是一个结论，而是一种把握：从「一个三角形被拉大了 10%」到「这一步该把每个顶点往哪挪」，每一环都接得上、符号和方向都对。</p>
+        <p class="lede">前四节把零件都讲齐了——形变梯度 $F=D_s D_m^{-1}$（<a href="9-2-deformation-gradient.html">9.2</a>）、应变能密度 $\psi(F)$（<a href="9-3-strain-energy.html">9.3</a>）、Piola 应力 $P=\partial\psi/\partial F$ 与单元力 $-V_0 P D_m^{-\top}$（<a href="9-4-piola-assembly.html">9.4</a>）。这一节把它们在一个具体三角形单元上拼起来，用真实数字算一遍。我们仿照 <a href="../12-ipc/12-7-worked-example.html">12.7</a> 解剖一个接触对的节奏：摆出一组数 → 每一步对一个公式 → 把中间值写出来让你能拿计算器复算 → callout 说明「为什么这样」。算完你会看到从「三角形被拉大 10%」到「回复力怎样装进牛顿系统」的完整链；实际位移还取决于本节没有计算的 Hessian 与其它装配项。</p>
 
         <h2 id="setup">摆出这个单元：rest 单位直角三角形，world 拉伸 10%</h2>
         <p>为了能手算，我们用一个最干净的 <b>2D 三角形单元</b>。rest 形状取<b>单位直角三角形</b>，三个顶点：</p>
@@ -52,7 +52,7 @@
         <h2 id="step3">第三步 · $J=\det F$ 与不变量 $I_C$</h2>
         <p>两个标量：体积/面积比 $J=\det F$，第一不变量 $I_C=\operatorname{tr}(F^\top F)$。</p>
         <div class="math-block">$$J=\det F=1.1\times1.1-0\times0=1.21,\qquad I_C=\operatorname{tr}(F^\top F)=1.1^2+1.1^2=1.21+1.21=2.42.$$</div>
-        <p>读出来：$J=1.21>1$——单元面积比 rest 大了 $21\%$（正是 $1.1\times1.1$），<b>没有反转</b>（$J>0$）。$I_C=2.42$，比 rest 的 $I_C=\operatorname{tr}(I)=2$ 大，编码「两列都被拉长了」。两个量都报告「这块材料被往外撑了一点」。</p>
+        <p>读出来：$J=1.21>1$——单元面积比 rest 大了 $21\%$（正是 $1.1\times1.1$），<b>没有反转</b>（$J>0$）。$I_C=2.42$，比 rest 的 $I_C=\operatorname{tr}(I)=2$ 大，编码「两列都被拉长了」。两个量都报告「这块材料被往外撑了一点」；但 $J>0$ 只说明取向，没有给出完整单元 Hessian 的特征谱。</p>
 
         <h2 id="step4">第四步 · 应变能密度 $\psi$</h2>
         <p>代进 <a href="9-3-strain-energy.html">9.3</a> 的 Neo-Hookean 能量（2D 形式，$\ln J$ 变体），逐个中间值都能验。先算 $\ln J$：</p>
@@ -88,13 +88,13 @@
           <p>这一步的<b>大小</b>（$0.1388$）会随 $\mu,\lambda$、单位缩放，不必当真；但<b>方向和符号是确定的、可自检的</b>：单元被<b>拉大</b>，回复力必须指向<b>收缩</b>（把顶点拉回 rest）。$x_1,x_2$ 受力朝原点、$x_0$ 受力朝内、三股相加为零——三条全对。若哪天你的实现里拉伸却得到「把顶点继续往外推」的力，那一定是 $P$ 的符号或 $-V_0$ 那个负号搞反了。这就是手算一遍的价值：它给你一把校验符号的尺子。</p>
         </div>
 
-        <h2 id="step7">第七步 · 装配并解 $\Delta x=H^{-1}f$ 的方向</h2>
-        <p>力定了方向，最后一步把它送进牛顿步。每个顶点收集邻接单元的力块与（SPD 投影后的）Hessian 块，连同惯性项，累加进 $\mathbf f_i/\mathbf H_i$，解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$（<a href="9-4-piola-assembly.html">9.4</a>）。这次形变是纯拉伸、$J=1.21>0$，单元 Hessian 这一块本身正定，<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影不需要动手（它是为压缩/接近反转时的负特征值兜底的）。以顶点 $x_1$ 为例，它从这个单元拿到的力是 $(-0.1388,0)$，惯性项可能在把它往别处拽，但<b>这个单元这一项明确地朝「把 $x_1$ 拉回 $-x$、收短被拉开的边」出力</b>：</p>
-        <div class="math-block">$$\Delta\mathbf x_{x_1}=\mathbf H_{x_1}^{-1}\mathbf f_{x_1}\ \Rightarrow\ \text{带一个 }-x\text{ 方向分量（把 }x_1\text{ 往 rest 收）}.$$</div>
-        <p><b>具体挪多少是定量的</b>（取决于 $\mu,\lambda$、质量、惯性项与其它邻接单元怎么拔河），我们不编精确小数；<b>但方向是确定的、符号是对的</b>：拉伸的弹性项进来就是为了把单元收回 rest，这一步 $\Delta\mathbf x$ 就让它收回。这条链——$F\to J,I_C\to\psi\to P\to$ 节点力 $\to\Delta\mathbf x$——和你将在 <a href="9-6-fem-is-minG.html">9.6</a> 看到的「FEM 就是 $\min G(x)$ 的弹性项」是同一件事的两个视角：这里是单个单元的算术，那里是它在整个能量泛函里的位置。</p>
+        <h2 id="step7">第七步 · 装配进牛顿系统：本算例未计算谱</h2>
+        <p>力定了方向，最后把它送进牛顿系统。每个顶点收集邻接单元的力与 Hessian 贡献，连同惯性项累加进 $\mathbf f_i/\mathbf H_i$；若求解器选择 elementwise modified-Hessian 策略，还可先把局部负特征值截到 $0$，得到 PSD 块再装配（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）。<b>本算例未计算完整单元 Hessian 及其特征谱</b>，因此不能仅凭「纯拉伸」或 $J=1.21>0$ 断言它本身 SPD，也不能断言 PSD clamp 在这里一定不会改动它。</p>
+        <div class="math-block">$$\mathbf H_{\mathrm{total}}\,\Delta\mathbf x=\mathbf f_{\mathrm{total}},\qquad \mathbf f_{x_1}^{(e)}=(-0.1388,0)$$</div>
+        <p>能写准的是右边这个<b>单元力贡献</b>沿 $-x$、倾向于收短被拉开的边；不能从这一项单独推出 $\mathbf H_{\mathrm{total}}^{-1}\mathbf f_{\mathrm{total}}$ 的某个分量，因为逆矩阵会耦合所有自由度与其它项。只有正质量惯性、约束消元或 positive shift 使自由 DOF 上的总 $\mathbf H_{\mathrm{total}}$ 成为 SPD 后，$\mathbf f=-\nabla G$ 下的 $\Delta\mathbf x=\mathbf H_{\mathrm{total}}^{-1}\mathbf f$ 才是严格下降方向；full step 仍要由 line search 决定是否接受。本节因此不编造 $\Delta\mathbf x$ 的大小或方向。</p>
 
         <h2 id="chain">回头看这条链</h2>
-        <p>把七步连起来念一遍，就是一个 FEM 单元一帧的完整生命：<b>边矩阵 $D_m=I,\ D_s=1.1I$（9.2）→ $F=D_sD_m^{-1}=1.1I$ → $J=1.21,\ I_C=2.42$（9.2/9.3）→ 代进 Neo-Hookean 得正能量 $\psi\approx0.0285$（9.3）→ $P=\partial\psi/\partial F\approx0.2776\,I$，对角为正（9.4）→ 节点力 $-V_0 P D_m^{-\top}$：$x_1,x_2$ 受力朝原点收缩、$x_0$ 取负和、三股净零（9.4）→ 装配进 $\mathbf f_i/\mathbf H_i$、解 $\mathbf H_i^{-1}\mathbf f_i$，得到一步把单元往 rest 收的 $\Delta\mathbf x$（9.4/10.2）</b>。每一环的输入都是上一环的输出，符号和方向全程自洽。这就是把前几节分散的零件，在一个真实单元上拼成整机。</p>
+        <p>把七步连起来念一遍，就是一个 FEM 单元贡献的完整生命：<b>边矩阵 $D_m=I,\ D_s=1.1I$（9.2）→ $F=D_sD_m^{-1}=1.1I$ → $J=1.21,\ I_C=2.42$（9.2/9.3）→ 代进 Neo-Hookean 得正能量 $\psi\approx0.0285$（9.3）→ $P=\partial\psi/\partial F\approx0.2776\,I$，对角为正（9.4）→ 节点力 $-V_0 P D_m^{-\top}$：$x_1,x_2$ 受力朝原点收缩、$x_0$ 取负和、三股净零（9.4）→ 力与 Hessian 贡献装配进总牛顿系统</b>。本节把能量与力的链算到了数值；由于没有算 Hessian 谱和完整装配，实际 $\Delta\mathbf x$ 留给总系统与 line search 决定。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">把 world 三角形拉成 1.1×，对照这一节的算法</span></div>
@@ -103,7 +103,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三件事：(1) 一个 FEM 单元从 $F$ 到 $\Delta x$ 是一条<b>每环都接得上</b>的链——边矩阵 → $F$ → $J,I_C$ → $\psi$ → $P=\partial\psi/\partial F$ → 节点力 $-V_0 P D_m^{-\top}$（净零）→ 装配解牛顿步；本节用 rest 单位直角三角形、world 拉伸 $10\%$、$\mu=1,\lambda=0.5$ 把每环的数都摆了出来（$F=1.1I,\ J=1.21,\ I_C=2.42,\ \psi\approx0.0285,\ P\approx0.2776I,\ \mathbf f_{x_1}=(-0.1388,0)$…）。(2) <b>能写准的写准</b>（$J$、不变量、$P$ 的符号、力的方向、净力为零），<b>会随单位/材料缩放的标成示意</b>（能量、力的绝对大小、$\Delta x$ 精确值）——这是诚实，不是含糊。(3) 这组数是为讲解构造的自洽示例（非论文复现），Neo-Hookean 精确变体以 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 为准；重点是<b>符号、方向和连接</b>，不是某个小数。</p>
+        <p>三件事：(1) 一个 FEM 单元从 $F$ 到牛顿装配是一条<b>每环都接得上</b>的链——边矩阵 → $F$ → $J,I_C$ → $\psi$ → $P=\partial\psi/\partial F$ → 节点力 $-V_0 P D_m^{-\top}$（净零）→ 力与 Hessian 贡献进入总系统；本节用 rest 单位直角三角形、world 拉伸 $10\%$、$\mu=1,\lambda=0.5$ 把能量与力各环的数摆了出来。(2) <b>能写准的写准</b>（$J$、不变量、$P$ 的符号、力的方向、净力为零）；本例没有计算 Hessian 谱，所以不声称单元 Hessian SPD，也不从单项力推断 $\Delta x$。(3) 这组数是为讲解构造的自洽示例（非论文复现），Neo-Hookean 精确变体以 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 为准；重点是<b>符号、方向和连接</b>，不是某个小数。</p>
         <p>单个单元算清了，下一节我们拉高一层：把所有单元的能量求和 $\Psi=\sum_e V_0^e\psi(F^e)$ 放回 $G(x)=\text{惯性}+\Psi$，看 FEM 怎么<b>整个</b>就是 $\min G(x)$ 的弹性项，和弹簧用的是同一台求解器、同一个装配口。去 <a href="9-6-fem-is-minG.html">9.6（FEM 就是 $\min G(x)$ 的弹性项）</a>。</p>
       </article>
     </main>

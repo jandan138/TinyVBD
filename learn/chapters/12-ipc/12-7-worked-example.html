@@ -72,15 +72,15 @@
           <p>回想 <a href="../04-code/4-3-solve.html">4.3</a> 里弹簧力按端点取 ± 号、两端等大反向。这里一模一样，只是「两端平分」升级成「按 barycentric 权重分到多个顶点」。弹簧是 $\{+1,-1\}$ 两端，接触是 $\{+1,-\lambda_a,-\lambda_b\}$ 多端——权重之和让净力归零的逻辑没变。你在 4.3 建立的肌肉记忆，在这里直接复用。</p>
         </div>
 
-        <h2 id="step5">第五步 · Hessian → PSD 投影 → 合成 → 这一步的 Δx</h2>
+        <h2 id="step5">第五步 · Hessian → PSD modified model → 总系统方向</h2>
         <p>力定了方向，还差曲率才能解牛顿步。barrier 的 Hessian 由 <a href="12-4-barrier-grad-psd.html">12-4</a> 的两项构成：一项来自 $b''(d)\,\hat{\mathbf n}\hat{\mathbf n}^\top$（沿法向的刚度，半正定），一项来自 $b'(d)\,\partial^2 d/\partial\mathbf x^2$（距离的二阶项，<b>不保证半正定</b>）。后者可能带来负特征值，让这块 Hessian 不定——直接拿去解牛顿步会跑出上坡方向。</p>
-        <p>所以照搬你在 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 学过的招：<b>PSD projection</b>，把这块接触 Hessian 的负特征值钳到零（或一个小正数），保证它半正定、保证解出来是下降方向。钳完，这块接触 Hessian 和惯性项 $\frac{m}{h^2}\mathbf I$、弹性项一起<b>累加进同一个 $\mathbf H$</b>，力一起进同一个 $\mathbf f$，解一步：</p>
-        <div class="math-block">$$\Delta\mathbf x = \mathbf H^{-1}\mathbf f$$</div>
-        <p>对 $\mathbf p$ 这个顶点而言，$\mathbf f$ 里接触贡献的那一份是 $+\hat{\mathbf n}=(0,1)$ 方向，惯性项可能在把它往别处拽，但接触这一项<b>明确地朝「抬离线段」的方向出力</b>。合成后这一步的 $\Delta\mathbf x_{\mathbf p}$ 因此带一个向上的分量——把点抬离线段、把距离 $d$ 往 $0.30$ 之上推。<b>具体抬多少是定量的（取决于 $\kappa$、质量、其余各项怎么拔河），我们不编精确小数；但方向是确定的、符号是对的</b>：barrier 进来就是为了把 $d$ 顶大，这一步 $\Delta\mathbf x$ 就让它顶大。</p>
-        <p>再补一句把全链接上：解出 $\Delta\mathbf x$ 后并不立刻全盘接受——还要过 <a href="12-5-ccd-linesearch.html">12-5</a> 的 <span class="term">CCD</span> line search，求一个安全步长 $\alpha\in(0,1]$，保证沿 $\Delta\mathbf x$ 走 $\alpha$ 步后<b>仍没穿过线段</b>。我们这个点本来就在外侧、$\Delta\mathbf x$ 又是抬离方向，CCD 多半放行整步（$\alpha=1$）；但机制始终在那兜底，这正是 IPC 「intersection-free 是保证而非兜底」的来源。</p>
+        <p>一种常用 modified-Hessian 做法是 <b>PSD projection</b>：把这块接触 Hessian 的负特征值钳到零，再与惯性项 $\frac{m}{h^2}\mathbf I$、弹性项一起装进总 $\mathbf H$。这个局部 PSD 块可能奇异，不能单独保证 inverse 或严格下降；只有正质量惯性、约束消元或 positive shift 使自由 DOF 上的<b>总系统 SPD</b> 后，下面的反解才给出严格下降方向：</p>
+        <div class="math-block">$$\mathbf H_{\mathrm{total}}\,\Delta\mathbf x=\mathbf f_{\mathrm{total}}=-\nabla G$$</div>
+        <p>对 $\mathbf p$ 而言，能写准的是接触<b>力贡献</b>沿 $+\hat{\mathbf n}=(0,1)$，明确地朝「抬离线段」方向出力；不能只凭这一项断言合成后的 $\Delta\mathbf x_{\mathbf p}$ 必有向上分量，因为 $\mathbf H_{\mathrm{total}}^{-1}$ 会耦合其它自由度与能量项。本例没有装配完整矩阵，因此不编造 $\Delta\mathbf x$ 的大小或分量。</p>
+        <p>再补一句把全链接上：即便总系统 SPD、解出了严格下降方向，也不立刻全盘接受 full step——还要过 <a href="12-5-ccd-linesearch.html">12-5</a> 的 <span class="term">CCD</span> + Armijo line search，求一个安全且实际降低能量的步长 $\alpha\in(0,1]$。本例的接触力朝外，但完整方向与 $\alpha=1$ 是否可接受仍由总系统、CCD 和 line search 共同决定；PSD modified Hessian 本身不提供 intersection-free 保证。</p>
 
         <h2 id="chain">回头看这条链</h2>
-        <p>把五步连起来念一遍，就是 IPC 一个接触对的完整生命：<b>几何给出 $d=0.30$、$\hat{\mathbf n}=(0,1)$、权重 $0.5/0.5$（12-3）→ 代进 barrier 得正能量 $\approx2.9\times10^{-3}$、确认在激活窗口内（12-2）→ 链式法则得力 $-b'(d)\hat{\mathbf n}$，方向沿 $+\hat{\mathbf n}$ 顶开点（12-4）→ 按 barycentric 把力分成点拿满、两端各 $-0.5\hat{\mathbf n}$，净力为零（12-3）→ Hessian 做 PSD 投影、与惯性/弹性合成、解 $\mathbf H^{-1}\mathbf f$，得到一步把点抬离线段的 $\Delta\mathbf x$，再经 CCD line search 截到可行域内（12-4/12-5）</b>。每一环的输入都是上一环的输出，符号和方向全程自洽。这就是把前面分散的零件，在一对真实接触上拼成整机。</p>
+        <p>把五步连起来念一遍，就是 IPC 一个接触对的完整生命：<b>几何给出 $d=0.30$、$\hat{\mathbf n}=(0,1)$、权重 $0.5/0.5$（12-3）→ 代进 barrier 得正能量 $\approx2.9\times10^{-3}$、确认在激活窗口内（12-2）→ 链式法则得力 $-b'(d)\hat{\mathbf n}$，方向沿 $+\hat{\mathbf n}$ 顶开点（12-4）→ 按 barycentric 把力分成点拿满、两端各 $-0.5\hat{\mathbf n}$，净力为零（12-3）→ 局部 Hessian 可做 PSD modified-Hessian 修正，与惯性/弹性合成；总系统 SPD 后解候选下降方向，再经 CCD + line search 选取可行且下降的实际步长</b>。本例算准了能量与力，但没有从单项力臆测完整 $\Delta\mathbf x$。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">把点设到 (0, 0.30)，对照这一节的算法</span></div>
@@ -89,7 +89,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三件事：(1) 一个接触对从距离到 $\Delta\mathbf x$ 是一条<b>每环都接得上</b>的链——几何（$d,\hat{\mathbf n}$，barycentric）→ barrier 能量 → 链式法则求力 → 按权重落到顶点 → Hessian 经 PSD 投影后与惯性/弹性合成解牛顿步 → CCD line search 截到可行域；本节用 $\mathbf p=(0,0.30)$、$d=0.30$、$\hat{\mathbf n}=(0,1)$、$\lambda=0.5/0.5$ 把每环的数都摆了出来。(2) <b>能写准的写准</b>（距离、法向、权重、力的方向与符号、净力为零），<b>会随单位/参数缩放的标成示意</b>（能量绝对值、$\Delta\mathbf x$ 精确大小）——这是诚实，不是含糊。(3) 这组数是为讲解构造的自洽示例（非论文复现），barrier 形式以论文为准；重点是<b>方向和连接</b>，不是某个小数。</p>
+        <p>三件事：(1) 一个接触对从距离到候选牛顿方向是一条<b>每环都接得上</b>的链——几何（$d,\hat{\mathbf n}$，barycentric）→ barrier 能量 → 链式法则求力 → 按权重落到顶点 → 局部 PSD modified Hessian 与惯性/弹性合成 → 总系统 SPD 后求方向 → CCD + line search 选实际步长。(2) <b>能写准的写准</b>（距离、法向、权重、力的方向与符号、净力为零）；完整 $\Delta\mathbf x$ 的分量没有在本例中计算，不能由单项力直接推出。(3) 这组数是为讲解构造的自洽示例（非论文复现），barrier 形式以论文为准；重点是<b>方向和连接</b>，不是某个小数。</p>
         <p>单个接触对算清了，下一节我们拉高一层：把整个 IPC 外迭代当成一段<b>伪代码</b>逐行走读——assemble → PSD-project → solve direction → CCD → line search → accept，像 <a href="../04-code/4-3-solve.html">4.3</a> 解剖 <code>solve()</code> 那样用手指点到每一行。去 <a href="12-8-ipc-iteration.html">12-8（一次完整迭代的伪代码走读）</a>。</p>
       </article>
     </main>

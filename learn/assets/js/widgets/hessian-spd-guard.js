@@ -1,10 +1,10 @@
-/* hessian-spd-guard — 单顶点 3×3 局部 Hessian 的特征值条 + det 阈值守卫。
-   左：可拖端点的单弹簧（控制压缩比 l/l0）。右：三根特征值条——惯性底 m/h²（恒正，绿）叠加
-   弹簧块（沿向 +k、两垂直向 k(1-l0/l)）。压到 l<l0 → 垂直特征值变负；叠惯性看是否仍 ≥0（理由一），
-   压过头使 det→0 触发 "SKIP this vertex"（理由二）。Knobs：压缩比、k(100 vs 1e8)、h。 */
+/* hessian-spd-guard — 单顶点 3×3 局部 Hessian 的谱与 determinant 诊断。
+   widget key 为兼容现有页面保留。谱用 minEig > 0 判断 SPD；determinant 独立模拟 Newton/Warp 的
+   abs(det) > 1e-8 可逆性 heuristic。后者不判断 SPD、下降或 TinyVBD C++ 的行为。
+   Knobs：压缩比 l/l0、k (100 vs 1e8)、h。 */
 (function () {
   window.VBWidgets["hessian-spd-guard"] = function (root) {
-    const W = 560, H = 300; const c = (n) => VBW.c(n);
+    const W = 560, H = 330; const c = (n) => VBW.c(n);
     const state = { ratio: 0.5, kExp: 2, hInv: 60 }; // l/l0, k=10^kExp, m/h²=hInv²
     const l0 = 1.0;
 
@@ -22,9 +22,9 @@
       const e = [mh2 + lamPar, mh2 + lamPerp, mh2 + lamPerp];
       const det = e[0] * e[1] * e[2];
       const minEig = Math.min.apply(null, e);
-      // det 阈值（演示用）：相对惯性底^3 太小则判退化跳过
-      const skip = minEig <= 0 || det < Math.pow(mh2, 3) * 1e-6;
-      return { k, l, mh2, lamPar, lamPerp, e, det, minEig, skip };
+      const spd = minEig > 0;
+      const invertibleHeuristic = Math.abs(det) > 1e-8;
+      return { k, l, mh2, lamPar, lamPerp, e, det, minEig, spd, invertibleHeuristic };
     }
 
     function draw() {
@@ -45,7 +45,7 @@
 
       // 右：特征值条（log 尺度，带正负）
       const bx = 250, bw = W - bx - 30, by0 = 40, bh = 30, gap = 18;
-      const labels = ["沿向 λ∥", "垂直 λ⊥ (a)", "垂直 λ⊥ (b)"];
+      const labels = ["合成 λ∥", "合成 λ⊥ (a)", "合成 λ⊥ (b)"];
       const zeroX = bx + 80;
       function lg(v) { const s = v >= 0 ? 1 : -1; return s * Math.log10(1 + Math.abs(v)); }
       const scale = 26;
@@ -63,17 +63,25 @@
       ctx.beginPath(); ctx.moveTo(zeroX, by0 - 6); ctx.lineTo(zeroX, by0 + 3 * (bh + gap)); ctx.stroke();
       ctx.fillStyle = c("ink-faint"); ctx.fillText("0", zeroX - 4, by0 - 10);
 
-      // 读数 + 守卫
-      const yb = 210; ctx.font = "12px var(--mono)";
+      // 读数 + 两项彼此独立的诊断
+      const yb = 204; ctx.font = "12px var(--mono)";
       ctx.fillStyle = c("ink-soft");
       ctx.fillText("惯性底 m/h² = " + r.mh2.toLocaleString(), 30, yb);
       ctx.fillText("弹簧 k = " + r.k.toExponential(0) + "   λ⊥(裸) = k(1-l₀/l) = " + r.lamPerp.toExponential(1), 30, yb + 20);
       ctx.fillText("min 特征值 = " + r.minEig.toExponential(1), 30, yb + 40);
-      // 守卫牌
+      ctx.fillText("det(H) = " + r.det.toExponential(2) + "   |det|>1e-8: " + (r.invertibleHeuristic ? "PASS" : "REJECT"), 30, yb + 60);
+      // 诊断牌：故意展示 determinant 放行不定矩阵的情形
       ctx.font = "bold 14px var(--mono)";
-      if (r.skip) { ctx.fillStyle = "#e0463c"; ctx.fillText("⚠ det→0 / 不定 → SKIP this vertex（理由二兜底）", 30, yb + 66); }
-      else if (r.lamPerp < 0) { ctx.fillStyle = c("warn"); ctx.fillText("✓ 裸 Hessian 不定，但惯性底抬回正定（理由一）", 30, yb + 66); }
-      else { ctx.fillStyle = c("interactive"); ctx.fillText("✓ 正定，直接可解", 30, yb + 66); }
+      if (!r.spd && r.invertibleHeuristic) {
+        ctx.fillStyle = "#e0463c";
+        ctx.fillText("谱: INDEFINITE | det heuristic: PASS（仍可能上坡）", 30, yb + 88);
+      } else if (!r.invertibleHeuristic) {
+        ctx.fillStyle = c("warn");
+        ctx.fillText("det heuristic: REJECT（只诊断近奇异，不判 SPD）", 30, yb + 88);
+      } else {
+        ctx.fillStyle = c("interactive");
+        ctx.fillText("谱: SPD | det heuristic: PASS（两项结论独立）", 30, yb + 88);
+      }
     }
 
     const r1 = VBW.row();
@@ -81,7 +89,7 @@
     r1.appendChild(VBW.slider("弹簧刚度 k", 1, 8, 1, state.kExp, (v) => { state.kExp = v; draw(); }, (v) => "1e" + (v | 0)).wrap);
     r1.appendChild(VBW.slider("1/h", 20, 120, 10, state.hInv, (v) => { state.hInv = v; draw(); }, (v) => "h=1/" + (v | 0)).wrap);
     root.appendChild(cv); root.appendChild(r1);
-    const cap = VBW.el("div", { class: "lab-cap", style: "padding:6px 0 0" }, "拖压缩比把弹簧压到 l<l₀：垂直特征值（裸）变负、条变红。再看叠上惯性底 m/h² 后——软弹簧(k=1e2)被抬回正定（理由一）；硬弹簧(k=1e8)惯性底救不回 → det→0 触发 SKIP（理由二）。调 1/h 改惯性底高度看它何时还兜得住。");
+    const cap = VBW.el("div", { class: "lab-cap", style: "padding:6px 0 0" }, "谱诊断用 min 特征值判断 SPD；determinant 诊断独立使用尺度相关的 |det|>1e-8。切到 k=1e8 并压缩，可看到 Hessian 不定但 determinant 仍巨大、heuristic 继续 PASS；只有特征值过零附近才 REJECT，继续压缩后 |det| 会再次增大。该 heuristic 来自 Newton/Warp 对照，不是 TinyVBD C++ 的 guard，也不保证下降。");
     root.appendChild(cap);
     window.addEventListener("themechange", draw);
     draw();

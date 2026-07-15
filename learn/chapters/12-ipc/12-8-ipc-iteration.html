@@ -39,15 +39,17 @@
 # 输出：更新后的 x，仍无交叉；是否收敛
 
 def ipc_outer_iteration(x, y):
-    # 1) 装配全局稀疏 H, f：惯性 + 弹性 + barrier 三部分贡献
-    #    梯度 ∇G → f（取负），Hessian ∇²G → H
-    H, f = assemble_global(x, y)          # 累加 inertia / elasticity / barrier
+    # 1) 装配全局稀疏 H, f；这里选择局部 PSD modified-Hessian 模型
+    #    f = -∇G；弹性 / barrier 局部块先截负特征值，再装进 H
+    H, f = assemble_global(x, y, local_hessian="psd_modified")
 
-    # 2) 对每个局部 Hessian 块做 PSD 投影，再装进全局 H
-    H = psd_project_blocks(H)             # 负特征值钳到 0，保证下降方向
+    # 2) 在自由 DOF 上建立 SPD 总系统（PSD 本身可能奇异）
+    H_free, f_free = eliminate_constrained_dofs(H, f)
+    H_free = positive_shift_if_needed(H_free)  # 必要时 regularize；普通 Cholesky 要 SPD
 
-    # 3) 解全局稀疏线性系统 H p = f，得到下降方向 p
-    p = sparse_cholesky_solve(H, f)       # CHOLMOD：符号分解 + 并行数值分解
+    # 3) 解自由系统，再把固定 DOF 上的零位移补回完整方向
+    p_free = sparse_cholesky_solve(H_free, f_free)  # H_free 已 SPD
+    p = lift_to_full_dofs(p_free)
 
     # 4) filtered CCD：沿 p 求最大不穿透步长 t*（time of impact）
     t_star = filtered_CCD(x, p)           # 整段扫掠里第一次接触的比例
@@ -60,7 +62,7 @@ def ipc_outer_iteration(x, y):
     converged = norm(grad_G(x)) &lt; tol     # 梯度足够小 → 已到极小附近
     return x, converged</code></pre></div>
 
-        <p>骨架是：<b>装配全局 H/f → PSD 投影 → 全局求解出方向 p → CCD 求安全步长 → line search 定最终步长 → 接受并判收敛</b>。把它和 4-3 的 VBD <code>solve()</code> 并排看，会发现两者<b>目标完全相同</b>（都在最小化同一个 incremental potential $G$），但「怎么走一步」的机器截然不同。下面逐块拆。</p>
+        <p>骨架是：<b>局部块构造 PSD modified Hessian 并装配全局 H/f → 约束消元 / 必要 regularization 使自由系统 SPD → 全局求解出方向 p → CCD 求安全步长 → line search 定最终步长 → 接受并判收敛</b>。把它和 4-3 的 VBD <code>solve()</code> 并排看，会发现两者<b>目标完全相同</b>（都在最小化同一个 incremental potential $G$），但「怎么走一步」的机器截然不同。下面逐块拆。</p>
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个 min G(x)，两台不同的机器</div>
@@ -68,12 +70,12 @@ def ipc_outer_iteration(x, y):
         </div>
 
         <h2 id="assemble">第 1 段：装配全局 H、f</h2>
-        <div class="code" data-lang="python"><div class="code-h"><span class="fn">① assemble_global</span><button class="cp">复制</button></div><pre><code>H, f = assemble_global(x, y)   # 累加 inertia / elasticity / barrier</code></pre></div>
-        <p>这一行对应 4-3 里给每个顶点填 <code>f</code>、<code>h</code> 的那两段——只是 IPC 把所有顶点、所有项一次性装进<b>全局稀疏</b>矩阵。$G$ 的梯度取负得到 <code>f</code>，$G$ 的 Hessian 得到 <code>H</code>：</p>
-        <div class="math-block">$$\mathbf f = -\nabla G(\mathbf x),\qquad \mathbf H = \nabla^2 G(\mathbf x)$$</div>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">① assemble_global</span><button class="cp">复制</button></div><pre><code>H, f = assemble_global(x, y, local_hessian="psd_modified")</code></pre></div>
+        <p>这一行对应 4-3 里给每个顶点填 <code>f</code>、<code>h</code> 的那两段——只是 IPC 把所有顶点、所有项一次性装进<b>全局稀疏</b>矩阵。$G$ 的梯度取负得到 <code>f</code>；精确局部 Hessian 来自 $\nabla^2G$，但本伪代码把选定局部块替换成 PSD modified blocks，因此装配出的 <code>H</code> 是二阶模型而非原始 Hessian 本身：</p>
+        <div class="math-block">$$\mathbf f=-\nabla G(\mathbf x),\qquad \mathbf H_{\mathrm{mod}}=\frac{\mathbf M}{h^2}+\sum_e\widetilde{\mathbf H}_e^{\mathrm{PSD}}+\sum_c\widetilde{\mathbf H}_c^{\mathrm{PSD}}$$</div>
         <p>$G$ 由三部分相加，装配时也就累加三份贡献：</p>
         <ul>
-          <li><b>惯性项</b>：和 4-3 同源的 $\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$ 进 <code>f</code>、$\frac{m_i}{h^2}\mathbf I$ 进 <code>H</code>（对角块，恒正定）。这是那块「定海神针」。</li>
+          <li><b>惯性项</b>：和 4-3 同源的 $\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)$ 进 <code>f</code>、$\frac{m_i}{h^2}\mathbf I$ 进 <code>H</code>；它在正质量 active 自由度上正定。固定 / 约束自由度要消元，零质量自由度不能靠这块获得正定性。</li>
           <li><b>弹性项</b>：每个 force element（弹簧 / 三角形 / 四面体）按它的能量贡献力与 Hessian，落到相关顶点的块上——就是 4-3 内层循环累加 <code>h_1_1</code> 和带 ± 号的力那件事，只不过现在写进全局矩阵的对应位置。</li>
           <li><b>barrier 项</b>：这是 IPC 独有、也是这一段最关键的部分。遍历当前所有<b>逼近的接触对</b>（point-triangle / edge-edge），对每一对算出 barrier 的力与 Hessian。</li>
         </ul>
@@ -85,21 +87,23 @@ def ipc_outer_iteration(x, y):
           <p>不是所有元件对都进 barrier 装配——只有距离 $d &lt; \hat d$（落进激活阈值）的接触对才有非零贡献，正是 <a href="12-2-barrier-energy.html">12-2</a> 那条「$d\ge\hat d$ 时 $b=0$」。所以每轮迭代前要先用空间加速结构找出这批逼近的对（和 12-5 里 filtered CCD 的「过滤」是同一套加速思想）。这份「当前活跃接触集」会随着 $\mathbf x$ 变化而变。</p>
         </div>
 
-        <h2 id="psd">第 2 段：PSD 投影每个局部块</h2>
-        <div class="code" data-lang="python"><div class="code-h"><span class="fn">② psd_project_blocks</span><button class="cp">复制</button></div><pre><code>H = psd_project_blocks(H)   # 负特征值钳到 0，保证下降方向</code></pre></div>
-        <p>这一段在 4-3 的 VBD <code>solve()</code> 里<b>是没有的</b>——VBD 故意不投影，靠那块恒正定的惯性 Hessian 把整体兜回正定附近（见 <a href="../03-vbd/3-6-stability.html">3.6</a>）。IPC 走全局 Newton，就必须更讲究：要让 $\mathbf H\,\mathbf p=\mathbf f$ 解出来的 $\mathbf p$ <b>确实是一个下降方向</b>，$\mathbf H$ 得是（半）正定的。</p>
-        <p>问题出在哪？弹性 Hessian 在压缩时可能不定（4-3 里那个 $k(1-l_0/l)$ 负特征值），barrier Hessian 里那个 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 项（距离的二阶项）<b>也不保证半正定</b>——这正是 <a href="12-4-barrier-grad-psd.html">12-4</a> 重点讲的。办法和 <a href="../10-elasticity-collision/10-2-spd-damping.html">10-2</a> 的 SPD 投影同源：对每个<b>局部</b> Hessian 块做特征分解，把负特征值<b>钳到零</b>，再把投影后的块装进全局 $\mathbf H$。</p>
+        <h2 id="psd">第 2 段：局部 PSD modified Hessian → 自由系统 SPD</h2>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">② establish_spd_system</span><button class="cp">复制</button></div><pre><code>H_free, f_free = eliminate_constrained_dofs(H, f)
+H_free = positive_shift_if_needed(H_free)   # 普通 Cholesky 前必须 SPD</code></pre></div>
+        <p>先分清两个层次。TinyVBD 的纯弹簧 demo 没有做 elementwise projection，但 production VBD 的真实 membrane 路径含 PSD clamp；IPC 伪代码这里选择同类的<b>局部 modified-Hessian</b> 策略。它不是所有 Newton / IPC 实现的强制工序，也不能只靠一块惯性就笼统替代。</p>
+        <p>问题出在哪？弹性 Hessian 即使在 $J&gt;0$ 时也可能不定，barrier Hessian 里的 $b'(d)\,\partial^2 d/\partial\mathbf x^2$ 项也不保证半正定。常见做法是对每个<b>局部</b> Hessian 块做特征分解，把负特征值<b>钳到零</b>，再把 PSD modified block 装进全局 $\mathbf H$：</p>
         <div class="math-block">$$\mathbf H_{\text{local}} = \mathbf Q\,\mathrm{diag}(\lambda_1,\dots,\lambda_n)\,\mathbf Q^\top \;\longrightarrow\; \mathbf Q\,\mathrm{diag}(\max(\lambda_1,0),\dots,\max(\lambda_n,0))\,\mathbf Q^\top$$</div>
-        <p>「逐块投影再装配」是关键细节：投影发生在每个小块（一个 force element、一对接触）<b>本地</b>，而不是对整个全局大矩阵做（那太贵）。每个本地块半正定，累加成的全局 $\mathbf H$ 也半正定——于是下一步的解必为下降方向。</p>
+        <p>「逐块投影再装配」是关键细节：投影发生在每个小块（一个 force element、一对接触）<b>本地</b>，而不是装配后对整个全局矩阵做。负特征值截到 $0$ 只保证 PSD，仍可能有刚体 / 约束 / 零质量等零模态；因此还要消去固定或约束自由度，并在需要时加 positive shift。只有自由系统最终满足 $\mathbf H\succ0$，在 $\mathbf f=-\nabla G$ 下反解才给严格下降方向。</p>
 
         <h2 id="solve">第 3 段：全局稀疏求解出方向 p</h2>
-        <div class="code" data-lang="python"><div class="code-h"><span class="fn">③ sparse_cholesky_solve</span><button class="cp">复制</button></div><pre><code>p = sparse_cholesky_solve(H, f)   # CHOLMOD：符号分解 + 并行数值分解</code></pre></div>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">③ sparse_cholesky_solve</span><button class="cp">复制</button></div><pre><code>p_free = sparse_cholesky_solve(H_free, f_free)
+p = lift_to_full_dofs(p_free)</code></pre></div>
         <p>这是 IPC 和 VBD 分道扬镳最明显的一行。4-3 里求方向是 <code>dx = h.colPivHouseholderQr().solve(f)</code>——一个 <b>3×3</b> 的小系统，每个顶点一个，互相独立。IPC 这里是<b>一个</b>覆盖全部自由度的<b>大稀疏</b>系统：</p>
-        <div class="math-block">$$\mathbf H\,\mathbf p = \mathbf f$$</div>
-        <p>$\mathbf H$ 是 $3N\times 3N$（$N$ 个顶点）的稀疏矩阵，解它要用稀疏直接法。IPC 用 <span class="term">CHOLMOD</span> 做 Cholesky 分解：先按 $\mathbf H$ 的稀疏结构做一次<b>符号分解</b>（算出非零位置、可在结构不变时复用），再做<b>并行数值分解</b>得到 $\mathbf p$。因为第 2 段已把 $\mathbf H$ 投成半正定，Cholesky 才用得上（它要求矩阵正定）。</p>
+        <div class="math-block">$$\mathbf H_{\mathrm{free}}\,\mathbf p_{\mathrm{free}}=\mathbf f_{\mathrm{free}},\qquad \mathbf p=\operatorname{lift}(\mathbf p_{\mathrm{free}})$$</div>
+        <p>自由系统是覆盖未约束 DOF 的大稀疏矩阵。IPC 用 <span class="term">CHOLMOD</span> 做 Cholesky 分解：先按稀疏结构做一次<b>符号分解</b>，再做<b>并行数值分解</b>得到 $\mathbf p_{\mathrm{free}}$，最后在固定 DOF 上补零得到完整 $\mathbf p$。这里要严格区分：局部 PSD projection 不足以支撑<b>普通 Cholesky</b>；是正质量惯性、约束消元和必要的 regularization 共同让自由系统成为 SPD 后，普通 Cholesky 才有前提。若矩阵仍仅 PSD / 奇异，就要继续处理零模态、加 shift，或改用能处理该情形的分解。</p>
         <div class="callout note">
           <div class="c-h">这一步贵在哪，下一节专门算账</div>
-          <p>「解一个全局稀疏系统」正是 IPC 比 VBD 的 per-vertex 3×3 贵的核心来源之一——它不能像 VBD 那样天然 per-vertex 并行，而要做一次有数据依赖的稀疏分解。这笔账连同 CCD 的开销，<a href="12-9-solver-cost.html">12-9</a> 会把 IPC「稳但贵」的全景摊开。这里先记住：<b>解出的 $\mathbf p$ 是「往 $G$ 更低处去」的方向，但还不是最终位移</b>——步长由下面两段决定。</p>
+          <p>「解一个全局稀疏系统」正是 IPC 比 VBD 的 per-vertex 3×3 贵的核心来源之一——它不能像 VBD 那样天然 per-vertex 并行，而要做一次有数据依赖的稀疏分解。这笔账连同 CCD 的开销，<a href="12-9-solver-cost.html">12-9</a> 会把 IPC「稳但贵」的全景摊开。这里先记住：<b>在总系统 SPD 的前提下，解出的 $\mathbf p$ 是严格下降方向，但还不是最终位移</b>——full step 是否被接受由下面两段决定。</p>
         </div>
 
         <h2 id="ccd-ls">第 4、5 段：CCD 求安全步长 + line search 定步长</h2>
@@ -134,7 +138,7 @@ converged = norm(grad_G(x)) &lt; tol   # 梯度足够小 → 已到极小附近<
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) IPC 一次外迭代的骨架是 <b>装配全局稀疏 $\mathbf H,\mathbf f$（惯性+弹性+barrier）→ 逐块 PSD 投影 → 全局稀疏 Cholesky 解出方向 $\mathbf p$ → CCD 求 $t^\star$ → line search 定 $\alpha=\min(\alpha_{\text{Newton}},c\,t^\star,\alpha_{\text{CFL}})$ → $\mathbf x\!\leftarrow\!\mathbf x+\alpha\mathbf p$ 并判收敛</b>，每一段都接得回 12-2/12-3/12-4/12-5；(2) 它和 4-3 的 VBD <code>solve()</code> <b>目标相同</b>（都是 $\min G(\mathbf x)$）但<b>机器不同</b>——VBD 是 per-vertex Gauss-Seidel sweep，IPC 是<b>一次全局求解</b>；(3) 因为 $\alpha$ 被 CCD 与保守界焊在可行域内，<b>每一次外迭代结束都无交叉</b>，于是 intersection-free 是贯穿整个 time step 的不变量。</p>
+        <p>三句话：(1) IPC 一次外迭代的骨架是 <b>局部块构造 PSD modified Hessian 并装配惯性+弹性+barrier → 约束消元 / 必要 positive shift 使自由系统 SPD → 普通 Cholesky 解严格下降方向 $\mathbf p$ → CCD 求 $t^\star$ → Armijo line search 在安全上限内定 $\alpha$ → $\mathbf x\!\leftarrow\!\mathbf x+\alpha\mathbf p$</b>；PSD、SPD、full-step 接受是三个不同层次。(2) 它和 4-3 的 VBD <code>solve()</code> 目标相同但机器不同：VBD 是 per-vertex sweep，IPC 是全局求解。(3) 在可行初值与完整 CCD-filtered line search 的前提下，接受后的迭代保持无交叉；这个保证来自步长过滤，不来自 PSD projection。</p>
         <p>这台机器转起来了，但还没算账：那个全局稀疏求解、那次 CCD，到底贵在哪、和 VBD 的 per-vertex 3×3 差多少？下一节 <a href="12-9-solver-cost.html">12-9（求解器全景与代价）</a>，我们把 IPC「稳但贵」的全景摊开来看。</p>
       </article>
     </main>

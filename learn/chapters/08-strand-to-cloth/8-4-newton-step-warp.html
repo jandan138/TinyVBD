@@ -65,7 +65,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         particle_displacements[particle_index] = particle_displacements[particle_index] + h_inv * f</code></pre></div>
         <p>盯住那两行 <code>f = …</code> 和 <code>h = …</code>。对照公式：</p>
         <div class="math-block">$$\mathbf f \mathrel{+}= \frac{m_i}{h^2}\big(\mathbf y_i - \mathbf x_i\big),\qquad \mathbf H \mathrel{+}= \frac{m_i}{h^2}\,\mathbf I_3$$</div>
-        <p><code>mass[particle_index]</code> 是 $m_i$，<code>inertia[particle_index]</code> 是惯性目标 $\mathbf y_i$（由 <a href="8-3-initialization.html">8.3</a> 的 <code>forward_step</code> 用朴素惯性 $\mathbf y=\mathbf x+(\mathbf v+\mathbf g\,h)\,h$ 算出，<b>没有</b> TinyVBD 那套自适应初始化），<code>pos[particle_index]</code> 是当前 $\mathbf x_i$，<code>dt_sqr_reciprocal</code> 是 $1/h^2$。力是负梯度，所以是 <code>(inertia - pos)</code> 的方向——把顶点往惯性碗底 $\mathbf y_i$ 拉。Hessian 的惯性块是各向同性的 $\frac{m_i}{h^2}\mathbf I_3$，<b>恒正定</b>，是后面那个 $3\times3$ 能解出来的定海神针。把这两行和 <a href="../04-code/4-3-solve.html">4.3</a> 的 TinyVBD 惯性块并排看，除了 <code>wp.identity(n=3)</code> 换掉了 <code>Mat3::Identity()</code>、变量名带了下标，<b>几乎一字不差</b>。</p>
+        <p><code>mass[particle_index]</code> 是 $m_i$，<code>inertia[particle_index]</code> 是惯性目标 $\mathbf y_i$（由 <a href="8-3-initialization.html">8.3</a> 的 <code>forward_step</code> 用朴素惯性 $\mathbf y=\mathbf x+(\mathbf v+\mathbf g\,h)\,h$ 算出，<b>没有</b> TinyVBD 那套自适应初始化），<code>pos[particle_index]</code> 是当前 $\mathbf x_i$，<code>dt_sqr_reciprocal</code> 是 $1/h^2$。力是负梯度，所以是 <code>(inertia - pos)</code> 的方向——把顶点往惯性碗底 $\mathbf y_i$ 拉。对正质量 active 顶点，Hessian 的惯性块是各向同性的 $\frac{m_i}{h^2}\mathbf I_3$，<b>恒正定</b>，是抬高局部曲率的重要来源；但若还累加未经修正的强负曲率，仅有这块惯性并不自动证明总 $\mathbf H_i$ 正定。把这两行和 <a href="../04-code/4-3-solve.html">4.3</a> 的 TinyVBD 惯性块并排看，除了 <code>wp.identity(n=3)</code> 换掉了 <code>Mat3::Identity()</code>、变量名带了下标，<b>几乎一字不差</b>。</p>
 
         <h2 id="accumulate">每个邻接元件加一块 f / H</h2>
         <p>惯性块之后，被我用 <code># ... elastic + contact force/Hessian ...</code> 省掉的那一大段，做的事和 <code>solve()</code> 内层 <code>for (iNeiE …)</code> 循环<b>结构相同</b>：遍历这个顶点的邻接元件，每个元件调一个 <span class="term">@wp.func</span> 求出它对 $\mathbf f$、$\mathbf H$ 的贡献，然后 <code>f = f + f_elem</code>、<code>h = h + h_elem</code> 累加上去。Newton 里的元件种类是：</p>
@@ -75,14 +75,14 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
           <li><b>tet</b>（四面体软体的 volumetric Neo-Hookean）——对应 <code>tet_indices</code> 那段邻接四面体循环；</li>
           <li><b>spring</b>（弹簧，力/Hessian 形式与 TinyVBD 弹簧<b>完全一致</b>）——以及 self-contact / body-particle contact，这些力/Hessian 在 sweep 里先攒进 <code>particle_forces</code> / <code>particle_hessians</code>，kernel 末尾两行 <code>h = h + particle_hessians[…]</code>、<code>f = f + particle_forces[…]</code> 把它们合并进来。</li>
         </ul>
-        <p>每种元件具体怎么算（变形梯度 $\mathbf F$、能量密度、SPD 投影……）是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 9</a> 的主题，这里只要记住：<b>它们都只是往同一个 $\mathbf f$、$\mathbf H$ 上 <code>+=</code> 一块</b>。这正是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 求和式 $\sum_{j\in\mathcal F_i}$ 在 3D、多元件下的逐项实现。代码无脑累加、不在元件层面对总 $\mathbf H$ 做投影——和 TinyVBD 一个脾气，靠惯性块兜底。</p>
+        <p>每种元件具体怎么算（变形梯度 $\mathbf F$、能量密度、PSD clamp / projection……）是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 9</a> 的主题，这里只要记住：<b>它们最终都往同一个 $\mathbf f$、$\mathbf H$ 上 <code>+=</code> 一块</b>。真实的 membrane 路径会先在<b>元件层面</b>对相应谱分量做 PSD clamp，再把修正后的贡献累加；这里没有的是对装配完成的总 $\mathbf H_i$ 再做一次整体投影，不能概括成「所有元件都不投影、只靠惯性兜底」。把负特征值截到 $0$ 得到的是 PSD 而非 SPD；只有正质量惯性与其余贡献合成后的总系统确实 SPD（或再经约束消元 / positive shift 达到 SPD），$\mathbf H_i^{-1}\mathbf f_i$ 才是有定义的严格下降方向，而 full step 是否下降仍需 line search 判断。</p>
 
-        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 f_i / H_i 与 G 单调下降</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">这是串行版的直觉；下一节看 Newton 怎么按 color 并行做同样的事。</div></div>
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 f_i / H_i 与候选更新</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">这是串行版的直觉；方向的下降性与 full step 的接受条件要分开，下一节看 Newton 怎么按 color 并行做同样的事。</div></div>
 
         <h2 id="solve">那个 3×3 解：Δx = H⁻¹f 与 det 守门</h2>
         <p>累加完，<code>h</code> 是完整的 $\mathbf H_i$、<code>f</code> 是完整的 $\mathbf f_i$，最后就是一步牛顿——求顶点该挪多少：</p>
-        <div class="math-block">$$\Delta\mathbf x_i = \mathbf H_i^{-1}\,\mathbf f_i$$</div>
-        <p>但 Newton 在求逆前先<b>守一道门</b>：<code>if abs(wp.determinant(h)) &gt; 1e-8</code>。只有当 $\lvert\det(\mathbf H_i)\rvert$ 超过这个阈值，才认为 $\mathbf H_i$ 足够「非退化」、求逆数值上靠谱，于是 <code>h_inv = wp.inverse(h)</code> 直接把 $3\times3$ 求逆，算出 $\mathbf H_i^{-1}\mathbf f_i$；否则<b>什么都不做</b>——这个顶点这一轮的位移保持原样（不加增量），等下一遍 sweep 它的邻居动过、$\mathbf H_i$ 重新变好再说。这就是 <a href="../03-vbd/3-6-stability.html">3.6</a> 讲的「万一退化就跳过」在 GPU 上的具体写法。</p>
+        <div class="math-block">$$\mathbf H_i\,\Delta\mathbf x_i=\mathbf f_i=-\nabla_iG,\qquad \Delta\mathbf x_i = \mathbf H_i^{-1}\,\mathbf f_i$$</div>
+        <p>但 Newton 在求逆前先<b>守一道门</b>：<code>if abs(wp.determinant(h)) &gt; 1e-8</code>。这只是一个筛掉<b>近奇异</b> $3\times3$ 矩阵的启发式：阈值依赖量纲与尺度，通过它不保证 $\mathbf H_i$ 是 SPD，也不可靠地保证条件数良好；一个可逆但不定的矩阵同样可能通过，而其反解方向未必下降。代码在门槛通过时直接算 <code>wp.inverse(h)</code>，否则<b>什么都不做</b>——这个顶点这一轮的位移保持原样。更一般的 Newton 求解会用约束处理或 positive shift 建立总系统的 SPD，再用 line search 决定是否接受 full step；不能从这道 det 门单独推出这些性质。</p>
         <p>还有个 GPU 细节值得点出：结果不是直接写回位置，而是<b>累加进 per-vertex displacement</b>——<code>particle_displacements[particle_index] += h_inv * f</code>。位移先攒着，等这一 color 的所有顶点都算完，再由外层（<a href="8-5-coloring-parallel.html">8.5</a>）统一施加并做 penetration-free 截断。这样同色顶点之间互不干扰，才能安全并行。</p>
 
         <div class="bridge tinyvbd"><div class="c-h"><span class="tag">从 TinyVBD 看</span> 三行对三行</div><p>把 <code>solve_elasticity</code> 接回你吃透的 <code>solve()</code>，几乎是逐行对译：<br>
@@ -92,7 +92,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
 
         <div class="callout note">
           <div class="c-h">直接求逆 vs colPivHouseholderQr</div>
-          <p>为什么 Newton 敢对 $\mathbf H_i$ 直接 <code>wp.inverse</code>，而 TinyVBD 用更稳的 <code>colPivHouseholderQr</code>？因为这是个 $3\times3$——闭式逆便宜又够用，GPU 上一个 thread 算它毫无压力；那道 <code>abs(det) &gt; 1e-8</code> 的守门正是用来挡掉求逆会炸的退化情形。TinyVBD 在 CPU 上图省心用了 Eigen 现成的 QR，两者解的是同一个方程，数值上对良态的 $3\times3$ 结果一致。</p>
+          <p>为什么 Newton 对 $\mathbf H_i$ 直接 <code>wp.inverse</code>，而 TinyVBD 用更稳的 <code>colPivHouseholderQr</code>？因为闭式 $3\times3$ 逆在 GPU 上便宜；对<b>已知良态</b>的矩阵，两者解的是同一个方程、结果一致。但 <code>abs(det) &gt; 1e-8</code> 只是近奇异启发式，不是 SPD 或良条件判据；退化、不定或尺度不合适时，稳健实现仍应跳过、regularize / shift，或换用更合适的线性求解与下降性检查。</p>
         </div>
 
         <h2 id="worked-example">代一组真数字：一个顶点的 3×3 装配全程</h2>
@@ -114,7 +114,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         <p>惯性块 + 弹簧块累加，拼出完整的 $\mathbf f_i$、$\mathbf H_i$。两块 Hessian 都是对角的，加起来还是对角，$3\times3$ 解一眼就出：</p>
         <div class="math-block">$$\mathbf f_i=(0,-72,0)+(20,0,0)=(20,\,-72,\,0),\qquad \mathbf H_i=\operatorname{diag}(3700,\,3616.67,\,3616.67)$$</div>
         <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i=\Big(\frac{20}{3700},\;\frac{-72}{3616.67},\;0\Big)\approx(0.0054,\,-0.0199,\,0)$$</div>
-        <p>这一步把顶点往下挪约 $0.02$（追惯性目标）、往邻居方向挪约 $0.005$（弹簧拉回）。注意 $\det(\mathbf H_i)=3700\times3616.67^2\approx4.8\times10^{10}\gg10^{-8}$，远远过得了 kernel 里 <code>abs(wp.determinant(h)) &gt; 1e-8</code> 那道守门——惯性块抬的 $3600$ 底，让 $\mathbf H_i$ 稳稳可逆。把这一遍和 4.3 的弹簧装配并排看：<b>同一套力、同一套 Hessian、同一个 $\mathbf H^{-1}\mathbf f$，只是从 2D strand 升到 3D、从一行 C++ 变成一个 GPU thread</b>。</p>
+        <p>这一步把顶点往下挪约 $0.02$（追惯性目标）、往邻居方向挪约 $0.005$（弹簧拉回）。这里三个对角元都显式为正，所以可直接验证 $\mathbf H_i$ 是 SPD 且可逆；$\det(\mathbf H_i)=3700\times3616.67^2\approx4.8\times10^{10}\gg10^{-8}$ 也会通过 kernel 的近奇异启发式，但<b>正定结论来自这组已算出的特征值，而不是 det 门本身</b>。把这一遍和 4.3 的弹簧装配并排看：<b>同一套力、同一套 Hessian、同一个 $\mathbf H^{-1}\mathbf f$，只是从 2D strand 升到 3D、从一行 C++ 变成一个 GPU thread</b>。</p>
 
         <div class="callout note">
           <div class="c-h">这组数是为讲解构造的自洽示例</div>
@@ -122,7 +122,7 @@ def solve_elasticity(dt: float, particle_ids_in_color: wp.array[wp.int32],
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>一句话记牢：<b>Newton 的 <code>solve_elasticity</code> kernel 就是 TinyVBD <code>solve()</code> 的循环体搬上 GPU——每个 thread 一个顶点，先用 <code>mass*(inertia-pos)/dt²</code> 和 <code>(mass/dt²)·I₃</code> 打底惯性块，再让每个邻接的 membrane / bending / tet / spring 元件各 <code>+=</code> 一块 $\mathbf f$、$\mathbf H$，最后在 <code>abs(det(H)) &gt; 1e-8</code> 守门下直接 <code>wp.inverse(h)</code> 求 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$，把结果累加进 per-vertex displacement。</b> 公式还是 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 那个 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，一个字没改。</p>
+        <p>一句话记牢：<b>Newton 的 <code>solve_elasticity</code> kernel 就是 TinyVBD <code>solve()</code> 的循环体搬上 GPU——每个 thread 一个顶点，先用 <code>mass*(inertia-pos)/dt²</code> 和 <code>(mass/dt²)·I₃</code> 打底惯性块，再让每个邻接的 membrane / bending / tet / spring 元件各 <code>+=</code> 一块 $\mathbf f$、$\mathbf H$（其中真实 membrane 路径含元件级 PSD clamp），最后在 <code>abs(det(H)) &gt; 1e-8</code> 的近奇异启发式下直接 <code>wp.inverse(h)</code> 求候选位移，把结果累加进 per-vertex displacement。</b> 公式仍是 $\mathbf H_i\Delta\mathbf x_i=\mathbf f_i$；但 det 门不证明 SPD 或下降，方向与 full step 的接受条件也不能混为一谈。</p>
         <p>下一节：这一个个顶点的牛顿步要并行起来——但同色顶点才能安全同时算。<a href="8-5-coloring-parallel.html">8.5</a> 看 <span class="term">graph coloring</span> 怎么把顶点分组，再用按 color 的并行 sweep 取代 TinyVBD 的串行单遍扫，既保 Gauss-Seidel 的收敛、又榨干 GPU。</p>
       </article>
     </main>

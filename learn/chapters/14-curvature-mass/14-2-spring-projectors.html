@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>从投影矩阵到弹簧 Hessian：一行不跳的推导 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-2">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-2</div>
+        <h1>从投影矩阵到弹簧 Hessian：一行不跳的推导</h1>
+        <p class="lede"><a href="../01-foundations/1-5-spring-energy.html#hessian">1-5</a> 已经给过弹簧 Hessian 的答案；这一页专门解释答案里的每一项为什么出现。我们从“扰动后一个量改变多少”出发，先分清 gradient 与 Jacobian，再推导长度和单位方向的微分。最后，平行与横向投影会自然拼成完整的两端 Hessian；每个符号都能用几何图像解释，不需要背公式。</p>
+
+        <h2 id="vector-derivative">先统一导数语言：标量、向量与扰动</h2>
+        <p>设标量函数 $\phi(x)$ 的输入 $x\in\mathbb R^n$ 受到一个很小的扰动 $\delta x$。标量对向量的导数是 <span class="term">gradient</span>，它是与输入同维的列向量，由线性近似定义：</p>
+        <div class="math-block">$$\delta\phi=\nabla\phi(x)^\top\delta x+o(\lVert\delta x\rVert).$$</div>
+        <p>如果输出本身是向量 $g(x)\in\mathbb R^m$，一个向量就装不下所有偏导，需要 $m\times n$ 的 <span class="term">Jacobian</span> $J$：</p>
+        <div class="math-block">$$\delta g=J\,\delta x+o(\lVert\delta x\rVert),\qquad J_{ij}=\frac{\partial g_i}{\partial x_j}.$$</div>
+        <p>当 $g=\nabla E$ 恰好是能量的 gradient 时，它的 Jacobian 才是 Hessian $H=\nabla^2E$。本节统一采用扰动定义 <code>δg=Hδx</code>：给位置一个微小变化，看 gradient 的一阶变化。这种写法不依赖“分子布局还是分母布局”的矩阵微积分约定，也不容易丢转置。若改看物理力 $f=-g$，则 <b>force Jacobian = $-H$</b>；能量 Hessian 与力的 Jacobian 只差一个负号，不能混名。</p>
+        <div class="callout note">
+          <div class="c-h">把矩阵式拆回分量，就不会神秘</div>
+          <p>$\delta g=J\delta x$ 的第 $i$ 行只是 $\delta g_i=\sum_j(\partial g_i/\partial x_j)\delta x_j$：每个输入分量的微小变化，按灵敏度加到第 $i$ 个输出上。若 $g_i=\partial E/\partial x_i$，那么 $J_{ij}=\partial^2E/(\partial x_j\partial x_i)$。对二阶连续的能量，混合偏导可交换，因而 $H_{ij}=H_{ji}$，Hessian 是对称矩阵。这里的对称性来自同一个标量能量的二次微分，不是仿真代码碰巧装配得对称。</p>
+        </div>
+
+        <h3 id="length-direction-differentials">长度与单位方向的两个核心微分</h3>
+        <p>对弹簧两端 $x_a,x_b$，定义</p>
+        <div class="math-block">$$d=x_a-x_b,\qquad l=\lVert d\rVert,\qquad u=\frac d l,\qquad \delta d=\delta x_a-\delta x_b.$$</div>
+        <p>先对 $l=(d^\top d)^{1/2}$ 做扰动。因为 $\delta(d^\top d)=2d^\top\delta d$，所以</p>
+        <div class="math-block">$$\delta l=\frac{1}{2l}\delta(d^\top d)=\frac{d^\top\delta d}{l}=u^\top\delta d.$$</div>
+        <p>长度的一阶变化只看扰动沿弹簧方向的分量；纯横向扰动在一阶上不改长度。再对商 $u=d/l$ 求扰动：</p>
+        <div class="math-block">$$\begin{aligned}
+\delta u
+&amp;=\frac{\delta d}{l}-\frac{d}{l^2}\delta l \\
+&amp;=\frac1l\left(I-uu^\top\right)\delta d.
+\end{aligned}$$</div>
+        <p>$\delta u$ 必须垂直于 $u$，因为单位向量只能在单位球面的切平面内转动，不能沿自身继续变长。矩阵 $I-uu^\top$ 正是在删除平行分量；前面的 $1/l$ 则说明同样的端点位移会让短弹簧转得更猛。这里以及后面所有含 $u$ 的公式，都以 $l&gt;0$ 为前提。</p>
+
+        <h2 id="projector-geometry">投影矩阵的几何：拆成平行与横向</h2>
+        <p>把刚才出现的两个矩阵命名为</p>
+        <div class="math-block">$$\Pi_\parallel=uu^\top,\qquad \Pi_\perp=I-uu^\top.$$</div>
+        <p>$\Pi_\parallel v$ 保留 $v$ 沿 $u$ 的分量，$\Pi_\perp v$ 保留垂直分量。它们不是只在坐标轴对齐时有效，而是跟着 $u$ 一起旋转的几何算子。四组性质把这种几何钉得很牢：</p>
+        <ul>
+          <li><b>对称：</b>$\Pi_\parallel^\top=\Pi_\parallel$、$\Pi_\perp^\top=\Pi_\perp$，投影没有方向偏置。</li>
+          <li><b>幂等：</b>$\Pi_\parallel^2=\Pi_\parallel$、$\Pi_\perp^2=\Pi_\perp$。投影一次已落到目标子空间，再投不会改变。</li>
+          <li><b>正交互补：</b>$\Pi_\parallel\Pi_\perp=0$，且 $\Pi_\parallel+\Pi_\perp=I$。任意向量都被唯一拆成互相垂直的两块。</li>
+          <li><b>rank：</b>在 $n$ 维里，$\operatorname{rank}(\Pi_\parallel)=1$，$\operatorname{rank}(\Pi_\perp)=n-1$。一个方向是弹簧轴，其余方向共同组成横向空间。</li>
+        </ul>
+        <p>这些性质都能从 $u^\top u=1$ 一行验证。例如 $(uu^\top)^2=u(u^\top u)u^\top=uu^\top$；而 $(I-uu^\top)^2=I-2uu^\top+(uu^\top)^2=I-uu^\top$。两者相乘为 $uu^\top-uu^\top uu^\top=0$。因此这不是“长得像投影”的矩阵，而是严格的 orthogonal projector。</p>
+        <p>从 null space 看也很直观：$\Pi_\parallel$ 把整个 $u^\perp$ 压成零，只留下 $\operatorname{span}\{u\}$；$\Pi_\perp$ 恰好把 $u$ 压成零，保留 $u^\perp$。对投影矩阵，特征值只能是 0 或 1，rank 等于特征值 1 的个数。这个谱结构稍后会让弹簧 Hessian 的特征分解几乎不用计算。</p>
+
+        <h3 id="rotated-example">一个旋转后的数值例子</h3>
+        <p>取 $u=(3/5,4/5)^\top$、$v=(2,1)^\top$，方向并不沿任一坐标轴。两个投影矩阵是</p>
+        <div class="math-block">$$\Pi_\parallel=\frac1{25}\begin{bmatrix}9&amp;12\\12&amp;16\end{bmatrix},\qquad
+\Pi_\perp=\frac1{25}\begin{bmatrix}16&amp;-12\\-12&amp;9\end{bmatrix}.$$</div>
+        <p>把它们作用到 $v$ 上：</p>
+        <div class="math-block">$$v_\parallel=\Pi_\parallel v=\begin{bmatrix}6/5\\8/5\end{bmatrix},\qquad
+v_\perp=\Pi_\perp v=\begin{bmatrix}4/5\\-3/5\end{bmatrix}.$$</div>
+        <p>直接相加得到 $v_\parallel+v_\perp=(2,1)^\top$；点积是 $24/25-24/25=0$。注意 $v_\perp$ 并不等于“第二个坐标”，它是相对旋转方向 $u$ 的横向分量。下面的交互图把同一分解画出来：拖动 $u$ 或 $v$，矩阵、分量与正交关系会同步更新。</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">旋转方向上的平行 / 横向投影</span></div>
+          <div class="lab-body" data-widget="projection-matrix"></div>
+          <div class="lab-cap">观察 $\Pi_\parallel v+\Pi_\perp v=v$，以及两部分点积始终为零。投影矩阵随单位方向旋转，而不是随屏幕坐标轴固定。</div>
+        </div>
+
+        <h2 id="spring-hessian-derivation">链式法则：从能量走到 Hessian</h2>
+        <p>现在取 Hookean 弹簧能量</p>
+        <div class="math-block">$$E(x_a,x_b)=\frac12k(l-l_0)^2.$$</div>
+        <p>本节采用物理域 $k&gt;0$、$l_0\ge0$：刚度为正，rest length 不为负。$k=0$ 只是“关闭这个元件”的常数零能量特例，不参与下面的曲率讨论。</p>
+        <p>先做一次扰动，并把 $\delta l=u^\top\delta d$ 代入：</p>
+        <div class="math-block">$$\delta E=k(l-l_0)\delta l=\left[k(l-l_0)u\right]^\top\delta d.$$</div>
+        <p>所以对 $d$，也就是对端点 $a$ 的能量 gradient 为</p>
+        <div class="math-block">$$g_a=\frac{\partial E}{\partial x_a}=k(l-l_0)u,\qquad g_b=-g_a.$$</div>
+        <p>再扰动一次。乘积 $k(l-l_0)u$ 有两部分：长度变化会改系数，方向转动会改单位向量。逐项代入前面的两个核心微分：</p>
+        <div class="math-block">$$\begin{aligned}
+\delta g_a
+&amp;=k(\delta l)u+k(l-l_0)\delta u \\
+&amp;=kuu^\top\delta d+k\frac{l-l_0}{l}(I-uu^\top)\delta d.
+\end{aligned}$$</div>
+        <p>读出 $\delta g_a=A\,\delta d$ 的系数，就得到端点自块</p>
+        <div class="math-block">$$\boxed{A=H_{aa}=kuu^\top+k\left(1-\frac{l_0}{l}\right)(I-uu^\top)}.$$</div>
+        <p>第一项来自“伸长量改变”，第二项来自“受力方向转动”。用投影记号，它就是</p>
+        <div class="math-block">$$A=k\Pi_\parallel+k\left(1-\frac{l_0}{l}\right)\Pi_\perp
+=k\left[I-\frac{l_0}{l}\Pi_\perp\right].$$</div>
+        <p>这解释了公式里为何出现看似突然的 $I-uu^\top$：它不是代数花招，而是单位方向在球面切空间里的 Jacobian。</p>
+        <p>还可以用量纲检查排除常见抄写错误。$E$ 的量纲是能量，gradient 是力，Hessian 则是力除以长度；$k$ 正有这个量纲，而 $l_0/l$、$uu^\top$ 和两个投影都是无量纲。若推导结果在投影前多出一个 $l$ 或少掉一个 $1/l$，量纲通常立刻报警。数值实现里也可任选单位方向 $q$，比较 $q^\top A q$ 与中心差分 $[E(d+\varepsilon q)-2E(d)+E(d-\varepsilon q)]/\varepsilon^2$；应取 $\varepsilon\ll l$，避免差分路径跨过零长度，并在舍入误差和截断误差平衡的区间观察两者收敛一致。</p>
+        <p>三个长度区间也值得在进入特征分析前先读一遍。拉伸时 $l&gt;l_0$，轴向与横向系数都为正；rest 状态 $l=l_0$ 时，横向二次系数为零；受压时 $0&lt;l&lt;l_0$，横向系数为负。最后一种只是在当前构形附近发现一个负的二阶方向，不能脱离一阶平衡、约束和外载就命名为结构屈曲；下一节会专门补上这个逻辑边界。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 2：把投影矩阵真的拼成弹簧 Hessian</div>
+          <p>取 $d=(3,4)$，于是 $l=5$、$u=(3/5,4/5)$；再取 $k=10$、$l_0=6$。弹簧受压，横向曲率先读成 $10(1-6/5)=-2$。沿用上面的两个投影矩阵：</p>
+          <div class="math-block">$$\begin{aligned}
+A&amp;=10\Pi_\parallel-2\Pi_\perp\\
+&amp;=\frac1{25}\begin{pmatrix}58&amp;144\\144&amp;142\end{pmatrix}
+=\begin{pmatrix}2.32&amp;5.76\\5.76&amp;5.68\end{pmatrix}.
+\end{aligned}$$</div>
+          <p>拿轴向 $u$ 和横向 $t=(-4/5,3/5)$ 检查，可得 $Au=10u$、$At=-2t$。所以这张矩阵虽然四个条目大多为正，却仍有一条负曲率方向；判断正定性要看二次型或特征值，不能逐项看正负。这个受压单弹簧仍未必处于平衡，是否能叫屈曲要留到 14-3。</p>
+        </div>
+
+        <h3 id="eigen-directions">平行与横向为什么天然是 eigen directions</h3>
+        <p>投影已经把空间分成两个互不混合的子空间，因此特征值可以直接读出：</p>
+        <div class="math-block">$$\lambda_\parallel=k,\qquad \lambda_\perp=k\left(1-\frac{l_0}{l}\right).$$</div>
+        <p>沿 $u$ 扰动时 $\Pi_\parallel u=u$、$\Pi_\perp u=0$，所以只看到轴向刚度 $k$；任取 $t\perp u$，角色反过来，只看到横向曲率 $k(1-l_0/l)$。更一般地，在二维取单位方向 $q=\cos\theta\,u+\sin\theta\,t$，它的 directional curvature 是</p>
+        <div class="math-block">$$q^\top A q=k\cos^2\theta+k\left(1-\frac{l_0}{l}\right)\sin^2\theta.$$</div>
+        <p>它是两条主曲率按方向余弦平方做的混合。在二维，横向只有一条 eigenline，也就是 $\operatorname{span}\{t\}$；$t$ 与 $-t$ 是同一条线。在三维，所有垂直于 $u$ 的向量构成二维 eigenspace，横向特征值的重数为 2。因此“一个横向特征值”在 3D 不是漏算，而是同一个值对应两个独立方向。</p>
+
+        <h2 id="full-spring-hessian">两端都自由时：完整的块 Hessian</h2>
+        <p>上面的 $A=H_{aa}$ 只描述移动 $a$、固定 $b$ 的 reduced 问题。若两端都是未知量，$\delta d=\delta x_a-\delta x_b$，而 $g_b=-g_a$，所以</p>
+        <div class="math-block">$$\delta g_a=A\delta x_a-A\delta x_b,\qquad
+\delta g_b=-A\delta x_a+A\delta x_b.$$</div>
+        <p>按 $(x_a,x_b)$ 排列自由度，完整矩阵是</p>
+        <div class="math-block">$$H_{\mathrm{spring}}=\begin{bmatrix}A&amp;-A\\-A&amp;A\end{bmatrix}.$$</div>
+        <p>给两端相同平移 $\delta x_a=\delta x_b=c$，相对向量 $d$ 完全不变，于是 $H_{\mathrm{spring}}(c,c)^\top=0$。这就是完整系统的平移零模态，每个空间维度各有一个。若 $Aq=\lambda q$，完整矩阵的反对称相对模态 $(q,-q)$ 对应特征值 $2\lambda$；因此 rest 状态除平移零模态外，还有 $n-1$ 个横向相对零模态，它们来自单根长度弹簧没有弯曲刚度。固定或消元端点 $b$ 后，只剩 $H_{aa}=A$，共同平移已不再是允许扰动。比较谱或判断正定性时，必须先说明讨论的是完整两端系统，还是固定一端的局部块。</p>
+        <p>反过来，让两端沿相反方向移动，$\delta x_a=q$、$\delta x_b=-q$，就有 $\delta d=2q$。此时完整二次型为 $(q,-q)^\top H_{\mathrm{spring}}(q,-q)=4q^\top Aq$。这个因子 4 不是新材料刚度，而是所选全局位移向量让相对长度变化放大了两倍，二次能量随幅度平方放大。它提醒我们：特征值必须连同自由度坐标和 eigenvector 归一化一起解释，不能把 full Hessian 与 reduced block 的数字直接横比。</p>
+        <p>实现矩阵向量乘法时甚至不必显式存下这个 $2n\times2n$ 块。对试探向量 $(p_a,p_b)$，先算相对量 $r=A(p_a-p_b)$，再把 $r$ 加到端点 $a$、把 $-r$ 加到端点 $b$。这种 element-wise action 自动保留对称性、作用反作用结构与共同平移零模态，也与有限元装配“局部算、全局散加”的方式完全一致。若代码对共同平移返回非零，通常意味着块符号、端点顺序或散加位置出了错，这是很便宜的单元测试。</p>
+        <p>把对象层次排成一条链更不容易混：$A=H_{aa}$ 是固定另一端时的单端自块；$H_{\mathrm{spring}}$ 是两端共同自由的完整元件矩阵；所有元件按节点索引散加后得到全局 $K$；VBD 冻结其他顶点、更新顶点 $i$ 时使用的是全局目标限制到该 block 的 $H_i$。它们互有关联，却不是同一尺寸的矩阵。可对照 <a href="../03-vbd/3-3-newton-step.html#spring-terms">3-3 的局部装配</a>与 <a href="../09-fem/9-4-piola-assembly.html#assembly">9-4 的 FEM 散加</a>。</p>
+        <div class="callout note">
+          <div class="c-h">能量 Hessian 与力 Jacobian 不要混名</div>
+          <p>若把两端力堆成 $f=(-g_a,-g_b)$，那么 $\delta f=-H_{\mathrm{spring}}\delta x$。实现隐式积分时常直接装配“力的导数”，优化推导则装配“能量 Hessian”；矩阵结构相同而符号相反，必须根据方程移项方式核对。</p>
+        </div>
+
+        <h2 id="zero-length">零长度处：公式失效还是模型失效？</h2>
+        <p>推导中除以 $l$ 并不是无害的写法技巧。若 $l=0$ 且 $l_0&gt;0$，能量可写成</p>
+        <div class="math-block">$$E(d)=\frac12k\left(\lVert d\rVert^2-2l_0\lVert d\rVert+l_0^2\right).$$</div>
+        <p>问题不只是 $u=d/l$ 无法计算：范数 $\lVert d\rVert$ 在原点没有唯一 gradient，弹簧也没有可选的轴向，所以能量在此不可微，gradient 与 Hessian 都没有经典定义。把分母机械替换成 $\max(l,\varepsilon)$ 会得到可运行的近似，却已经选择了一种正则化模型；它的零附近力学应单独验证，不能再声称是上面的精确 Hessian。</p>
+        <p>有一个重要特例：若 $l_0=0$，则 $E=\frac12k\lVert d\rVert^2$，它在 $l=0$ 完全光滑，$g_a=kd$、$A=kI$。此时含 $u$ 与 $l_0/l$ 的表达在原点仍不能直接代值，但先把能量化简就能得到唯一结果。也就是说，$l=0,l_0&gt;0$ 是模型本身不可微；$l=0,l_0=0$ 只是那一种参数化公式奇异。</p>
+        <p>工程上更好的第一道防线通常是避免正 rest-length 边完全塌到零：若该端点对确实被接触系统覆盖，可用接触约束阻止重合；网格质量检查或 remeshing 也可处理退化，时间步与求解容差则限制一次更新。TinyVBD C++ 本身没有碰撞保护，$l=0$ 时会直接进入除零公式。若应用确实允许重合，就应明确选取平滑范数、分段势能或内部方向状态，并重新推导其 gradient 与 Hessian。沿用上一帧方向虽然能给出一个数，却会引入路径依赖；用 $\sqrt{d^\top d+\varepsilon^2}$ 虽然光滑，也会改变零附近的力和有效 rest 状态。正则化没有免费答案，只有写清模型后可验证的取舍。</p>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">一分钟自测：只改 rest length，谱怎样变？</div>
+          <p>沿用 $l=5,k=10$。先把 $l_0$ 改成 5，再改成 0，分别写出 $(\lambda_\parallel,\lambda_\perp)$。答案应是 $(10,0)$ 与 $(10,10)$。再问自己：完整两端矩阵为何无论哪种参数都保留两条共同平移零模态？提示：让两端同时加上同一个向量 $c$，相对向量 $d$ 根本不变。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>四句话：(1) 标量对向量给 gradient，向量对向量给 Jacobian；能量 gradient 的 Jacobian 才是 Hessian，扰动关系是 <code>δg=Hδx</code>。(2) $\delta l=u^\top\delta d$ 与 $\delta u=\Pi_\perp\delta d/l$ 把长度变化和方向旋转分开，直接导出 $A=k\Pi_\parallel+k(1-l_0/l)\Pi_\perp$。(3) 平行与横向子空间天然就是 eigenspaces；两端都自由时必须使用块矩阵 $\begin{bmatrix}A&amp;-A\\-A&amp;A\end{bmatrix}$，并保留共同平移零模态。(4) 全部方向公式要求 $l&gt;0$；零长度且正 rest length 时能量不可微，而 $l_0=0$ 是可先化简的光滑特例。</p>
+        <p>上一页 <a href="14-1-hessian-geometry.html">14-1</a> 给出了 directional curvature 与谱的读法；下一页 <a href="14-3-buckling-newton.html">14-3</a> 会严格区分“局部负曲率”与“平衡态屈曲”，并追踪它对 Newton 步的影响。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

@@ -55,9 +55,9 @@
         </div>
 
         <h2 id="one-newton-step">每个顶点：一步牛顿</h2>
-        <p>$G_i$ 只有 3 个自由度，这是一个极小的优化问题。VBD 不去精确求它的最小值，而是对它做<b>一步 Newton</b>：算出局部能量的负梯度（也就是作用在 $i$ 上的合力）$\mathbf f_i=-\nabla_{\mathbf x_i}G_i$ 和局部 Hessian $\mathbf H_i=\nabla^2_{\mathbf x_i}G_i$，解一个 $3\times3$ 系统得到位移，然后挪过去：</p>
-        <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i\mathrel{+}=\Delta\mathbf x_i$$</div>
-        <p>$3\times3$ 的求解几乎是免费的（甚至能解析地写出来）。$\mathbf f_i$ 和 $\mathbf H_i$ 的具体形式——惯性项加上相邻弹簧的力与 Hessian——我们留到 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 一项一项拆开。这里你只要记住节奏：<b>取一个顶点 → 算 $\mathbf f_i,\mathbf H_i$ → 解 $3\times3$ → 更新它的位置 → 换下一个顶点。</b>扫完全部顶点叫一次 <span class="term">sweep</span>；一帧里会做很多次 sweep（TinyVBD 默认 <code>numIterations=100</code>）。</p>
+        <p>$G_i$ 只有 3 个自由度，这是一个极小的优化问题。VBD 可以精确最小化这一块，也可以先构造<b>一步 raw Newton 候选</b>：算出局部能量的负梯度（也就是作用在 $i$ 上的合力）$\mathbf f_i=-\nabla_{\mathbf x_i}G_i$ 和局部 Hessian $\mathbf H_i=\nabla^2_{\mathbf x_i}G_i$，解一个 $3\times3$ 系统得到候选位移：</p>
+        <div class="math-block">$$\mathbf p_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf x_i\mathrel{+}=\alpha\mathbf p_i$$</div>
+        <p>$3\times3$ 的线性求解很便宜。$\mathbf f_i$ 和 $\mathbf H_i$ 的具体形式——惯性项加上相邻弹簧的力与 Hessian——我们留到 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 一项一项拆开。这里先记住节奏：<b>取一个顶点 → 算 $\mathbf f_i,\mathbf H_i$ → 解 $3\times3$ 得到候选步 → 按所选策略接受或回退 → 换下一个顶点。</b>TinyVBD 的精简 C++ 省略接受检查、直接走 full step；完整算法可加入局部 backtracking。扫完全部顶点叫一次 <span class="term">sweep</span>；一帧里会做很多次 sweep（TinyVBD 默认 <code>numIterations=100</code>）。</p>
 
         <h2 id="gauss-seidel">Gauss-Seidel 顺序：用上最新的位置</h2>
         <p>扫描是<b>顺序</b>的，而且关键在于：当我们处理顶点 $i$ 时，它的邻居里凡是<b>这一遍已经更新过</b>的，我们就用它们的<b>新</b>位置来算 $\mathbf f_i$、$\mathbf H_i$。这正是 <span class="term">Gauss-Seidel</span> 的精神——信息在一遍 sweep 之内就向前传播，收敛比「全用旧位置」的 Jacobi 快。TinyVBD 的 <code>solve()</code> 就是一次这样的 Gauss-Seidel sweep，从 <code>iV=1</code> 扫到末端（顶点 0 被 pin 住、跳过）：</p>
@@ -75,19 +75,19 @@
 }</code></pre></div>
         <p>注意最后一行 <code>strand.vertex(iV) += dx</code> 是<b>就地</b>更新 <code>mVertPos</code>，所以下一个顶点 <code>iV+1</code> 在算它自己的力时，读到的就是 <code>iV</code> 的新位置——这就是 Gauss-Seidel。<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a> 会讨论它和 Jacobi 的取舍，以及如何用 graph coloring 把它并行化。</p>
 
-        <h2 id="the-widget">慢动作：亲眼看 G 单调下降</h2>
-        <p>这一节的承诺是：<b>每一个这样的局部牛顿步，都让全局 $G$ 单调下降</b>——不是让 $G_i$ 下降而已，是让整个 $G$ 下降。这个「局部 = 全局」的保证，是 VBD 无条件稳定的根，下一节 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 会证明它。在那之前，先用下面这个慢动作部件亲眼看一遍：每点一次「更新下一个顶点」，就走一个 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，左边显示这个顶点当前的 $\mathbf f_i$、$\mathbf H_i$、$\Delta\mathbf x_i$，右边的 $G$ 曲线一路往下走，从不回头。</p>
+        <h2 id="the-widget">慢动作：观察这组参数下的 G 变化</h2>
+        <p>下一节 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a> 会证明的是：<b>只动一个顶点时，局部改变量严格等于全局改变量</b>，即 $\Delta G_i=\Delta G$。这条恒等式本身不承诺 raw Newton full step 一定下降；还要精确 block minimizer，或 <a href="../03-vbd/3-4-line-search.html">3.4</a> 的 backtracking/Armijo 接受条件。下面的慢动作部件展示当前参数下 raw 步确实下降的一次运行：每点一次「更新下一个顶点」，左边显示 $\mathbf f_i$、$\mathbf H_i$、$\Delta\mathbf x_i$，右边记录对应的 $G$，但这条示例曲线不是对任意构形的定理。</p>
 
-        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 Gauss-Seidel 块下降</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">点「更新下一个顶点」一步步走：看每个顶点的 f_i、H_i、Δx_i，以及增量势能 G 单调下降。</div></div>
+        <div class="lab"><div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">慢动作：逐顶点的 Gauss-Seidel 块更新</span></div><div class="lab-body" data-widget="vbd-sweep"></div><div class="lab-cap">点「更新下一个顶点」一步步走：看每个顶点的 f_i、H_i、Δx_i，以及当前演示参数下增量势能 G 的变化；raw full step 并非普遍下降保证。</div></div>
 
         <div class="bridge pbd">
           <div class="c-h"><span class="tag">从 PBD 看</span> 都是 Gauss-Seidel 扫顶点，差别在「扫的时候干什么」</div>
-          <p>PBD 也按 Gauss-Seidel 顺序一个个处理（不过它处理的是<b>约束</b>，不是顶点），也是就地更新位置、迭代越多越收敛。表面流程几乎一样。差别在于每一步<b>朝哪走</b>：PBD 把粒子<i>投影到约束流形上</i>（把弹簧硬掰回 rest length），它并不盯着任何能量；VBD 则解一个微型牛顿步，明确地<b>把 $G$ 往下推</b>。正因为 VBD 每一步都对着 $G$ 这把尺子，它才有 PBD 给不了的单调下降与稳定性保证。下一节就把这件事说死。</p>
+          <p>PBD 也按 Gauss-Seidel 顺序一个个处理（不过它处理的是<b>约束</b>，不是顶点），也是就地更新位置。表面流程几乎一样。差别在于每一步<b>用什么量来判断好坏</b>：PBD 的投影不以这里的 $G$ 为验收目标；VBD 则能计算局部 $G_i$，并利用 $\Delta G_i=\Delta G$ 把局部下降验收变成全局下降验收。注意「有一把尺子」不等于「raw full Newton 自动过关」：只有真正检查并接受下降，或精确最小化该 block，单调结论才成立。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) VBD 用 <span class="term">block coordinate descent</span> 解 $\min G$——一次只优化一个顶点的 3 个 DoF，其余固定，按 Gauss-Seidel 顺序扫；(2) 每个顶点对自己的局部能量 $G_i$ 做一步牛顿 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，$3\times3$ 求解几乎免费；(3) 关键承诺——每个这样的局部步都让<b>全局</b> $G$ 单调下降。</p>
-        <p>下一节我们证明这个承诺：为什么动一个顶点带来的局部能量下降，恰好等于全局能量的下降；以及它如何直接给出 VBD 的无条件稳定。再下一节 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 把 $\mathbf f_i$、$\mathbf H_i$ 拆到底。</p>
+        <p>三句话：(1) VBD 用 <span class="term">block coordinate descent</span> 解 $\min G$——一次只优化一个顶点的 3 个 DoF，其余固定，按 Gauss-Seidel 顺序扫；(2) 每个顶点可由 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 生成一个便宜的 $3\times3$ Newton 候选步；(3) 关键结构是 $\Delta G=\Delta G_i$，而全局单调还取决于这个候选步是否被精确块最小化或下降准则接受。</p>
+        <p>下一节我们精确证明「只动一个顶点时 $\Delta G=\Delta G_i$」，并把它与下降和收敛所需的额外条件分开。再下一节 <a href="../03-vbd/3-3-newton-step.html">3.3</a> 把 $\mathbf f_i$、$\mathbf H_i$ 拆到底。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

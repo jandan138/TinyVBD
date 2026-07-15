@@ -57,7 +57,7 @@
         </div>
 
         <h2 id="many-solvers">一个引擎，多个 solver</h2>
-        <p>这里有个对理解 VBD 至关重要的事实：Newton 不是「一种解法」，而是<b>一个装着多种 solver 的引擎</b>。它同时提供 <span class="term">XPBD</span>、<span class="term">VBD</span>、<span class="term">MuJoCo</span>、<span class="term">Featherstone</span>、<span class="term">SemiImplicit</span> 等多个求解器（见 <code>docs/index.rst</code>）。你在前六部里建立的整张谱系图——PBD / XPBD / Projective Dynamics / VBD 都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同——在 Newton 里几乎是字面成真的：它们就是并排摆着、可以替换的 solver。</p>
+        <p>这里有个对理解 VBD 至关重要的事实：Newton 不是「一种解法」，而是<b>一个装着多种 solver 的引擎</b>。它同时提供 <span class="term">XPBD</span>、<span class="term">VBD</span>、<span class="term">MuJoCo</span>、<span class="term">Featherstone</span>、<span class="term">SemiImplicit</span> 等多个求解器（见 <code>docs/index.rst</code>）。这些 solver 可以服从同一个 <code>step()</code> 接口、在引擎层并排替换，却不因此变成数学等价的优化器：VBD 直接下降 incremental potential，XPBD 迭代 compliant constraints 的 KKT 系统，其他 backend 还各有自己的状态与方程。<b>统一的是引擎契约，不是同一个固定 $\min G$。</b></p>
         <p>我们这一篇要盯住的是其中的 <code>SolverVBD</code>。它的类 docstring 写得很清楚：对 <b>particle 用 VBD</b>，对 <b>rigid 用 AVBD</b>（<span class="term">Augmented VBD</span>）（<code>solver_vbd.py:88</code>）。也就是说，你吃透的那套顶点级 block coordinate descent，正是这里 particle 路径的内核；而 rigid 那条路用的是 VBD 的增广拉格朗日升级版 AVBD——Part 11 会专门讲。<b>这就是为什么 VBD/AVBD 住在 Newton 里</b>：它们是这个多-solver 引擎里专门负责可形变体与刚体约束的那两块。</p>
 
         <div class="bridge tinyvbd">
@@ -66,7 +66,7 @@
         </div>
 
         <h2 id="throughline">主线没变，变的是并行方式</h2>
-        <p>把上面这些串起来，本篇的主线其实只有一句话，后面会反复用到：<b><span class="term-i">min G(x)</span> 没变；变的是「一根 strand 串行 → 一块 cloth 在 GPU 上按颜色并行」</b>。你已经懂的所有数学——增量势能、per-vertex 牛顿步、Gauss-Seidel 单调下降——在 Newton 里一个都没丢。新增的全是「怎么把它高效地铺到成千上万个 GPU thread 上」的工程学：Warp 的编程模型、graph coloring、CUDA graph capture。接下来几节就沿着这条线一步步走。</p>
+        <p>把上面这些串起来，本篇的主线其实只有一句话，后面会反复用到：<b><span class="term-i">min G(x)</span> 没变；变的是「一根 strand 串行 → 一块 cloth 在 GPU 上按颜色并行」</b>。增量势能、per-vertex Newton 候选和 Gauss-Seidel 的依赖结构都被保留；但 raw full step 是否下降仍取决于 Hessian 与接受机制，不能由“搬上 GPU”自动继承单调定理。新增的主要是怎样把同一结构高效铺到成千上万个 GPU thread 上：Warp、graph coloring 与 CUDA graph capture。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>就四件事：(1) <span class="term">Newton</span> 是建在 <span class="term">NVIDIA Warp</span> 之上、面向 robotics 与研究的 GPU 物理引擎，扩展自已 deprecated 的 <code>warp.sim</code>、以 <span class="term">MuJoCo Warp</span> 为主力后端（<code>README.md:8,10-11</code>）；(2) 它由 Disney Research / Google DeepMind / NVIDIA 发起，现为 Apache-2.0 的 Linux Foundation 项目；(3) 它是个<b>多-solver 引擎</b>（XPBD / VBD / MuJoCo / Featherstone…），其中 <code>SolverVBD</code> 对 particle 用 VBD、对 rigid 用 AVBD；(4) 你的 <code>simulate()</code> 在这里被统一成 <code>solver.step(state_in, state_out, control, contacts, dt)</code> 契约。</p>

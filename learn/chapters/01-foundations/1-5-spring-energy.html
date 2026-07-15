@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 1 · The Variational View · 1-5</div>
         <h1>弹簧的能量、力与 Hessian</h1>
-        <p class="lede">前面 $E(\mathbf x)$ 一直是个抽象符号。这一节把它落到一根真实的 Hookean 弹簧上：写出能量、求出力、再求出 Hessian——然后撞见一个关键事实：弹簧被<b>压缩</b>时，Hessian 在垂直方向的特征值会变负、矩阵变得<span class="term-i">不定</span>。这正是 <code>solve()</code> 里 <code>h_1_1</code> 那一行，也是 VBD 局部求解必须直面的硬骨头。</p>
+        <p class="lede">前面 $E(\mathbf x)$ 一直是个抽象符号。这一节把它落到一根真实的 Hookean 弹簧上：写出能量、求出力、再求出 Hessian——然后撞见一个关键事实：弹簧被<b>压缩</b>时，Hessian 在横向的特征值会变负、矩阵变得<span class="term-i">不定</span>。这是受压构型的局部负曲率，也是后续屈曲分析的一项原料，但它本身还不是完整的屈曲判据。</p>
 
         <h2 id="energy">一根弹簧的能量 E(x)</h2>
         <p>取一根弹簧，两端点 $\mathbf x_a,\mathbf x_b$，rest length 为 $l_0$，stiffness 为 $k$。记方向向量与当前长度</p>
@@ -39,40 +39,40 @@
         <div class="math-block">$$\mathbf f_a=-\,\frac{\partial E}{\partial\mathbf x_a}=k\,\frac{l_0-l}{l}\,\mathbf d,$$</div>
         <p>端点 $b$ 取负号（作用力与反作用力）。读一下符号：当 $l&gt;l_0$（被拉长），$l_0-l&lt;0$，力沿 $-\mathbf d$，把 $a$ 往 $b$ 拉回去；当 $l&lt;l_0$（被压短），$l_0-l&gt;0$，力沿 $+\mathbf d$，把 $a$ 往外推开。弹簧总想回到 rest 长度，符合直觉。这一行正是 <code>solve()</code> 里 <code>±stiffness*(l0-l)/l*diff</code> 的来历。</p>
 
-        <h2 id="hessian">Hessian：力对位置的导数</h2>
-        <p>VBD 每个顶点要做一步牛顿，光有力 $\mathbf f$ 不够，还要力的导数——也就是能量的二阶导 <span class="term">Hessian</span>。对端点 $a$ 自身的 $3\times3$ 块（在二维里就是 $2\times2$，道理一样），把上面的力再对 $\mathbf x_a$ 求一次导，得到</p>
+        <h2 id="hessian">Hessian：gradient 对位置的 Jacobian</h2>
+        <p>记能量 gradient 为 $\mathbf g_a=\partial E/\partial\mathbf x_a=-\mathbf f_a$。Hessian 是 gradient 的 Jacobian，$\mathbf H_{aa}=\partial\mathbf g_a/\partial\mathbf x_a$；因此它等于 force Jacobian 的负号：$\mathbf H_{aa}=-\partial\mathbf f_a/\partial\mathbf x_a$。VBD 的局部 Newton 模型使用的是这个<b>能量 Hessian</b>，不能把两种矩阵混名。对端点 $a$ 的 $3\times3$ 自块（二维里是 $2\times2$），得到</p>
         <div class="math-block">$$\mathbf H_{aa}=k\Big[\mathbf I-\frac{l_0}{l}\Big(\mathbf I-\frac{\mathbf d\,\mathbf d^\top}{l^2}\Big)\Big].$$</div>
-        <p>这个式子初看吓人，其实结构很清楚。$\frac{\mathbf d\mathbf d^\top}{l^2}$ 是「沿弹簧方向」的投影矩阵，$\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2}$ 则是「垂直于弹簧方向」的投影。换句话说，$\mathbf H_{aa}$ 在<b>沿弹簧</b>和<b>垂直弹簧</b>两个方向上各有一个特征值——它们的故事完全不同。</p>
+        <p>这个式子初看吓人，其实结构很清楚。$\frac{\mathbf d\mathbf d^\top}{l^2}$ 是「沿弹簧方向」的投影矩阵，$\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2}$ 则投到横向子空间。因此 $\mathbf H_{aa}$ 只有两个<b>不同的</b>特征值：一个沿弹簧轴，另一个属于整个横向子空间；在 3D 中横向特征值的重数为 2。以上方向公式要求 $l&gt;0$；若 $l=0$ 且 $l_0&gt;0$，方向、gradient 与 Hessian 都没有经典定义。投影形式与零长度边界的完整推导见 <a href="../14-curvature-mass/14-2-spring-projectors.html">14-2</a>。</p>
 
-        <h3 id="eigenvalues">两个特征值：一个永远正，一个会变负</h3>
+        <h3 id="eigenvalues">两个 distinct eigenvalues：3D 横向重数为 2</h3>
         <p>把 $\mathbf H_{aa}$ 分别作用在「沿 $\mathbf d$」和「垂直 $\mathbf d$」的方向上，特征值一眼就读出来：</p>
         <ul>
-          <li><b>沿弹簧方向</b>：垂直投影那项为零，剩 $\mathbf H_{aa}\mathbf d=k\,\mathbf d$，特征值 $=k$。<b>永远是正的</b>，且就等于刚度——沿着弹簧拉伸，永远是「越拉越费力」的稳定方向。</li>
+          <li><b>沿弹簧方向</b>：垂直投影那项为零，剩 $\mathbf H_{aa}\mathbf d=k\,\mathbf d$，特征值 $=k$。<b>永远是正的</b>，且就等于刚度——沿轴向的局部曲率恒为正。</li>
           <li><b>垂直弹簧方向</b>：沿弹簧投影那项为零，特征值 $=k\big(1-\tfrac{l_0}{l}\big)$。它的符号取决于 $l$ 和 $l_0$ 的大小：<b>拉伸</b>（$l&gt;l_0$）时为正；恰好 rest（$l=l_0$）时为零；<b>压缩</b>（$l&lt;l_0$）时 $\frac{l_0}{l}&gt;1$，于是这个特征值<b>变负</b>。</li>
         </ul>
         <div class="math-block">$$\lambda_{\parallel}=k\;(&gt;0\ \text{恒成立}),\qquad \lambda_{\perp}=k\Big(1-\frac{l_0}{l}\Big)\;\xrightarrow{\,l&lt;l_0\,}\;\text{负}.$$</div>
-        <p>一个特征值正、一个负，意味着压缩状态下 $\mathbf H_{aa}$ <b>不再正定，而是<span class="term-i">indefinite</span>（不定）</b>。物理上这正是<span class="term">buckling</span>（屈曲）方向：一根被压短的杆，往侧向偏一点点能量反而下降，所以它不愿待在直的状态、想弯掉。负特征值忠实地编码了这种「侧向不稳定」。</p>
+        <p>轴向特征值为正、横向特征值为负，意味着受压构型下 $\mathbf H_{aa}$ <b>不再正定，而是<span class="term-i">indefinite</span>（不定）</b>。这个负值只说明固定另一端时，当前构型附近存在一条横向降能方向；它是屈曲分析会用到的<b>局部曲率原料</b>。只有把外载、约束与其他元件都计入总势能，先满足驻点条件，再在允许方向上发现失稳，才可以谈 buckling。严格边界见 <a href="../14-curvature-mass/14-3-buckling-newton.html">14-3</a>。</p>
 
-        <h3 id="what-is-pd">退一步：「正定」到底在说什么——碗 vs 马鞍</h3>
-        <p>我们一路在说「正定 / 不定」，但这两个词的<b>物理画面</b>值得停下来钉死，因为它远不止弹簧——后面整本书（<a href="../03-vbd/3-6-stability.html">3.6</a> 的稳定性、<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影、IPC 的 Hessian）反复要用它。Hessian 是能量的<b>二阶导</b>，它描述的是<b>能量面在这一点的弯曲方式</b>，而它的特征值，就是<b>各个主方向上「弯」的方向与程度</b>：</p>
+        <h3 id="what-is-pd">退一步：驻点处的碗 vs 马鞍</h3>
+        <p>我们一路在说「正定 / 不定」，但二阶曲率要在正确前提下解释。Hessian 描述能量面在当前点沿各主方向怎样弯；要用它判断局部极小或鞍点，必须先有 $\nabla E=0$。有约束时，还只能检查满足约束的允许方向（一般是约束切空间中的 reduced/Lagrangian Hessian）：</p>
         <ul>
-          <li><b>特征值都为正 → 正定 → 能量面是个「碗」。</b>往<b>任何</b>方向走，能量都升高。所以这一点是一个<b>真正的、稳定的极小</b>：你把球放在碗底，推它一下，它会滚回来。这正是我们求解想落到的地方。</li>
-          <li><b>有一个特征值为负 → 不定 → 能量面是个「马鞍」。</b>沿正特征值方向是上坡（谷），沿负特征值方向却是下坡（脊）。球放在鞍点上，只要往那个负方向轻轻一推，它就<b>一路滑下去、回不来</b>——这就是<b>失稳</b>。压缩弹簧的屈曲，正是这种马鞍：沿弹簧方向是稳的（$\lambda_\parallel=k>0$），垂直方向却塌了（$\lambda_\perp&lt;0$），球（顶点）于是想往侧向滑，杆就弯了。</li>
-          <li><b>有一个特征值为零 → 半正定 → 能量面是条「平底山谷」。</b>沿谷底那条线走，能量不变——没有唯一的最低点。</li>
+          <li><b>驻点处，所有允许方向曲率都为正。</b>这是严格局部极小的二阶充分条件；无约束时就是 $H\succ0$。</li>
+          <li><b>驻点处，同时存在允许的正、负曲率方向。</b>这时才可把该点判为鞍点；若 $\nabla E\ne0$，一阶坡度仍占主导，不能只凭不定 Hessian 给当前点贴上「鞍点」标签。</li>
+          <li><b>出现零特征值。</b>这只表示二阶模型在该方向信息不足，不代表能量恒定或存在平底。例如 $E(x)=x^4$ 在 $x=0$ 的 gradient 与 Hessian 都为零，原点仍是严格局部极小；此时必须看高阶项或对称性。</li>
         </ul>
-        <p>所以「Newton 要求 Hessian 正定」这句话，物理上就是一句大白话：<b>牛顿步默认你脚下是个碗，它朝碗底走；可要是脚下其实是马鞍，它就可能朝着那个「下坡的脊」走岔、甚至越走越高</b>。这就是为什么不定的 Hessian 会让 Newton 出问题——下面那座 GAMES103 桥说的 SPD 投影，正是「强行把马鞍掰回碗」的手段。先用下面这个 widget 把碗和马鞍亲手拖一遍。</p>
+        <p>对最小化而言，$H\succ0$ 会使 $p=-H^{-1}g$ 成为下降方向；$H$ 不定时，raw Newton 方向可能反而满足 $g^\top p&gt;0$。这说的是优化方向，不是说非驻点已经物理失稳。下面先用二次模型看曲率符号，再回到真实弹簧。</p>
 
         <div class="lab">
-          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">正定=碗、不定=马鞍：拖特征值看能量面变形</span></div>
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">驻点的二次模型：拖特征值看曲率变形</span></div>
           <div class="lab-body" data-widget="positive-definite-bowl"></div>
-          <div class="lab-cap">两个滑杆是 Hessian 的两个特征值 λ₁,λ₂。都正 → 碗（稳定谷底）；把 λ₂ 拖到负 → 碗塌成马鞍（沿负方向一推就滑，正是屈曲）；拖到 0 → 平底山谷。这就是「正定 / 不定 / 半正定」的几何真身。</div>
+          <div class="lab-cap">这张图只画局部二次型。先假设当前点是驻点：两个值都正给严格局部极小的二阶条件，一正一负给鞍形二次模型；有零值时二阶判别不充分，不能据此断言真实能量存在平底。</div>
         </div>
 
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">一根弹簧的 E、f、H</span></div>
           <div class="lab-body" data-widget="spring-hessian"></div>
-          <div class="lab-cap">拖动端点：压缩时垂直方向的 Hessian 特征值变负（H 不定）。</div>
+          <div class="lab-cap">拖动端点：受压构型的横向 Hessian 特征值会变负（局部块不定）；这只是屈曲分析的局部原料，不是完整屈曲判据。端点重合附近方向与 Hessian 未定义。</div>
         </div>
 
         <h2 id="code-h11">代码对照：这就是 solve() 里的 h_1_1</h2>
@@ -84,24 +84,24 @@ Mat3 h_1_1;
 h_1_1 = stiffness_ * (Mat3::Identity()
         - (l0 / l) * (Mat3::Identity() - diff * diff.transpose() / (l * l)));
 h += h_1_1;</code></pre></div>
-        <p>逐项对得上：<code>diff</code> 是 $\mathbf d$，<code>l</code> 是 $l$，<code>l0</code> 是 $l_0$，<code>diff*diff.transpose()/(l*l)</code> 就是 $\frac{\mathbf d\mathbf d^\top}{l^2}$。整句 <code>h_1_1 = stiffness*(I - (l0/l)*(I - dd^T/l^2))</code> 与公式 $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$ 完全一致。<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 整段逐行读透，这里你只需认出：那一行<b>真的可能给你一个不定矩阵</b>。</p>
+        <p>逐项对得上：<code>diff</code> 是 $\mathbf d$，<code>l</code> 是 $l$，<code>l0</code> 是 $l_0$，<code>diff*diff.transpose()/(l*l)</code> 就是 $\frac{\mathbf d\mathbf d^\top}{l^2}$。整句 <code>h_1_1 = stiffness*(I - (l0/l)*(I - dd^T/l^2))</code> 与公式 $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$ 完全一致。<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 整段逐行读透；<a href="../14-curvature-mass/14-2-spring-projectors.html">14-2</a> 则给出不跳步的 projector 推导。这里你只需认出：那一行真的可能给你一个不定的<b>能量 Hessian</b>。</p>
 
         <div class="bridge g103">
           <div class="c-h"><span class="tag">从 GAMES103 看</span> 这就是隐式积分要做「SPD 投影」的原因</div>
-          <p>GAMES103 讲隐式积分常会提一句：组装出的 Hessian（或 $M-h^2\nabla\mathbf f$）有时不正定，Newton 一步可能走错方向甚至发散，于是要做 <span class="term">SPD projection</span>——把负特征值强行拍正，或退回 line search。负特征值从哪来？正是上面这个压缩弹簧的 $\lambda_\perp&lt;0$。你当年「为保险起见投一下影」的那个操作，针对的就是这一节亲手算出的不定性。</p>
+          <p>组装出的 Hessian（或 $M-h^2\nabla\mathbf f$）不正定时，Newton 方向可能不是下降方向。<span class="term">Modified/PSD Hessian</span>、damping 或 trust region 先负责把方向/模型修好；<span class="term">line search</span> 再沿下降方向选择步长。若方向本来上坡，单纯把步长缩小不能保证下降。这三件事的分工见 <a href="../14-curvature-mass/14-3-buckling-newton.html">14-3</a>。</p>
         </div>
 
         <h2 id="inertia-saves">惯性项 m/h²·I 是怎么帮上忙的</h2>
         <p>好消息是：VBD 每个顶点真正要解的，不是孤零零的弹簧 Hessian，而是它<b>加上惯性项</b>之后的局部 Hessian（见 <a href="../01-foundations/1-4-inertia-elastic.html">1.4</a>）：</p>
         <div class="math-block">$$\mathbf H_i=\underbrace{\frac{m_i}{h^2}\mathbf I}_{\text{恒正定}}+\sum_{j}\mathbf H_{aa}^{(j)}.$$</div>
-        <p>惯性项 $\frac{m_i}{h^2}\mathbf I$ 是各向同性的正定矩阵，它给每个特征值都<b>加上一个正的 $\frac{m_i}{h^2}$ 偏置</b>。于是那个会变负的 $\lambda_\perp=k(1-l_0/l)$，实际进入求解的是 $\frac{m_i}{h^2}+k(1-l_0/l)$——只要质量不太小、时间步不太大，这个偏置足以把它顶回正数，整个 $\mathbf H_i$ 重新正定，牛顿步方向可靠。这就是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那句「惯性项保证问题不病态」的具体兑现。</p>
+        <p>惯性项 $\frac{m_i}{h^2}\mathbf I$ 是各向同性的正定矩阵，因此把<b>整个弹性 Hessian 和</b>的每个特征值统一加上 $\frac{m_i}{h^2}$。下面的 $\frac{m_i}{h^2}+k(1-l_0/l)$ 只针对单弹簧，或若干共轴、可同时对角化的教学例子；一般不同方向弹簧的 Hessian 不共享特征向量，应先对总和求谱。若偏置把局部总 Hessian 顶回正定，局部 Newton 方向就是下降方向；但这只正则化当前时间步的增量目标，不代表静态弹性系统已经稳定。</p>
 
         <h3 id="eig-worked">代真数字算一遍：偏置救得回软弹簧，救不回硬弹簧</h3>
         <p>把上面的符号换成数字，「不定」和「偏置非万能」就从一句话变成两行算术。取一根教学用小弹簧 $k=100$、$l_0=1$，把它<b>压缩到</b> $l=0.5$（压成 rest 长度的一半）。先读两个特征值：</p>
         <div class="math-block">$$\lambda_\parallel=k=100\ (&gt;0),\qquad \lambda_\perp=k\Big(1-\frac{l_0}{l}\Big)=100\Big(1-\frac{1}{0.5}\Big)=100\,(1-2)=-100.$$</div>
-        <p>垂直方向特征值 $\lambda_\perp=-100&lt;0$——孤零零的弹簧 Hessian 确实不定（屈曲方向）。现在加惯性偏置。用共享参数集的轻顶点：$h=1/60$、$m=1$，于是 $\frac{m}{h^2}=3600$。进入求解的有效垂直特征值是</p>
+        <p>横向特征值 $\lambda_\perp=-100&lt;0$——孤零零的弹簧 Hessian 确实有一条负横向曲率。现在加惯性偏置。用共享参数集的轻顶点：$h=1/60$、$m=1$，于是 $\frac{m}{h^2}=3600$。进入求解的有效横向特征值是</p>
         <div class="math-block">$$\frac{m}{h^2}+\lambda_\perp=3600+(-100)=3500\ (&gt;0).$$</div>
-        <p>$3500&gt;0$——偏置轻松把负的顶回正，局部 $\mathbf H_i$ 重新凸、牛顿步可靠。<b>软弹簧这关，惯性项一手包办。</b>但把同一根弹簧换成 TinyVBD 默认的硬弹簧 $k=10^8$（同样压到 $l=0.5$），垂直特征值变成</p>
+        <p>$3500&gt;0$——偏置轻松把负的顶回正，局部二次模型重新凸，Newton 方向成为下降方向。<b>软弹簧这关，惯性项一手包办。</b>但把同一根弹簧换成 TinyVBD 默认的硬弹簧 $k=10^8$（同样压到 $l=0.5$），横向特征值变成</p>
         <div class="math-block">$$\lambda_\perp=10^8\,(1-2)=-10^8,\qquad \frac{m}{h^2}+\lambda_\perp=3600-10^8\approx-10^8\ (\ll0).$$</div>
         <p>$3600$ 这点偏置在 $10^8$ 面前微不足道，有效特征值仍是约 $-10^8$——<b>偏置救不回来，局部 Hessian 依旧不定</b>。一个数量级的对照就把「偏置非万能」钉死了：偏置的大小是固定的 $\frac{m}{h^2}=3600$，而负特征值随刚度 $k$ 线性放大，刚度一硬就压过偏置。下面这条 warn 就是这一现象的结论。</p>
         <div class="callout note">
@@ -110,13 +110,13 @@ h += h_1_1;</code></pre></div>
         </div>
 
         <div class="callout warn">
-          <div class="c-h">但偏置不是万能的</div>
-          <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 这点正偏置可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。Newton 类方法到这里要么投影、要么 line search 才能保稳。VBD 选了另一条路：它<b>不强制把局部 Hessian 投成 SPD</b>，而是靠一套别的机制（行列式阈值、单调下降保证）照样稳。这条路怎么走，正是 <a href="../03-vbd/3-6-stability.html">3.6</a> 的主题。</p>
+          <div class="c-h">偏置不是万能的，当前 C++ 也没有步长保护</div>
+          <p>当弹簧极硬（$k=10^8$）而质量很轻、或时间步偏大时，$\frac{m_i}{h^2}$ 可能压不住 $k(1-l_0/l)$ 的负，局部 $\mathbf H_i$ 仍可能不定。当前 TinyVBD C++ 的 <code>solve()</code> 直接执行 <code>h.colPivHouseholderQr().solve(f)</code>，随后用 <code>vertex += dx</code> 接受局部 full step；代码里没有 determinant guard、line search/能量验收或 modified/PSD Hessian。它在示例参数下经验上常能工作，但这不构成 raw step 单调下降定理。稳健优化器可用 modified/PSD Hessian 先修正非下降方向，再用 line search 控制步长；trust region 则可联合限制模型与步长。</p>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 一根 Hookean 弹簧 $E=\tfrac12 k(l-l_0)^2$，力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$，Hessian $\mathbf H_{aa}=k[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})]$，就是 <code>solve()</code> 的 <code>h_1_1</code>；(2) 它沿弹簧的特征值恒为 $k$，垂直方向为 $k(1-l_0/l)$——<b>压缩时变负</b>，$\mathbf H$ 不定（屈曲方向）；(3) 永远正定的惯性项 $\frac{m}{h^2}\mathbf I$ 给所有特征值加正偏置，多数情况下把它顶回正定，但不是万能。</p>
-        <p>带着「局部 Hessian 可能不定」这个事实，我们就有了进入 Part 3 的票。<a href="../03-vbd/3-6-stability.html">3.6</a> 会讲 VBD 如何不靠 SPD 投影也能稳，<a href="../04-code/4-3-solve.html">4.3</a> 会把 <code>solve()</code> 里这套力与 Hessian 的装配逐行读完。Part 1 的地基到此打齐——隐式欧拉是什么、为什么、长什么样，你都拿到手了。</p>
+        <p>三句话：(1) 一根 Hookean 弹簧 $E=\tfrac12 k(l-l_0)^2$，力 $\mathbf f=k\frac{l_0-l}{l}\mathbf d$；能量 Hessian 是 gradient 的 Jacobian，也是 force Jacobian 的负号。(2) Hessian 只有轴向 $k$ 与横向 $k(1-l_0/l)$ 两个 distinct eigenvalues，3D 横向重数为 2；受压时的负横向曲率只是屈曲分析的局部原料。(3) 惯性项 $\frac{m}{h^2}\mathbf I$ 提供正偏置但不保证正定；当前 C++ 使用未经 line search/PSD 保护的 QR full step，不能据此宣称 raw step 单调。</p>
+        <p>需要继续深挖时，<a href="../14-curvature-mass/14-2-spring-projectors.html">14-2</a> 从 projector 完整推导 gradient、Hessian、重数与零长度边界，<a href="../14-curvature-mass/14-3-buckling-newton.html">14-3</a> 严格区分负曲率、屈曲与 Newton safeguards；<a href="../04-code/4-3-solve.html">4.3</a> 则把 <code>solve()</code> 的装配逐行读完。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

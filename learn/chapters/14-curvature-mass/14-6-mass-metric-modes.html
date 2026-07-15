@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>质量是度量：M、Hessian、Newton 与物理模态 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="14-6">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 14 · Hessian, Mass &amp; Modes · 14-6</div>
+        <h1>质量是度量：M、Hessian、Newton 与物理模态</h1>
+        <p class="lede"><a href="14-5-mass-lumping.html">上一页</a>解释了 consistent mass 与 lumped mass 怎样代表同一片连续材料。现在要问更深的一层：为什么 $M$ 不只出现在 $f=Ma$ 里，还决定什么叫「一个单位运动」？答案是质量在构型的自由切空间上定义了内积。把这件事钉牢，$M$、势能 Hessian、增量势 Hessian、Newton 步和物理振动模态就不会再混成一团。</p>
+
+        <h2 id="mass-metric">质量度量：重节点的一单位运动更「长」</h2>
+        <p>想象两个节点都移动 1 cm，一个携带 1 g 材料，另一个携带 1 kg 材料。几何位移相同，运动学代价却显然不同。若质量矩阵 $M$ 在自由度子空间上对称正定（SPD），它定义</p>
+        <div class="math-block">$$\langle u,v\rangle_M=u^\top Mv,\qquad \lVert u\rVert_M^2=u^\top Mu.$$</div>
+        <p>这就是离散速度/位移空间里的 inner product：$M$-单位球不是「所有坐标同幅度」的球，而会按质量重新缩放。它是<b>构型空间上的运动度量</b>，不是三维物理空间的坐标 metric；欧氏空间里的米仍然是米。若用广义坐标且 $M=M(x)$ 随构型变化，这族内积构成 <span class="term">Riemannian</span> metric；常见的 Cartesian FEM 在固定参考密度下 $M$ 不随 $x$ 变，对应一个固定的平坦度量。</p>
+        <p>度量还决定怎样把「能量的变化率」变成一个运动方向。微分满足 $\mathrm dE[u]=\nabla E^\top u$；若希望用 $M$-内积表示同一件事，就写成 $\mathrm dE[u]=\langle \operatorname{grad}_M E,u\rangle_M$，于是 $\operatorname{grad}_M E=M^{-1}\nabla E$。对本书固定 Cartesian 质量矩阵的情形，保守力 $f=-\nabla E$ 产生 $a=M^{-1}f=-\operatorname{grad}_M E$：<b>负的</b>质量梯度才是势能力对应的加速度/最速下降方向。若推广到位置相关的 $M(x)$，动力学还含 metric connection（Christoffel/Coriolis 型）项，应写成协变加速度，不能只用 $M^{-1}f$ 概括。</p>
+        <p>这个离散内积来自连续体，而不是人为加权。参考域 $\Omega_0$ 上的速度场有质量加权 $L^2(\rho)$ 内积</p>
+        <div class="math-block">$$\langle u_h,v_h\rangle_{L^2(\rho)}=\int_{\Omega_0}\rho(X)\,u_h(X)\cdot v_h(X)\,\mathrm dX.$$</div>
+        <p>用 FEM 插值 $u_h=\sum_iN_i u_i$、$v_h=\sum_jN_jv_j$ 代入，便得到</p>
+        <div class="math-block">$$\int_{\Omega_0}\rho\,u_h\cdot v_h\,\mathrm dX=\sum_{ij}u_i^\top\left(\int_{\Omega_0}\rho N_iN_j\,\mathrm dX\right)v_j=u^\top Mv.$$</div>
+        <p>所以 consistent mass matrix 正是把连续 $L^2(\rho)$ inner product 沿有限元插值“拉回”节点系数空间后的结果，这个操作常叫 <span class="term">pullback</span>。lumping 改变了离散近似，却保留「质量给运动定长度」的角色。</p>
+        <p>非对角项也因此有清楚含义：相邻 shape function 在同一片材料上重叠，两种节点速度场会共同贡献动能。Lumping 把这些交叉贡献收回对角线，换来廉价的 $M^{-1}$；它不是把质量从物理里删掉，而是换了一把近似的离散尺。</p>
+        <div class="callout warn">
+          <div class="c-h">SPD 要在真正允许运动的空间上说</div>
+          <p>Pinned 自由度应先消元，或把方向限制到约束切空间，再看 reduced matrix $M_{ff}$；不能把被禁止的坐标也当自由方向。若模型含零质量的辅助自由度，完整 $M$ 只是半正定，$u^\top Mu$ 不能在全空间充当范数；应消去这些变量、加上合适的独立度量，或限定到 $M$ 正定的子空间。把「零质量」直接塞进 $M^{-1}$ 会让后面的广义谱失去定义。</p>
+        </div>
+
+        <h2 id="three-matrices">三张矩阵，三个问题：$M$、$K$ 与 $H_G$</h2>
+        <p>先固定记号。速度 $v$ 的动能是 $T(v)=\tfrac12v^\top Mv$，因此</p>
+        <div class="math-block">$$M=\frac{\partial^2T}{\partial v^2}.$$</div>
+        <p>在平衡构型 $x_*$ 附近令小位移为 $u=x-x_*$，势能的 tangent stiffness 是</p>
+        <div class="math-block">$$K=\left.\frac{\partial^2E}{\partial x^2}\right|_{x_*},\qquad E(x_*+u)\approx E(x_*)+\frac12u^\top Ku.$$</div>
+        <p>这里先写的是无约束、且 $E$ 已包含全部保守势的情形。线性 pin 只需取自由自由子块。一般非线性约束则沿用 14-3 的切空间：若 $Z$ 的列张成允许方向，先构造</p>
+        <div class="math-block">$$M_r=Z^\top MZ,\qquad K_r=Z^\top\nabla^2_{xx}\mathcal L(x_*,\mu_*)Z,$$</div>
+        <p>再在 reduced space 解 $K_r\psi=\omega^2M_r\psi$，最后映回 $\phi=Z\psi$。这里的 $K$ 是当前平衡附近的切线对象，不必等于一张永远不变的「材料刚度表」。非线性弹性里它随构型变化，还可能包含由预应力产生的 geometric stiffness；换一个预拉伸状态，同一材料的低模态也会改变。只有在线性化固定后，下面的 $M\ddot u+Ku=0$ 才把它当常矩阵使用。</p>
+        <p>隐式一步最小化的 incremental potential 则是 $G(x)=\frac{1}{2h^2}(x-y)^\top M(x-y)+E(x)$。在这一小步内把 $M$ 与预测位置 $y$ 视为固定，当前位置的 Hessian 为</p>
+        <div class="math-block">$$H_G=\nabla^2G(x)=\frac{M}{h^2}+K(x).$$</div>
+        <table>
+          <thead><tr><th>对象</th><th>从哪里来</th><th>回答什么</th></tr></thead>
+          <tbody>
+            <tr><td>$M$</td><td>动能对速度的二阶导</td><td>运动的内积、惯性与质量分布</td></tr>
+            <tr><td>$K$</td><td>势能对位置的二阶导</td><td>平衡附近的弹性曲率与 stiffness</td></tr>
+            <tr><td>$H_G=M/h^2+K$</td><td>某个时间步目标 $G(x)$ 的二阶导</td><td>当前增量优化的 Newton 局部模型</td></tr>
+          </tbody>
+        </table>
+        <p>三者能相加，是因为 $M/h^2$ 与 $K$ 都把位移映成同量纲的梯度变化；但它们不是同一个对象。Newton 在当前迭代解</p>
+        <div class="math-block">$$H_Gp=-g,\qquad g=\nabla G(x),$$</div>
+        <p>目的是找这一时间步目标的下降修正 $p$。而无阻尼小振动方程</p>
+        <div class="math-block">$$M\ddot u+Ku=0$$</div>
+        <p>描述的是平衡点附近随真实时间演化的扰动。一个是代数优化步骤，一个是动力系统；它们共享 $M,K$，问题却不同，不能把 Newton 方向直接解释成振型。</p>
+        <p>还有一个直观区别：Newton 的 $p$ 取决于当前残差 $g$，同一张 $H_G$ 面对不同载荷会给不同方向；自由振动模态则是在没有外部残差驱动时，寻找系统自身可以保持形状、只让幅值随时间变化的方向。前者回答「这次迭代往哪修」，后者回答「轻推之后它偏爱怎样振」。</p>
+        <p>把全书里的相近符号排好队：14-1 的 $H$ 是任意标量目标的 Hessian；平衡点的势能 Hessian在这里记作 $K$；时间步目标的 Hessian 是 $H_G=M/h^2+K$；VBD 固定其他 block 后使用的 $H_i$ 则是 $H_G$ 在顶点 $i$ 上的局部限制。看到字母先问“对哪个函数、在哪个空间求二阶导”，就不会把四张不同尺寸的矩阵混在一起。</p>
+        <div class="callout note">
+          <div class="c-h">本书的 $G(x)$ 不是 geometry 教材里的 metric $G$</div>
+          <p>有些 Riemannian geometry 文献用字母 $G$ 表示 metric tensor。本书已经用 $G(x)$ 表示 incremental potential，因此这里始终用 $M$ 表示质量度量、用 $H_G$ 表示目标函数的 Hessian，避免同名把「标量目标」与「双线性度量」混在一起。</p>
+        </div>
+
+        <h2 id="generalized-modes">广义特征问题：频率必须同时看刚度与质量</h2>
+        <p>标准特征问题 $Kq=\lambda q$ 只问欧氏单位位移下的势能曲率。它忽略「谁在动」的质量，因此 $\lambda$ 的量纲也不是频率平方。令小振动取分离形式 $u(t)=\phi a(t)$，代入 $M\ddot u+Ku=0$，得到真正的物理模态方程</p>
+        <div class="math-block">$$K\phi=\omega^2M\phi.$$</div>
+        <p>也就是要求原样写出的广义谱：$K\phi=\omega^2M\phi$。它的 Rayleigh quotient 是</p>
+        <div class="math-block">$$\omega^2(\phi)=\frac{\phi^\top K\phi}{\phi^\top M\phi}.$$</div>
+        <p>分子是该形变储存的二次势能尺度，分母是同一速度形状的二次动能尺度；「很硬但也很重」未必高频，「不太硬但极轻」也可能高频。对称 $K$ 与 SPD $M$ 下，不同特征值的模态可选成 <span class="term">M-orthogonal</span>：</p>
+        <div class="math-block">$$\phi_i^\top M\phi_j=\delta_{ij}.$$</div>
+        <p>这才是在质量度量下彼此正交、<b>单位模态质量</b>归一的含义，不是普通的 $\phi_i^\top\phi_j=0$；若模态速度幅值取 1，对应动能是 $1/2$。</p>
+        <p>正交性不是额外规定。分别左乘可得 $\phi_i^\top K\phi_j=\omega_j^2\phi_i^\top M\phi_j$；利用 $K$ 对称并交换 $i,j$，同一个左端也等于 $\omega_i^2\phi_i^\top M\phi_j$。因此 $(\omega_i^2-\omega_j^2)\phi_i^\top M\phi_j=0$，不同频率自然在质量内积下正交；重频率时则像 14-1 一样，只唯一确定模态子空间。</p>
+        <p>一个双质点例子足以看出差别。两个自由质点由刚度 $k$ 的弹簧相连：</p>
+        <div class="math-block">$$M=\begin{pmatrix}m_1&amp;0\\0&amp;m_2\end{pmatrix},\qquad K=k\begin{pmatrix}1&amp;-1\\-1&amp;1\end{pmatrix}.$$</div>
+        <p>标准 $K$ 的相对运动特征向量永远是 $(1,-1)^\top$，完全看不见质量。广义问题则给出平移模态 $\phi_0=(1,1)^\top$、$\omega_0=0$，以及相对模态 $\phi_1=(m_2,-m_1)^\top$、$\omega_1^2=k(1/m_1+1/m_2)$。取 $m_1=1,m_2=4,k=100$，有 $\phi_1\propto(4,-1)$、$\omega_1^2=125$：轻质点振幅是重质点的四倍，恰好保持质心不动。普通 eigenvector $(1,-1)$ 会错误地让两者等幅。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例 6：验证特征对，再把 rad/s 换成 Hz</div>
+          <p>把 $\phi_1=(4,-1)^\top$ 真正代回矩阵：</p>
+          <div class="math-block">$$K\phi_1=\begin{pmatrix}500\\-500\end{pmatrix},\qquad
+M\phi_1=\begin{pmatrix}4\\-4\end{pmatrix},\qquad
+125M\phi_1=K\phi_1.$$</div>
+          <p>它的质量长度平方为 $\phi_1^\top M\phi_1=16+4=20$，所以单位模态质量版本是 $\widehat\phi_1=(4,-1)/\sqrt{20}$。平移模态可归一成 $\widehat\phi_0=(1,1)/\sqrt5$，并且 $\phi_0^\top M\phi_1=4-4=0$，这就是 $M$-orthogonal。</p>
+          <p>最后别把 $\omega$ 直接当 Hz：$\omega=\sqrt{125}=5\sqrt5\approx11.18\,\mathrm{rad/s}$，普通频率是 $f=\omega/(2\pi)\approx1.78\,\mathrm{Hz}$。平方值、角频率和每秒周期数是三个不同量。</p>
+        </div>
+        <p>也可以把广义问题「白化」成标准对称谱。令 $z=M^{1/2}\phi$，则</p>
+        <div class="math-block">$$\underbrace{M^{-1/2}KM^{-1/2}}_{A}z=\omega^2z,\qquad \phi=M^{-1/2}z.$$</div>
+        <p>$M^{-1/2}$ 把质量椭球变回欧氏单位球；$A$ 的普通正交向量映回去，就是 $M$-orthogonal 模态。概念上它很干净，但百万维 consistent $M$ 下通常不会显式形成稠密平方根，而会直接用 generalized eigensolver、稀疏因子或预条件器。</p>
+
+        <h2 id="unified-map">从能量与动能到稳定性、Newton 和模态</h2>
+        <p>在百万 DOF 模型里，物理模态 $\phi\in\mathbb R^{dN}$ 同样应 reshape 成 $N\times d$ 的节点位移场。不同的是，现在这片场按质量归一，$\omega$ 有频率意义。对单个连通、非退化、无约束无外场、能量保持 Euclidean invariance 的三维物体，其谱至少包含三条平移与三条转动刚体零频率；多个断开分量各有一组，2D 则每个分量有两平移一转动，机构还会带来额外零模态。施加 pin 或消元后，相应方向不再属于自由切空间。若平衡点的广义 eigenvalue $\omega^2&lt;0$，写成 $\omega^2=-\sigma^2$ 后模态幅值满足 $\ddot a-\sigma^2a=0$，出现 $e^{\sigma t}$ 的指数增长：这才是无阻尼线性化意义下的动态失稳。</p>
+        <p>自由刚体方向满足 $K\phi=0$，但对正质量系统仍有 $\phi^\top M\phi&gt;0$：刚体零模态让 $K$ 奇异，不会让 $M$ 奇异。可视化时通常先跳过这些可预期的零模态，再按频率查看最前面的非零位移场：细长结构先出现整体弯曲，薄壳可能出现波纹，局部软区会聚集振幅。计算上仍无需全谱；generalized Lanczos 或 LOBPCG 只反复使用 $K\phi$、$M\phi$ 与预条件求解，就能取出少量低频模态。约束必须在同一个 reduced space 中施加，否则算法会把被 pin 的方向或零质量变量误当成低模态。</p>
+        <p>还要区分物理支承与 gauge fixing。Pin 一个节点会改变允许形变和非零频率，是实实在在的新边界条件；gauge fixing 只选一个坐标代表来去掉整体漂移，不应凭空改变内部振动。自由 3D 物体的六个刚体方向还共享同一个零特征值，算法可能返回平移与转动的任意 $M$-正交组合；与 14-1 的重根一样，应比较整个刚体子空间，而不是要求“前三根必须纯平移、后三根必须纯转动”。</p>
+        <p>增量势 Hessian 与物理谱还有一个精确而有用的联系。若 $K\phi=\omega^2M\phi$，并且该线性化中 $M,K$ 固定，那么</p>
+        <div class="math-block">$$H_G\phi=\left(\frac{M}{h^2}+K\right)\phi=(h^{-2}+\omega^2)M\phi.$$</div>
+        <p>所以惯性项把 $K$ 的<b>广义</b>谱整体平移 $h^{-2}$；它不是说 $\phi$ 必然是 $H_G$ 的普通欧氏 eigenvector。负的 $\omega^2$ 若尚未低过 $-h^{-2}$，当前增量目标仍可能沿该方向为正曲率；时间步变大时这层惯性托底会减弱。</p>
+        <table>
+          <thead><tr><th>起点</th><th>求导/组合</th><th>终点问题</th></tr></thead>
+          <tbody>
+            <tr><td>势能 $E(x)$</td><td>$g=\nabla E$</td><td>$-g$ 给内力与一阶平衡</td></tr>
+            <tr><td>势能 $E(x)$</td><td>$K=\nabla^2E$</td><td>驻点稳定性、弹性曲率</td></tr>
+            <tr><td>增量势 $G(x)$</td><td>$H_G=M/h^2+K$</td><td>$H_Gp=-\nabla G$，求 Newton 修正</td></tr>
+            <tr><td>动能 $T(v)$</td><td>$M=\nabla_v^2T$</td><td>运动内积与惯性</td></tr>
+            <tr><td>线性化动力方程 $M\ddot u+Ku=0$</td><td>$K\phi=\omega^2M\phi$</td><td>频率、物理模态与动态稳定性</td></tr>
+          </tbody>
+        </table>
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">一张统一地图</span> 两条导数链在广义谱处会合</div>
+          <p>$E\rightarrow\nabla E\rightarrow K\rightarrow$ stability / Newton，$T\rightarrow M\rightarrow$ inertia / metric；把 $K$ 与 $M$ 放在同一个 quotient 里，才得到 modes。$M$ 虽然是动能对<b>速度</b>的 Hessian，却不是势能对<b>位置</b>的 Hessian $K$；二者定义在不同变量上、回答不同问题，它们的比值才规定振动有多快。</p>
+        </div>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">两分钟自测：物理 pin 真的会改频率</div>
+          <p>沿用 $m_1=1,m_2=4,k=100$。自由系统有一条平移零模态和 $\omega\approx11.18\,\mathrm{rad/s}$ 的内部模态。若 pin 住重质点，只剩轻质点运动，频率变成 $\sqrt{k/m_1}=10\,\mathrm{rad/s}$；若 pin 住轻质点，只剩重质点运动，频率变成 $\sqrt{k/m_2}=5\,\mathrm{rad/s}$。这三组数不同，说明 pin 不是简单“删掉零向量”，而是在改变物理边界。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>$M$ 是连续 $L^2(\rho)$ 动能内积在离散自由度上的 pullback，并在消元后的自由切空间定义运动度量；$K$ 是势能曲率，$H_G=M/h^2+K$ 是一次增量优化的曲率，三者不可混名。Newton 方程 $H_Gp=-g$ 求优化修正，动力学 $M\ddot u+Ku=0$ 描述真实时间扰动。物理频率来自 $K\phi=\omega^2M\phi$，模态按 $M$ 正交；刚体方向给零频率，负广义值给指数增长，而 whitening 只是把同一问题换到质量归一坐标。</p>
+        <p>需要快速查公式时回到 <a href="../appendix/a-2-cheatsheet.html">附录 a-2：公式与符号速查</a>；要继续追 consistent mass、FEM 与连续体出处，参见 <a href="../appendix/a-8-fem-references.html">附录 a-8：FEM / 连续介质参考文献</a>。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

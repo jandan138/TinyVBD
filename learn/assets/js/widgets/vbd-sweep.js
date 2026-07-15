@@ -1,6 +1,6 @@
 /* vbd-sweep — 把 Gauss-Seidel 顶点块下降「拆成慢动作」。
    一次只更新一个顶点：组装它的 2×2 系统 (f_i, H_i)，解 Δx_i = H_i⁻¹f_i，
-   看增量势能 G 单调下降。展示「局部下降 = 全局下降」。 */
+   观察当前参数下 G 的变化。raw Newton 没有无条件单调保证。 */
 (function () {
   window.VBWidgets["vbd-sweep"] = function (root) {
     const W = 560, H = 300, dt = 1 / 60;

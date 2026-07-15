@@ -63,7 +63,7 @@ def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
         <h2 id="missing-adaptive">少了什么：那个 accelerationComponent 投影</h2>
         <p>回忆 TinyVBD <a href="../04-code/4-2-forward-step.html">4.2</a> 在算完 <code>inertia</code> 之后还做了一整段：用前后两帧速度差估出近似加速度，把它<b>投影到重力方向</b>得到一个标量 <code>accelerationComponent</code>（论文 Eq.17 里的 $\tilde a$），钳在 $[0, g]$，然后逐顶点用</p>
         <div class="math-block">$$\mathbf x^{(0)}_i = \mathbf x^{t}_i + h\,\mathbf v^{t-1}_i + h^2\,\hat{\mathbf g}\,\tilde a_i$$</div>
-        <p>当初始猜测。它的精髓是<b>区别对待</b>：真在自由下落的顶点 $\tilde a\approx 1$（吃满重力位移、初始猜测接近 $\mathbf y$），被弹簧或接触托住的顶点 $\tilde a\approx 0$（几乎停在原地，不被先扔到碗底）。这样叠放、静止、被支撑的顶点不会一开始就被初始化成互相穿插的自由下落态。</p>
+        <p>当初始猜测。它的精髓是<b>区别对待</b>：真在自由下落的顶点 $\tilde a\approx g$（吃满重力位移、初始猜测接近 $\mathbf y$），被弹簧或接触托住的顶点 $\tilde a\approx 0$（几乎停在原地，不被先扔到碗底）。这样叠放、静止、被支撑的顶点不会一开始就被初始化成互相穿插的自由下落态。</p>
 
         <p>Newton 的 <code>forward_step</code> 里，<b>这一整段不存在</b>。没有 <code>accelerationApprox</code>、没有 <code>dot(gravDir)</code> 投影、没有逐顶点的 $\tilde a$ 钳制。每个激活顶点都吃满一个 $\mathbf g\,\Delta t^2$ 的重力位移，无差别地落到惯性位置 $\mathbf y$。换句话说：</p>
 
@@ -77,7 +77,7 @@ def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
         <div class="math-block">$$\text{朴素：}\ \Delta y_{\text{naive}}=g\,\Delta t^2=9.8\times\Big(\tfrac{1}{60}\Big)^2=\frac{9.8}{3600}\approx2.7\times10^{-3}\,\text{m}=2.7\,\text{mm}$$</div>
         <p>朴素初始化不管三七二十一，把这个静止顶点先<b>下坠 2.7mm</b>——它被无差别当成自由下落处理。自适应初始化则不同：它先估出这个顶点的近似加速度、投影到重力方向得到标量 $\tilde a$，再钳进 $[0,g]$：</p>
         <div class="math-block">$$\tilde a=\operatorname{clamp}\big(\hat{\mathbf g}\cdot\tilde{\mathbf a},\;0,\;g\big),\qquad \Delta y_{\text{adaptive}}=\Delta t^2\,\tilde a$$</div>
-        <p>对一个被托住、上一帧几乎没在加速下落的顶点，估出的 $\hat{\mathbf g}\cdot\tilde{\mathbf a}\approx0$，钳完 $\tilde a\approx0$，于是 $\Delta y_{\text{adaptive}}=\Delta t^2\times0=0$——<b>原地不动</b>。同一个顶点，朴素挪 2.7mm、自适应挪 0。这 2.7mm 不是错（迭代会把它拉回），但它是求解器开局就背上的一截「债」：弹性力/接触力得多花几次迭代把这个静止顶点从 $-2.7\text{mm}$ 拽回原位。在一整片叠放/被支撑的静止区域里，这种债逐顶点累积，热启动质量的差距就出来了。而真在自由下落的顶点，$\hat{\mathbf g}\cdot\tilde{\mathbf a}\approx g$、钳完 $\tilde a\approx g$，$\Delta y_{\text{adaptive}}\approx g\,\Delta t^2$——和朴素一致、吃满那 2.7mm。自适应的精髓正是这个<b>区别对待</b>：该落的落满、该停的真停。</p>
+        <p>对一个被托住、上一帧几乎没在加速下落的顶点，估出的 $\hat{\mathbf g}\cdot\tilde{\mathbf a}\approx0$，钳完 $\tilde a\approx0$，于是 $\Delta y_{\text{adaptive}}=\Delta t^2\times0=0$——<b>原地不动</b>。同一个顶点，朴素初值挪 2.7mm、自适应初值挪 0；两者没有改惯性锚点 $\mathbf y$，只改变 $\mathbf x^{(0)}$。这 2.7mm 是求解器开局背上的一截「债」：在迭代正常收敛时，弹性力/接触力还要把它消化；有限预算或不同非凸吸引域下则可能留下不同结果。真在自由下落的顶点有 $\tilde a\approx g$，两种初值都吃满约 2.7mm。自适应的精髓正是这个<b>区别对待</b>：该落的落满、该停的真停。</p>
 
         <div class="callout note">
           <div class="c-h">2.7mm 是自洽示例，量级随 g、Δt 缩放</div>
@@ -92,9 +92,9 @@ def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
         <h2 id="why-matters">这处差异要不要紧？诚实地说</h2>
         <p>朴素初始化最大的好处是<b>简单</b>：少一段逐顶点的投影与钳制、少存一份上一帧速度、kernel 更短，逻辑也更容易并行展开。对很多场景这完全够用——尤其是顶点本来就大多在自由运动、没有大片被支撑的静止区域时，$\mathbf y$ 已经是相当好的起点，自适应初始化省下的那几次迭代未必显眼。</p>
 
-        <p>代价也得说清楚：在<b>叠放 / 接触 / 被强支撑</b>的场景里，朴素初始化会把那些本该几乎不动的顶点先往下挪 $\mathbf g\,\Delta t^2$，于是迭代的<b>第一步</b>就引入了一截需要被弹性力和接触力拉回来的位移。这意味着求解器要多花几次迭代把它们「拉回」，热启动的质量不如自适应初始化好。<a href="../04-code/4-2-forward-step.html">4.2</a> 强调过的那个好处——「不把所有顶点都先扔到碗底」——Newton 的 particle 路径在这里<b>放弃了</b>。</p>
+        <p>代价也得说清楚：在<b>叠放 / 接触 / 被强支撑</b>的场景里，朴素初始化会把那些本该几乎不动的顶点先往下挪 $\mathbf g\,\Delta t^2$，于是开局就引入了一截需要被弹性力和接触力纠正的位移。求解器通常要为这段初始误差多做工作，有限迭代下也可能留下更大残差；热启动质量因此不如自适应初始化。<a href="../04-code/4-2-forward-step.html">4.2</a> 强调过的那个好处——「不把所有顶点都先扔到碗底」——Newton 的 particle 路径在这里<b>放弃了</b>。</p>
 
-        <p>这里不必过度渲染：它不是 bug，也不会让结果错（迭代仍会收敛到同一个 $\arg\min G$，惯性初始化和自适应初始化只差一个起点，不改变目标函数）。它是一个<b>务实的取舍</b>——用初始猜测的质量换实现的简洁。要不要补上自适应初始化，取决于你的场景里「被支撑的静止顶点」占多大比例。把它和 <a href="8-1-same-min-G.html">8.1</a> 反复说的那句主线对上：<code>min G(x)</code> 没变，变的只是工程实现上的一处选择。</p>
+        <p>这里不必过度渲染：它不是在改目标函数，朴素与自适应初始化只差起点，<code>min G(x)</code> 本身没变。但「目标相同」不等于有限迭代结果必同：只有两次求解都充分收敛到同一个极小点时，最终解才与初值无关；非凸问题可能进入不同吸引域，raw 候选步也不自带收敛保证（<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>）。因此这是一个<b>务实的取舍</b>——用热启动质量换实现简洁，而不是一条无条件的最终收敛定理。</p>
 
         <div class="callout note">
           <div class="c-h">和「没有 Chebyshev」是同一类诚实点名</div>
@@ -102,7 +102,7 @@ def forward_step(dt, gravity, pos_prev, pos, vel, inv_mass,
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三件事：(1) Newton 的 <code>forward_step</code> kernel 做 <code>pos_prev = pos</code>、<code>vel_new = vel + (gravity + external_force·inv_mass)·dt</code>、<code>inertia = pos + vel_new·dt</code>，得到的是<b>朴素惯性位置</b> $\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t$；(2) 它<b>不做</b> TinyVBD 那套 <code>accelerationComponent</code> 自适应初始化——每个激活顶点都无差别落到 $\mathbf y$；(3) 这是「简洁 vs 更好的热启动」的务实取舍，在叠放/接触场景里会损失一点初始猜测质量，但不影响最终收敛。</p>
+        <p>三件事：(1) Newton 的 <code>forward_step</code> kernel 做 <code>pos_prev = pos</code>、<code>vel_new = vel + (gravity + external_force·inv_mass)·dt</code>、<code>inertia = pos + vel_new·dt</code>，得到的是<b>朴素惯性位置</b> $\mathbf y = \mathbf x + (\mathbf v + \mathbf g\,\Delta t)\,\Delta t$；(2) 它<b>不做</b> TinyVBD 那套 <code>accelerationComponent</code> 自适应初始化——每个激活顶点都无差别落到 $\mathbf y$；(3) 这是「简洁 vs 更好的热启动」的务实取舍，不改变目标 $G$，但有限迭代结果与最终落入哪个极小点仍可能受初值影响。</p>
         <p>惯性位置就位、初始猜测定了。下一节 <a href="8-4-newton-step-warp.html">8.4</a> 进入全篇的核心：把 per-vertex 的 Newton step 在 Warp 里展开，看 <code>solve_elasticity</code> 怎么逐顶点装配 $\mathbf f_i$ 与 $\mathbf H_i$、做 $\Delta\mathbf x = \mathbf H^{-1}\mathbf f$——并顺手点出「没有 Chebyshev」那处差异。</p>
       </article>
     </main>

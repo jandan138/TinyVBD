@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 5 · Experiments · 5-2</div>
         <h1>高刚度比：VBD 的软肋</h1>
-        <p class="lede">上一节 VBD 把 1000× 质量比轻松拿下，看起来无懈可击。这一节我们诚实地翻到另一面：VBD 也有真正怕的东西——不是高质量比，而是高<b>刚度</b>比。这是论文白纸黑字承认的弱点，也是理解「VBD 是局部下降法」的最好窗口。</p>
+        <p class="lede">上一节的给定 demo 中，VBD 在 1000× 质量比下表现良好。这一节我们诚实地翻到另一面：VBD 的局部传播真正怕的不是高质量比，而是高<b>刚度</b>比。这是论文白纸黑字承认的收敛弱点，也是理解 block 方法边界的最好窗口。</p>
 
         <h2 id="setup">实验设置：软硬交替的链</h2>
         <p>这次切换到 <code>initializeStiffRatio()</code>（在 <code>initialize()</code> 里把 <code>initializeTilted()</code> 注释掉、取消下一行注释即可）。它构造一条<b>刚度软硬交替</b>的短链，参数来自真实代码：</p>
@@ -43,11 +43,11 @@
           <li><b>硬弹簧（1e8）</b>几乎不可拉伸，它两端顶点必须<i>一起</i>动才不破坏约束——但局部下降一次只动一个顶点，硬段就像被「锁住」，需要很多很多次 sweep 才能把信息从一端传到另一端协调好；</li>
           <li><b>软弹簧（1e4）</b>则相反，它愿意被拉长，于是在迭代还没收敛时，重力的负担更多地落在软段上，软段被<b>过度拉伸</b>，而硬段几乎不动。</li>
         </ul>
-        <p>从能量看，整条链的增量势能 $G$ 仍然在<b>单调下降</b>——VBD 永远稳、不会爆（这点和上一节一样可靠）。问题不在稳定性，在<b>收敛速度</b>：刚度比越悬殊，迭代矩阵的条件数越糟，局部下降把 $G$ 推到真正谷底所需的 sweep 数就越多。论文把这记成 VBD 的明确弱点（Fig.23，约 1:10000 刚度比时收敛变差）。</p>
+        <p>从能量看要分两层：若每个 block 精确最小化，或候选经 backtracking/Armijo 验收后才写回，$\Delta G=\Delta G_i$ 才能推出整条链的 $G$ 单调不增；TinyVBD C++ 实际执行的是未经 PSD、det guard 或 line search 验收的 QR raw full step，不能据此声称永远稳、不会爆。<b>在这里给定的刚度比配置中</b>，工程上观察到的主要问题是收敛慢：软段过拉、硬段迟钝，而不是立即爆飞。刚度比越悬殊，局部迭代通常越吃力；论文 Fig.23 也把约 1:10000 时的收敛变差记为 VBD 的明确弱点。</p>
 
         <div class="callout warn">
-          <div class="c-h">稳 ≠ 收敛快：别把两件事混为一谈</div>
-          <p>VBD 的「无条件稳定」说的是<b>不会发散</b>——哪怕 1 次迭代，能量也只降不升。但「收敛到隐式欧拉的真解」是另一回事，需要足够多次迭代。高刚度比下，这条短链在 100 次迭代里看起来还在「软段过拉、硬段锁死」的半收敛态——它稳，但还没到位。</p>
+          <div class="c-h">给定实验里的鲁棒表现 ≠ raw 实现的普遍定理</div>
+          <p>带精确 block minimizer 或下降验收的版本可以保证<b>已接受</b>的能量不升；当前 C++ 没有这项检查，所以「1 次迭代也只降不升」并不成立为代码定理。高刚度比下，这条短链在给定参数与 100 次迭代时保持有限，却还处于「软段过拉、硬段锁死」的半收敛态。这说明该次 demo 没爆但没到位，不证明任意刚度、步长或初值都如此。</p>
         </div>
 
         <h2 id="condition-number">把「条件数 ∝ 刚度比」算给你看：一个 2×2 toy-Hessian</h2>
@@ -56,14 +56,14 @@
         <div class="math-block">$$\mu_\text{soft} = \frac{m}{h^2} + k_\text{soft} = 360 + 10^4 \approx 1.04\times10^4,\qquad \mu_\text{hard} = \frac{m}{h^2} + k_\text{hard} = 360 + 10^8 \approx 1.0\times10^8$$</div>
         <p>把这两支当成一个对角 2×2 Hessian $\mathbf H=\mathrm{diag}(\mu_\text{soft},\mu_\text{hard})$，它的<span class="term">条件数</span>就是大小特征值之比：</p>
         <div class="math-block">$$\kappa(\mathbf H) = \frac{\lambda_\max}{\lambda_\min} = \frac{\mu_\text{hard}}{\mu_\text{soft}} = \frac{1.0\times10^8}{1.04\times10^4} \approx 9.6\times10^3 \;\approx\; \frac{k_\text{hard}}{k_\text{soft}} = 10^4$$</div>
-        <p>看清楚这个数：条件数 $\approx 9.6\times10^3$，<b>几乎就是刚度比 $k_\text{hard}/k_\text{soft}=10^4$</b>（差的那点正是惯性项 $m/h^2$ 把软支抬高了一丢丢）。这就把「条件数 $\propto$ 刚度比」从断言变成了算术：硬支的曲率被刚度撑到 $10^8$，软支只有 $\sim10^4$，两者一比就是 $\sim10^4$。而对局部下降 / Gauss-Seidel 这类一阶迭代法，<b>收敛所需的迭代数随条件数 $\kappa$ 增长</b>——$\kappa\approx10^4$ 时要把误差压下去就得成千上万次 sweep。这正是下面那些 <code>_converged</code> 变体要把迭代数拉到 20000 的算术根源。</p>
+        <p>看清楚这个数：条件数 $\approx 9.6\times10^3$，<b>几乎就是刚度比 $k_\text{hard}/k_\text{soft}=10^4$</b>（差的那点正是惯性项 $m/h^2$ 把软支抬高了一丢丢）。这就把这个 toy model 里的「条件数与刚度比同量级」变成了算术：硬支的曲率被刚度撑到 $10^8$，软支只有 $\sim10^4$，两者一比就是 $\sim10^4$。局部 / Gauss-Seidel 型迭代的收敛通常会随条件数恶化，但具体速率还取决于完整谱、耦合与扫描顺序；这个算例解释了源码为何准备 20000 次的高迭代参考配置，并不单独证明一个普适的迭代阈值。</p>
         <div class="callout note">
           <div class="c-h">这组数是为讲解构造的自洽示例</div>
           <p>这里的 2×2 是把「中间顶点夹在一软一硬两弹簧之间」<b>刻意约化到两个方向的标量曲率</b>得到的示意结构，真实 $\mathbf H$ 是 3×3、还含外积项与邻接耦合。<b>能写准也值得记的是趋势</b>：条件数随刚度比同量级增长（$\kappa\approx k_\text{hard}/k_\text{soft}$），惯性项 $m/h^2$ 只对软支有可见抬升、对 $10^8$ 的硬支几乎可忽略。具体小数会随 $m,h$ 缩放，但「条件数 ∝ 刚度比 → 迭代数随之暴涨」这条因果链是真的。</p>
         </div>
 
         <h2 id="commented-variants">代码里那些注释掉的「converged」变体</h2>
-        <p>这正是 <code>initializeStiffRatio()</code> 里一堆被注释掉的配置存在的理由。它们刻意把迭代数从 100 拉到 <b>20000</b>，就是为了让你看清：要让这条软硬链真正收敛到位，到底要花多少次迭代。</p>
+        <p>这正是 <code>initializeStiffRatio()</code> 里一堆被注释掉的配置存在的理由。它们刻意把迭代数从 100 拉到 <b>20000</b>，作为这条软硬链的<b>高迭代参考</b>。源码路径名里的 <code>_converged</code> 是实验标签，不是严格收敛证明。</p>
         <div class="code" data-lang="cpp"><div class="code-h"><span class="fn">main.cpp · initializeStiffRatio()</span><button class="cp">复制</button></div><pre><code>//int numVerts = 3;
 //params.numIterations = 20000;
 //params.accelerationRho = 0.0;
@@ -76,12 +76,12 @@
 int numVerts = 5;            // 当前生效的配置
 params.numIterations = 100;
 params.accelerationRho = 0.0;</code></pre></div>
-        <p>把这些 <code>_converged</code> 变体（20000 迭代）跑出来的结果，和默认的 100 迭代结果对比，你就能直观看到：100 次迭代下软段还在过拉，而到了 20000 次它才真正绷紧到正确位形。换言之，<b>这些注释不是废代码，而是论文弱点的可复现证据</b>。另外还有把 <code>accelerationRho</code> 调到 0.08 的「accelerated」变体——Chebyshev 加速（<a href="../04-code/4-4-chebyshev.html">4.4</a>）能缓解、但不能根治高刚度比带来的慢收敛。</p>
+        <p>把这些 <code>_converged</code> 变体（20000 迭代）跑出来的结果，和默认的 100 迭代结果对比，你就能直观看到：100 次迭代下软段还在过拉，而给定运行的 20000 次结果更接近绷紧的高迭代参考位形。换言之，<b>这些注释不是废代码，而是观察高刚度比慢收敛的实验工具</b>。另外还有把 <code>accelerationRho</code> 调到 0.08 的「accelerated」变体；Chebyshev（<a href="../04-code/4-4-chebyshev.html">4.4</a>）可能提速，也可能升能，未经额外验收不能把它当作收敛或单调保证。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">亲手把迭代滑块从 100 推到很大，看半收敛态绷紧</span></div>
           <div class="lab-body" data-widget="strand-lab"></div>
-          <div class="lab-cap">把链调硬（高刚度）、把迭代数压到 <b>100 上下</b>，你会看到本节说的「半收敛态」：链还没绷到正确位形、软段被过度拉伸；再把迭代滑块往大里推（对应源码那些 <b>20000</b> 迭代的 <code>_converged</code> 变体），同一根链才慢慢收紧到位。这就是「稳 ≠ 收敛快」与「条件数 ∝ 刚度比 → 迭代数暴涨」的现场版——求解器一直没爆，只是离真解还差很多次 sweep。</div>
+          <div class="lab-cap">把链调硬（高刚度）、把迭代数压到 <b>100 上下</b>，你会看到本节说的「半收敛态」：链还没绷到高迭代参考位形、软段被过度拉伸；再把迭代滑块往大里推（对应源码那些 <b>20000</b> 迭代的 <code>_converged</code> 变体），同一根链逐渐收紧。在这个 widget 的参数范围里运行保持有限，是工程观察；raw C++ 没有逐步验收，不能把这条示例轨迹外推成任意参数下不爆或单调的定理。</div>
         </div>
 
         <h2 id="contrast">对照：质量比轻松、刚度比吃力</h2>
@@ -90,7 +90,7 @@ params.accelerationRho = 0.0;</code></pre></div>
           <thead><tr><th>压力源</th><th>对应实验</th><th>VBD 表现</th><th>根因</th></tr></thead>
           <tbody>
             <tr><td>高<b>质量</b>比（1000×）</td><td><code>initializeTilted()</code></td><td>轻松，只拉伸约 1%</td><td>质量直接进每顶点 Hessian 的 $m_i/h^2$，是 primal 求解器的天然优势</td></tr>
-            <tr><td>高<b>刚度</b>比（1:10000）</td><td><code>initializeStiffRatio()</code></td><td>稳但收敛慢，需很多迭代</td><td>局部下降，信息每 sweep 只传播有限远，软硬悬殊时条件数差</td></tr>
+            <tr><td>高<b>刚度</b>比（1:10000）</td><td><code>initializeStiffRatio()</code></td><td>给定 demo 中保持有限但收敛慢，需很多迭代</td><td>局部传播，信息每 sweep 只走有限远，软硬悬殊时条件数差</td></tr>
           </tbody>
         </table>
         <p>这不是矛盾，而是同一套机制的两面：VBD 把质量稳稳地放在每个顶点的局部牛顿系统里（所以不怕质量比），但它放弃了全局直接求解、改用局部 sweep 传播信息（所以怕刚度比）。Newton 这类全局法在高刚度比上可能更优，代价是每步要解大稀疏系统。</p>
@@ -101,7 +101,7 @@ params.accelerationRho = 0.0;</code></pre></div>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) <code>initializeStiffRatio()</code> 用 5 顶点、1e4/1e8 交替刚度（1:10000）、均匀质量，专门暴露 VBD 的软肋；(2) VBD 是局部下降法，信息每 sweep 只传播有限远，软硬悬殊时收敛慢（软段过拉、硬段锁死），这是论文 Fig.23 记录的明确弱点；(3) 代码里 20000 迭代的 <code>_converged</code> 注释变体，正是用来展示真正收敛要多少迭代。下一节 <a href="5-3-skip-spring-iterations.html">5.3</a> 我们换个旋钮，看 skip spring（弯曲）与迭代数怎么影响结果。</p>
+        <p>三句话：(1) <code>initializeStiffRatio()</code> 用 5 顶点、1e4/1e8 交替刚度（1:10000）、均匀质量，专门暴露 VBD 的软肋；(2) VBD 的局部传播在软硬悬殊时收敛慢（软段过拉、硬段锁死），这是论文 Fig.23 记录的明确弱点，但当前 raw C++ 不带逐步单调证书；(3) 代码里 20000 迭代的 <code>_converged</code> 注释变体是高迭代参考，不是普适收敛阈值。下一节 <a href="5-3-skip-spring-iterations.html">5.3</a> 我们换个旋钮，看 skip spring（弯曲）与迭代数怎么影响结果。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

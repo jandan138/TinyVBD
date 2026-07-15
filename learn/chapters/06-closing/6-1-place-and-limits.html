@@ -29,26 +29,26 @@
 
         <h2 id="where-it-sits">VBD 站在谱系的哪一格</h2>
         <p>用一句话给 VBD 定位：它是<b>在真正的增量势能 $G(\mathbf x)$ 上做的、per-vertex 的 <span class="term">block coordinate descent</span></b>。这一句话里每个词都来之不易，我们把它拆开，对照 <a href="../02-family/2-4-family-tree.html">2.4</a> 的谱系图复盘一遍。</p>
-        <p>先回忆那张谱系图的主轴（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）：PBD、XPBD、Projective Dynamics、Newton、VBD <b>都在解同一个 $\min G(\mathbf x)$</b>，分歧只在「怎么解」。VBD 的「怎么解」有三个同时成立的特征，正是它的坐标：</p>
+        <p>先回忆那张谱系图的主轴（<a href="../02-family/2-4-family-tree.html">2.4</a>）：这些方法共享增量动力学 / 能量-约束视角，却不都在解同一个固定 $\min G$。原始 PBD 做位置投影，XPBD 迭代 compliant KKT，PD 受限于可投影能量；VBD 则和用于变分隐式 FEM 的 global Newton 一样，直接面对明确写出的 incremental potential。VBD 在这一层里的「怎么解」有三个同时成立的特征，正是它的坐标：</p>
         <ul>
           <li><b>对象是真正的 $G$。</b>它直接最小化完整的增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$，而不是某个约束违反量的近似。每个顶点的局部牛顿步用的是<b>完整的局部 Hessian</b> $\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j \partial^2 E_j/\partial\mathbf x_i^2$，惯性项加弹性项一项不少（<a href="../03-vbd/3-3-newton-step.html">3.3</a>）。</li>
-          <li><b>更新顺序是 Gauss-Seidel，收敛快。</b>一次只动一个顶点，且立刻用上刚更新过的邻居——这是 <span class="term">Gauss-Seidel</span> 而非 <span class="term">Jacobi</span>，所以信息在一次 sweep 内就能往前串一截，收敛比纯 Jacobi 快（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）。</li>
-          <li><b>并行度却接近 Jacobi。</b>靠对<b>顶点图</b>做 <span class="term">graph coloring</span>：同色顶点互不相邻、可并行更新，颜色数远少于 XPBD 要着色的约束/对偶图。于是 VBD 拿到了「Gauss-Seidel 的收敛 + 近 Jacobi 的并行」这个看似矛盾的组合（<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>）。</li>
+          <li><b>更新顺序是 Gauss-Seidel，信息传播通常比 Jacobi 快。</b>一次只动一个顶点，且立刻用上刚更新过的邻居——这是 <span class="term">Gauss-Seidel</span> 而非 <span class="term">Jacobi</span>，所以信息在一次 sweep 内就能往前串一截；具体收敛仍取决于曲率、接受机制和问题条件数（<a href="../03-vbd/3-1-block-descent.html">3.1</a>）。</li>
+          <li><b>并行度却接近 Jacobi。</b>靠对<b>顶点图</b>做 <span class="term">graph coloring</span>：同色顶点互不相邻、可并行更新，颜色数远少于 XPBD 要着色的约束/对偶图。于是 VBD 拿到了「Gauss-Seidel 顺序 + 近 Jacobi 并行」这个看似矛盾的组合（<a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>）。</li>
         </ul>
         <p>还有一个隐性但关键的坐标：VBD 是 <span class="term">primal</span> 求解器——它直接在<b>位置</b>这个原始变量上下降，而不是像 XPBD 那样去解一套 <span class="term">dual</span>（对偶 / 约束力 $\lambda$）系统。这一条决定了它在高质量比下的命运，下面会展开。</p>
 
         <h2 id="wins-over-xpbd">复盘它相对 XPBD 的几个赢面</h2>
         <p>这本书的主线是「从 PBD 到 VBD」，所以最值得对照的是 XPBD。把前面各章算过的账汇总，VBD 的赢面有四条，且都能追到它「最小化真正的 $G$ + primal + 完整 Hessian」这个根上：</p>
         <ul>
-          <li><b>解的是真东西。</b>XPBD 本质是约束近似，且只保留惯性项那部分 Hessian（丢掉了弹性项的二阶信息）；大时间步 $h$ 或少迭代时，它会偏离真正的隐式欧拉解。VBD 最小化完整的 $G$、保留完整局部 Hessian，每步保证 $G$ 单调下降（<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>），不会越解越偏。</li>
+          <li><b>目标是真正的 $G$，而且能做局部验收。</b>XPBD 本质是约束近似，且只保留惯性项那部分 Hessian（丢掉了弹性项的二阶信息）；大时间步 $h$ 或少迭代时，它会偏离真正的隐式欧拉解。VBD 保留完整局部 Hessian，并有 $\Delta G=\Delta G_i$ 这条单 block 恒等式：若 block 被精确最小化，或候选经 backtracking/Armijo 验收，已接受更新才保证全局 $G$ 不增（<a href="../03-vbd/3-2-local-global-descent.html">3.2</a>）。TinyVBD C++ 的 raw QR full step 没做这项验收。</li>
           <li><b>扛得住高质量比。</b>这是全书最戏剧化的一幕（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a>）：XPBD 是 dual 求解器，修正按逆质量分配，一根末端重 1000× 的 strand 会被「轻的拽不动重的」逼到崩溃；VBD 是 primal，直接解位置，高质量比对它没有这种结构性压力。TinyVBD 默认跑的 <code>initializeTilted()</code> 就是这个 1:1000 实验。</li>
           <li><b>不替你决定初始化。</b>XPBD 把初始位置强制成惯性预测；VBD 不强制任何初始化，这恰恰是它能做<b>自适应初始化</b>的前提——自由下落的顶点带上完整重力、被托住的顶点停在原位，避免把叠放物初始化成穿插的自由下落态（<a href="../04-code/4-2-forward-step.html">4.2</a>）。</li>
-          <li><b>稳，且不靠打补丁稳。</b>它无条件稳定来自「单调下降」这把尺子，而不是靠对 Hessian 做 SPD 投影或 line search；惯性项 $\frac{m_i}{h^2}\mathbf I$ 恒正定，把局部系统兜住，所以即便弹簧被压缩、弹性 Hessian 不定，整体也立得住（<a href="../03-vbd/3-6-stability.html">3.6</a>）。</li>
+          <li><b>有便宜的下降验收接口，但实现必须真的使用。</b>$\Delta G=\Delta G_i$ 让局部能量检查直接成为全局检查；惯性项 $\frac{m_i}{h^2}\mathbf I$ 也提供正曲率偏置。可负弹性曲率仍可能让总 Hessian 不定，SPD 方向修正与 line search 又分别处理方向和步长。TinyVBD C++ 不做 PSD 修正、显式 det guard 或 line search，只直接接受 QR raw full step，所以给定 demo 的鲁棒性不能写成无条件定理（<a href="../03-vbd/3-6-stability.html">3.6</a>）。</li>
         </ul>
 
         <div class="callout note">
           <div class="c-h">一句话记住它的位置</div>
-          <p>VBD = 在真正的 $G$ 上做 per-vertex block coordinate descent，用顶点图着色换来「Gauss-Seidel 收敛 + 近 Jacobi 并行」，且是 primal、保留完整局部 Hessian、单调下降。它不是「又一个调位置的 PBD 变体」，而是把隐式欧拉的最小化问题<b>正面、增量、可并行地</b>解掉。</p>
+          <p>VBD = 在真正的 $G$ 上做 per-vertex block 优化，用顶点图着色换来「Gauss-Seidel 顺序 + 近 Jacobi 并行」，且是 primal、保留完整局部 Hessian。结构上，任意单 block 位移都满足 $\Delta G=\Delta G_i$；算法上，只有精确 block minimizer 或经下降验收的候选才给出单调链。TinyVBD 的 raw C++ 省掉验收，是这个框架的经验性精简实现。</p>
         </div>
 
         <h2 id="family-table">一张表把整个谱系横着摆开</h2>
@@ -93,15 +93,15 @@
               <td>真正的 $G$</td>
               <td><b>primal</b></td>
               <td>Gauss-Seidel + 顶点图着色并行</td>
-              <td>完整<b>局部</b> Hessian（per-vertex 3×3）</td>
-              <td>高刚度比 / 超硬高分辨率收敛慢</td>
+              <td>完整<b>局部</b> Hessian（per-vertex 3×3 候选）</td>
+              <td>高刚度比 / 超硬高分辨率收敛慢；raw full step 无验收时没有单调证书</td>
             </tr>
           </tbody>
         </table>
-        <p>横着扫一遍就能读出全书主线：往右走，「最小化什么」从约束近似收敛到真正的 $G$；「保留多少 Hessian」从几乎不用爬到完整。VBD 是这张表里唯一同时拿到「真 $G$ + primal + Gauss-Seidel 收敛 + 着色并行」的一行——它的强项正是把别人各自的优点叠在一起，代价就落在最后一列那个高刚度比。</p>
+        <p>横着扫一遍就能读出全书主线：往右走，「最小化什么」从约束近似收敛到真正的 $G$；「保留多少 Hessian」从几乎不用爬到完整。VBD 同时拿到「真 $G$ + primal + Gauss-Seidel 顺序 + 着色并行」，并能用局部 $G_i$ 验收全局改变量；但验收不是 raw Newton 自动附赠的。它的主要收敛代价仍落在最后一列那个高刚度比。</p>
 
         <h2 id="optimizer-skeleton">把仿真器看成优化器：一帧的通用骨架</h2>
-        <p>到这里可以把「物理仿真器」暂时翻译成「优化器」。只要你走的是隐式欧拉 / 增量势能这条路，一帧的核心都在重复同一个骨架：先写出 $G(\mathbf x)$，再在当前点附近装配导数，求一个下降方向，挑一个安全步长，接受新位置。差别不在这条脊梁，而在每一步的实现有多局部、多全局、要不要额外保持可行性。</p>
+        <p>到这里可以把「物理仿真器」暂时翻译成「优化器」。只要你走的是隐式欧拉 / 增量势能这条路，稳健版本的一帧通常沿同一个骨架组织：先写出 $G(\mathbf x)$，再装配导数，构造候选方向，修正方向或模型，挑安全步长，最后验收新位置。精简实现可以省掉其中若干守卫，但也就不能继承相应保证。</p>
         <div class="code" data-lang="pseudo"><div class="code-h"><span class="fn">optimization-based simulator skeleton</span><button class="cp">复制</button></div><pre><code>given x_n, v_n:
     y = inertial_prediction(x_n, v_n, h)
     x = initialize_guess(y)
@@ -109,7 +109,7 @@
     repeat until converged or iteration budget used:
         assemble energy G(x) = inertia(x, y) + elastic(x) + contact(x)
         assemble gradient/force and Hessian (or local Hessian blocks)
-        make Hessian usable as a descent model (PSD projection, damping, or local guard)
+        make Hessian usable as a descent model (PSD projection, positive shift, damping, or trust region)
         solve for a direction p
         choose step length alpha (line search; contact solvers also apply CCD)
         accept x = x + alpha * p
@@ -119,18 +119,18 @@
         <table>
           <thead><tr><th>求解器</th><th>装配什么</th><th>怎么求方向</th><th>怎么选步长 / 保证</th></tr></thead>
           <tbody>
-            <tr><td><b>VBD</b></td><td>每个顶点邻接的弹性 / 接触元件块</td><td>per-vertex $3\times3$ 局部 Newton，Gauss-Seidel sweep</td><td>通常不显式 line search，靠惯性正定、det guard、单调下降兜底（<a href="../03-vbd/3-6-stability.html">3.6</a>）</td></tr>
-            <tr><td><b>global Newton</b></td><td>全局梯度与稀疏 Hessian</td><td>解一个大稀疏线性系统</td><td>PSD / damping 保方向，backtracking line search 保下降（<a href="../03-vbd/3-4-line-search.html">3.4</a>）</td></tr>
+            <tr><td><b>VBD / TinyVBD</b></td><td>每个顶点邻接的弹性 / 接触元件块</td><td>per-vertex $3\times3$ 局部 Newton，Gauss-Seidel sweep</td><td>完整方法可用局部 backtracking/Armijo 验收；TinyVBD C++ 则直接 QR raw full step，<b>无</b> PSD、det guard 或 line search，故无逐步单调保证（<a href="../03-vbd/3-6-stability.html">3.6</a>）</td></tr>
+            <tr><td><b>global Newton</b></td><td>全局梯度与稀疏 Hessian</td><td>解一个大稀疏线性系统</td><td>稳健实现常用 PSD / damping 保方向，再用 backtracking line search 保下降（<a href="../03-vbd/3-4-line-search.html">3.4</a>）</td></tr>
             <tr><td><b>IPC</b></td><td>弹性 + barrier 接触能量，以及距离导数</td><td>全局 Newton 方向</td><td>CCD-filtered line search 先限制最大安全步长，再做下降检查，保证 intersection-free（<a href="../12-ipc/12-5-ccd-linesearch.html">12.5</a>）</td></tr>
           </tbody>
         </table>
         <div class="callout note">
           <div class="c-h">为什么这张骨架图重要</div>
-          <p>它把后半本书的新增内容都接回同一根线：FEM 只是在 <code>elastic(x)</code> 里把弹簧换成 $\sum_e V_0^e\psi(F^e)$（Part 9），production VBD 在「make Hessian usable」处加 per-element SPD 投影和阻尼（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），IPC 在 <code>contact(x)</code> 与 line search 处加 barrier 和 CCD（Part 12）。这套组织受《Physics-Based Simulation》把仿真统一写成优化流程的讲法启发；这里用本书自己的 VBD / Newton / IPC 例子重写。</p>
+          <p>它把后半本书的新增内容都接回同一根线：FEM 只是在 <code>elastic(x)</code> 里把弹簧换成 $\sum_e V_0^e\psi(F^e)$（Part 9），Newton/Warp 的 production VBD 路径在「make Hessian usable」处加 per-element 投影和阻尼（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>），IPC 在 <code>contact(x)</code> 与 line search 处加 barrier 和 CCD（Part 12）。这些机制不属于 TinyVBD C++，尤其不能把 Newton/Warp 的 determinant heuristic 倒灌成 C++ 的 det guard。这套组织受《Physics-Based Simulation》把仿真统一写成优化流程的讲法启发；这里用本书自己的 VBD / Newton / IPC 例子重写。</p>
         </div>
 
         <h2 id="honest-limits">诚实地交代它的局限</h2>
-        <p>没有银弹。VBD 的强项和弱项是同一枚硬币的两面——它是个<b>局部下降法</b>，这让它稳、可并行、扛质量比，但也带来三处真实的短板。</p>
+        <p>没有银弹。VBD 的强项和弱项是同一枚硬币的两面——它把目标拆成局部 block，使局部验收便宜、扫描可并行、并在高质量比 demo 中表现良好；但局部传播也带来三处真实的短板。若具体实现不做下降验收，「局部」本身并不自动等于「稳定」。</p>
 
         <h3 id="limit-local">1. 信息传播慢：超硬、超高分辨率系统不理想</h3>
         <p>因为一次只动一个顶点、靠 Gauss-Seidel + 着色串联，信息每个 step 大约只能传播 ~(#colors × #iterations) 远。对一根 20 顶点的 strand 这绰绰有余；但对一个<b>高分辨率、又非常硬</b>的系统，要把一端的扰动传到另一端就需要很多次迭代，收敛会拖慢。这种场景里，一个直接面对全局耦合的 <span class="term">Newton</span> 求解器（解整个大稀疏系统）反而可能更划算。局部方法的代价，就是它看不到「远处」。</p>
@@ -139,15 +139,15 @@
         <p>这是 <a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 专门考的软肋。注意它和高<b>质量</b>比是两回事：高质量比 VBD 不怕，高<b>刚度</b>比（<span class="term">high stiffness ratio</span>，比如相邻弹簧 1:10000）才是它的痛点。当系统里同时存在极软和极硬的部分，局部下降在硬的方向上步子迈不开、收敛极慢。TinyVBD 的 <code>initializeStiffRatio()</code>（交替刚度 1e4/1e8）就是用来亲手撞这堵墙的——你会看到它迟迟收不干净。</p>
         <div class="callout warn">
           <div class="c-h">高质量比 vs 高刚度比：一正一反，别一锅烩</div>
-          <p>这俩「高…比」最容易记混。高<b>质量</b>比 = VBD 的<b>强项</b>（<a href="../05-experiments/5-1-mass-ratio.html">5.1</a> 那记 1000× 重锤稳如老狗）；高<b>刚度</b>比 = VBD 的<b>软肋</b>（<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a> 撞墙）。方向正好相反——一个它扛得住、一个它收不动，记的时候分开放。<a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 还会专门搭一座桥再纠一遍。</p>
+          <p>这俩「高…比」最容易记混。高<b>质量</b>比是 VBD 的结构强项，且在 <a href="../05-experiments/5-1-mass-ratio.html">5.1</a> 的 1000× 重锤 demo 中表现鲁棒；高<b>刚度</b>比则是 VBD 的<b>收敛软肋</b>（<a href="../05-experiments/5-2-stiffness-ratio.html">5.2</a>）。方向正好相反，但两边的具体运行结果都应按给定参数解读，不能把 demo 观察升级成 raw 实现的任意参数定理。<a href="../11-avbd/11-1-avbd-idea.html">11.1</a> 还会专门搭一座桥再纠一遍。</p>
         </div>
 
         <h3 id="limit-collision">3. 惩罚式碰撞不保证无穿透</h3>
         <p>完整版 VBD 用<b>惩罚力</b>（penalty）处理接触：穿透越深、回推力越大。这在能量框架里很自然，但惩罚力是「软」的——它把穿透当作要最小化的能量项去压，而不是一道<b>硬约束</b>。于是理论上不保证零穿透，尤其在大穿透或高刚度比叠加时。TinyVBD 这根 strand 干脆没有碰撞，所以这一条你在 demo 里碰不到，但在用完整 VBD 时要心里有数。</p>
 
         <div class="callout warn">
-          <div class="c-h">别把「无条件稳定」误读成「无条件正确」</div>
-          <p>VBD 无条件稳定，指的是它<b>不会发散</b>（$G$ 永远在下降）。但「不发散」不等于「这一帧已经收敛到隐式欧拉的精确解」。迭代次数不够时，结果会偏软 / 偏迟钝——它稳稳地停在一个还没下到谷底的位置。稳定性和精度是两件事，迭代数（<a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a>）买的是后者。</p>
+          <div class="c-h">把三种「稳定」分开：时间积分、下降验收、demo 观察</div>
+          <p>精确求解的 backward Euler 在线性测试方程上 A-stable；这是时间积分结论。对 block 优化，$\Delta G=\Delta G_i$ 只是恒等式，只有精确 block minimizer 或经 backtracking/Armijo 接受的步才给出 $G$ 单调不增；这是优化接受结论。TinyVBD C++ 则是无 PSD、det guard、line search 的 QR raw full step，给定 demo 在低迭代下常表现为偏软而未爆，只是工程观察。三者不能互相替代，也不能据此保证任意参数下既不发散又收敛到精确隐式解。</p>
         </div>
 
         <h2 id="avbd">后续：AVBD 补上硬约束与高刚度比</h2>
@@ -155,7 +155,7 @@
         <p>直觉上：纯惩罚法（软）和纯拉格朗日法（硬约束、但难解）各有所长，augmented Lagrangian 是二者的融合——既保留惩罚项带来的良态，又通过显式维护一个拉格朗日乘子把约束逼到真正满足。这恰好对症 VBD 那两处短板：高刚度比下惩罚法迈不开步，而 augmented Lagrangian 能把「极硬」当作约束来精确满足，而不是当作一个越来越陡、越来越难下降的能量碗去硬啃。如果你想继续往下走，AVBD 是 VBD 之后最自然的下一站（见 <a href="../appendix/a-3-references.html">参考文献</a>）。</p>
 
         <h2 id="closing">合上这本书</h2>
-        <p>到这里，你已经把 TinyVBD 从头到尾走通了一遍。回头看这条坡道：你先补回了那块发虚的拼图——<b>一步隐式欧拉 = 最小化增量势能 $G$</b>（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）；然后用这把统一的尺子，把 PBD、XPBD、Projective Dynamics 摆进同一张谱系图（Part 2）；接着理解了 VBD 的精髓——<b>一次只动一个顶点的 block coordinate descent，局部下降即全局下降</b>（Part 3）；再把这套思想在 TinyVBD ~400 行代码里逐行对上号（Part 4）；最后亲手跑了高质量比、高刚度比、弯曲这些招牌实验，摸清了它的脾气和边界（Part 5）。</p>
+        <p>到这里，你已经把 TinyVBD 从头到尾走通了一遍。回头看这条坡道：你先补回了那块发虚的拼图——<b>一步隐式欧拉 = 最小化增量势能 $G$</b>（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）；然后用这把统一的尺子，把 PBD、XPBD、Projective Dynamics 摆进同一张谱系图（Part 2）；接着理解了 VBD 的精髓——一次只动一个顶点时有 $\Delta G=\Delta G_i$，所以<b>经精确 block 最小化或下降验收的局部下降会成为全局下降</b>（Part 3）；再把这套思想及 TinyVBD raw 实现的边界在 ~400 行代码里逐行对上号（Part 4）；最后亲手跑了高质量比、高刚度比、弯曲这些招牌实验，摸清了它的脾气和边界（Part 5）。</p>
         <p>更重要的是，你现在拥有的不只是「VBD 怎么写」，而是一套能读懂<b>整个 position/optimization-based 仿真家族</b>的视角。下次再遇到一个新方法，你会本能地问：它在最小化什么？它是 primal 还是 dual？它的更新是 Gauss-Seidel 还是 Jacobi？它保留了多少 Hessian？——这几个问题，足以让你迅速把任何新方法放回谱系里。</p>
         <p>谢谢你读到这里。剩下的附录是给你随时回查的：<a href="../appendix/a-1-glossary.html">术语表</a>、<a href="../appendix/a-2-cheatsheet.html">公式与符号速查</a>、<a href="../appendix/a-3-references.html">参考文献</a>。去把 TinyVBD 跑起来，拖一拖那根 strand，剩下的就交给好奇心了。</p>
       </article>

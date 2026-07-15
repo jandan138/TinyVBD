@@ -29,7 +29,7 @@
 
         <h2 id="why-coloring">为什么需要着色：races 从哪来</h2>
         <p>回忆 TinyVBD 的 <code>solve()</code>：它从 <code>iV=1</code> 一路顺序扫到末端，每个顶点就地解一个牛顿步 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$，立刻写回。这是纯 <span class="term">Gauss-Seidel</span>——处理顶点 $i$ 时，它会用到邻居<b>当前最新</b>的位置。一根 20 顶点的 strand，CPU 上顺序扫一遍快得很，没人在乎。</p>
-        <p>到了 cloth，问题立刻变味。你想让几万个顶点的牛顿步并行跑——但相邻的两个顶点不能同时更新：它们共享同一个 force element（同一条边、同一个三角），$\mathbf f_i$ 和 $\mathbf H_i$ 的装配都要读对方的位置。两个 thread 一边读一边写同一份数据，就是经典的 <span class="term">data race</span>，结果不可重现、能量也不再单调下降。</p>
+        <p>到了 cloth，问题立刻变味。你想让几万个顶点的牛顿步并行跑——但相邻的两个顶点不能同时更新：它们共享同一个 force element（同一条边、同一个三角），$\mathbf f_i$ 和 $\mathbf H_i$ 的装配都要读对方的位置。两个 thread 一边读一边写同一份数据，就是经典的 <span class="term">data race</span>；结果不可重现，原本基于顺序 block 更新的能量变化论证也随之失效。</p>
         <p>VBD 的观察很朴素：<b>只有相邻的顶点才会互相影响</b>。如果两个顶点之间没有任何 force element 直接连着，那它们的 $\mathbf f_i$、$\mathbf H_i$ 谁也不读谁，<b>同时更新毫无冲突</b>。于是只要把「互不相邻」的顶点凑成一批，这一批就能安全并行。怎么找出这些批次？给<b>顶点图</b>染色。</p>
 
         <h2 id="builder-color">builder.color() → particle_color_groups</h2>
@@ -83,7 +83,7 @@ solver = newton.solvers.SolverVBD(model)   # 构造时会检查 particle_color_g
 
         <div class="bridge tinyvbd">
           <div class="c-h"><span class="tag">从 TinyVBD 看</span> 把 <code>for iV=1..numVerts</code> 拆成「按 color launch」</div>
-          <p>TinyVBD 的 <code>solve()</code> 就是一句 <code>for (iV=1; iV&lt;numVerts; ++iV)</code>——一次一个顶点，纯串行 Gauss-Seidel，没有颜色、没有并行批次（参见 <a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>，那里我们已经讲过这套着色思想，但也诚实交代了 TinyVBD 自己并不着色）。Newton 做的事，本质上是把这个 <code>for</code> 循环<b>重排</b>：先把顶点按 color 分组，再 <code>for color in color_groups</code>，每个 color 用一次 <code>wp.launch</code> 把这一批顶点<b>一口气并行做完</b>。算法没变——还是逐顶点牛顿步、还是单调下降的 Gauss-Seidel 收敛——只是扫描的<b>次序</b>从「一个挨一个」变成了「一批挨一批」，而每一批内部交给 GPU 的几万个 thread 同时跑。</p>
+          <p>TinyVBD 的 <code>solve()</code> 就是一句 <code>for (iV=1; iV&lt;numVerts; ++iV)</code>——一次一个顶点，纯串行 Gauss-Seidel，没有颜色、没有并行批次（参见 <a href="../03-vbd/3-5-coloring-parallel.html">3.5</a>）。Newton 把这个循环<b>重排</b>：先按 color 分组，再逐 color 调 <code>wp.launch</code>，让互不相邻的一批顶点并行。保留的是逐顶点候选和跨颜色读取最新值的结构；若要求单调，仍须精确 block 最小化或对候选做下降验收，着色本身不提供这项保证。</p>
         </div>
 
         <h2 id="no-chebyshev">顺带说一句：这里没有 Chebyshev</h2>

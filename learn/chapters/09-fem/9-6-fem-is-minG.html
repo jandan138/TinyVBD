@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 9 · 9-6</div>
         <h1>FEM 就是 $\min G(x)$ 的弹性项</h1>
-        <p class="lede">前面五节像在拆一台机器：形变梯度 $F$、应变能密度 $\psi(F)$、Piola 应力 $P$、单元力与 Hessian、一遍手算。这一节把它们装回整本书的主干——那句反复出现的「<b>一切都是 $\min G(x)$</b>」。我们要说清一件事，而且是<b>同一件事</b>的两个面：把所有单元的能量求和 $\Psi=\sum_e V_0^e\psi(F^e)$ 塞回 $G(x)=\text{惯性}+\Psi$，FEM 就<b>整个</b>变成了 $G$ 里的弹性项；而 VBD/Newton 解它的方式，和它解弹簧时<b>逐字相同</b>——每个顶点收集邻接单元的 $\mathbf f/\mathbf H$，走那一步 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$。FEM 不是一台新求解器，它只是把 $G$ 的弹性项从弹簧升级成了连续介质。讲完这节，FEM 篇的地基就和原书、Newton 篇、IPC 篇接成了一整块。</p>
+        <p class="lede">前面五节像在拆一台机器：形变梯度 $F$、应变能密度 $\psi(F)$、Piola 应力 $P$、单元力与 Hessian、一遍手算。这一节把它们装回整本书的主干——那句反复出现的「<b>一切都是 $\min G(x)$</b>」。我们要说清同一件事的两个面：把所有单元的能量求和 $\Psi=\sum_e V_0^e\psi(F^e)$ 塞回 $G(x)=\text{惯性}+\Psi$，FEM 就成为 $G$ 里的弹性项；而在装配层面，每个顶点仍收集邻接单元的 $\mathbf f/\mathbf H$，形成候选步 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$。<b>装配口相同，不代表 raw Newton 步自动单调</b>；方向修改与步长验收仍是独立问题。FEM 不是一台新求解器，它只是给同一类目标函数换上连续介质弹性项。</p>
 
         <h2 id="sum-energy">把单元能量求和：$\Psi=\sum_e V_0^e\psi(F^e)$</h2>
         <p>单个单元的能量我们在 <a href="9-4-piola-assembly.html">9.4</a> 写过：$V_0^e\,\psi(F^e)$（rest 体积乘以能量密度）。一块真实材料是<b>许多单元拼起来</b>的网格，它的总弹性能量就是把每个单元的能量加起来：</p>
@@ -40,32 +40,32 @@
         <p>找让 $G$ 最小的顶点位置。惯性项想让物体顺着上一帧的速度滑过去，弹性项 $\Psi$ 想让材料恢复 rest 形状，两边拔河，$\min$ 的那个 $x$ 就是这一步的平衡。<b>这就是全篇主线：还是 $\min G(x)$，弹性项 $\Psi$ 没变本质——只是从弹簧的 $\tfrac12 k(l-l_0)^2$（标量、1 自由度）推广成连续介质的 $\sum_e V_0^e\psi(F^e)$（张量、整块材料）。FEM = 把那块积分离散成一个个单元，每个单元一个常数 $F$。</b></p>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 弹簧是 1 维的 FEM 单元</div>
-          <p>把这句话钉进脑子：<b>弹簧就是一维的 FEM 单元。</b>它的「形变」是长度比 $l/l_0$（一维的形变梯度），它的能量 $\tfrac12 k(l-l_0)^2$ 就是一维的 $\psi$。FEM 只是把「长度比」升级成形变梯度矩阵 $F$（能装下拉、压、剪、转），把标量能量升级成 $\psi(F)$。于是 TinyVBD 那个 $G(x)=\text{惯性}+\sum\tfrac12 k(l-l_0)^2$，和 FEM 软体的 $G(x)=\text{惯性}+\sum_e V_0^e\psi(F^e)$，是<b>同一个模板填了不同的弹性项</b>。你为 strand 学的那套 $\min G$、per-vertex 牛顿步、单调下降，原封不动适用于一块 FEM 软体——这就是为什么本篇叫「地基」而不是「新方法」。</p>
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 单弹簧是一维 truss/bar 的结构类比</div>
+          <p>单根弹簧与一维 truss/bar 都只读轴向长度变化，并把局部能量的导数装配到两个端点，所以它们是很好的<b>结构类比</b>，却不是严格相同的离散模型（推导见 <a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a>）。TinyVBD 的 $G(x)=\text{惯性}+\sum\tfrac12 k(l-l_0)^2$ 与 FEM 软体的 $G(x)=\text{惯性}+\sum_e V_0^e\psi(F^e)$，共享「惯性 + 逐元件弹性能」模板。可以原封不动复用的是目标形式与装配接口；raw Newton 方向和 full step 是否下降，仍要由曲率处理与接受条件判断。</p>
         </div>
 
         <h2 id="solve">VBD/Newton 怎么解它：同一个装配口</h2>
-        <p>$\min G(x)$ 怎么解？答案在 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a>、<a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 早讲透了，FEM 一个字都不用改：扫过每个顶点 $i$，给它解一个局部牛顿步</p>
+        <p>$\min G(x)$ 怎么解？装配公式在 <a href="../03-vbd/3-2-local-global-descent.html">3.2</a>、<a href="../08-strand-to-cloth/8-4-newton-step-warp.html">8.4</a> 已经出现：扫过每个顶点 $i$，收集一个局部 Newton 候选步</p>
         <div class="math-block">$$\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i,\qquad \mathbf f_i=\frac{m_i}{h^2}(\mathbf y_i-\mathbf x_i)+\sum_{e\in\mathcal N_i}\mathbf f_i^{\,e},\qquad \mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_{e\in\mathcal N_i}\mathbf H_i^{\,e}.$$</div>
-        <p>$\mathcal N_i$ 是顶点 $i$ 邻接的单元集合。每个顶点<b>收集它邻接的所有单元</b>贡献的力块 $\mathbf f_i^e$ 与（SPD 投影后的）Hessian 块 $\mathbf H_i^e$（<a href="9-4-piola-assembly.html">9.4</a> 算的就是这两块），连同惯性项累加，解一步。把它和 <a href="../04-code/4-3-solve.html">4.3</a> 里弹簧的装配并排看——那里顶点收集邻接<b>弹簧</b>的力与 Hessian，这里收集邻接<b>单元</b>的——<b>是同一个装配口、同一行求逆、同一个单调下降</b>。弹簧的力是 $\{+1,-1\}$ 两端，FEM 单元的力是三个（四面体四个）节点、净力为零（<a href="9-4-piola-assembly.html">9.4</a>、<a href="9-5-worked-tet.html">9.5</a> 验过）；落进 $\mathbf f_i/\mathbf H_i$ 的机理没有任何不同。</p>
-        <p>这也解释了 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 为什么能那么轻松地把 membrane、volumetric、bending、spring 混在一张网上跑：<b>它们全往同一个 $\mathbf f_i/\mathbf H_i$ 里叠</b>，加一种材料只是多写一个力/Hessian 函数，主循环一行不动。本篇讲的 $F\to\psi\to P\to$ 单元力/Hessian，正是 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 那些元件背后的地基；<a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 是这套地基在 Newton 求解器里的落地。压缩/接近反转时单元 Hessian 会不定，于是 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影上场（它服务的就是这些 FEM 单元 Hessian，<a href="9-4-piola-assembly.html">9.4</a> 点过）——一条完整的流水线就此闭合：<b>9.4 生产单元 $\mathbf f/\mathbf H$ → 10.2 SPD 投影 → 装配进 $\mathbf H_i$ → 解牛顿步 → $\min G$。</b></p>
+        <p>$\mathcal N_i$ 是顶点 $i$ 邻接的单元集合。每个顶点<b>收集它邻接的所有单元</b>贡献的力块 $\mathbf f_i^e$ 与原始或经稳健化的 Hessian 块 $\mathbf H_i^e$（<a href="9-4-piola-assembly.html">9.4</a> 算的就是这两块），连同惯性项累加，解一个候选步。把它和 <a href="../04-code/4-3-solve.html">4.3</a> 里弹簧的装配并排看：那里收集邻接<b>弹簧</b>，这里收集邻接<b>单元</b>，二者确实是同一个装配口与同一类线性系统。不同的是下降保证：<b>raw full Newton 不自动单调</b>，未经验收的局部 Newton full step 也可能冲过头。只有精确求出当前 block 的最小值，或用 backtracking 只接受确实降低局部目标的更新，才能在其余 block 固定时把这次局部下降直接推成全局 $G$ 的下降。</p>
+        <p>这也解释了 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 为什么能把 membrane、volumetric、bending、spring 混在一张网上跑：<b>它们全往同一个 $\mathbf f_i/\mathbf H_i$ 里叠</b>。本篇讲的 $F\to\psi\to P\to$ 单元力/Hessian，正是那些元件背后的地基。某些模型与构型会产生负曲率，当前 Newton 实现可在装配前做 <a href="../10-elasticity-collision/10-2-spd-damping.html">elementwise PSD clamp</a>；这只是在构造更稳健的局部二次模型，最终是否接受 full step 仍是另一个问题。</p>
 
         <div class="callout note">
-          <div class="c-h">一句话收束这条主线</div>
-          <p>从原书的弹簧 strand，到 Newton 篇的 cloth/soft body，到本篇的 FEM 地基，<b>$\min G(x)$ 从未改变</b>。变的只有 $G$ 里那个弹性项 $\Psi$：弹簧时是 $\sum\tfrac12 k(l-l_0)^2$，FEM 时是 $\sum_e V_0^e\psi(F^e)$。求解器、装配口、per-vertex 牛顿步、单调下降——全程同一套。你若只带走一句话，就是这句：<b>FEM 不是换了引擎，是给同一台引擎换了更强的弹性项。</b></p>
+          <div class="c-h">装配相同，不等于 raw Newton 自动单调</div>
+          <p>从弹簧 strand 到 FEM，$G$ 都可写成惯性项加逐元件弹性能，per-vertex 的力/Hessian 装配口也相同。但装配恒等式本身不提供下降定理：精确 block minimizer 会下降；近似 Newton 更新则需要 backtracking 等接受条件确认下降。方向是否可靠、full step 是否过冲与能量如何装配，是三件必须分开检查的事。</p>
         </div>
 
         <h2 id="next">往前看：应用落地、参考文献、以及 MPM 也要复用它</h2>
         <p>地基铺到这里，三条路从这里岔出去：</p>
         <ul>
-          <li><b>应用落地（Part 10）</b>：<a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 Neo-Hookean membrane / volumetric、dihedral bending，正是本篇 $F$/$\psi$/$P$/单元装配这套地基在 Newton 求解器里的<b>真实落地</b>；<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影与 Rayleigh damping 处理的就是本篇单元 Hessian 的不定与耗散；<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 再补上 self-collision。读完本篇回头看 Part 10，你会发现那些「凭空用 $F$、$\psi$、Piola」的地方，现在每一处都有了来历。</li>
+          <li><b>应用落地（Part 10）</b>：<a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 Neo-Hookean membrane / volumetric、dihedral bending，正是本篇 $F$/$\psi$/$P$/单元装配这套地基在 Newton 求解器里的<b>真实落地</b>；<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 PSD clamp 与 Rayleigh damping 讨论局部曲率稳健化和耗散；<a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 再补上 self-collision。读完本篇回头看 Part 10，你会发现那些「凭空用 $F$、$\psi$、Piola」的地方，现在每一处都有了来历。</li>
           <li><b>参考文献（附录 a-8）</b>：StVK、co-rotational、stable Neo-Hookean（Smith 2018）、constant-strain FEM、Sifakis &amp; Barbic 的 FEM 课程笔记等系统出处，整理在 <a href="../appendix/a-8-fem-references.html">a-8（FEM 参考文献）</a>，想深挖某个能量模型或证明的读者从那里进。</li>
-          <li><b>MPM 也要复用它（Part 13）</b>：你可能以为 $F$ 和 $\psi$ 是 FEM 专属——并不。<span class="term">MPM</span>（material point method，待写的 Part 13）用的是<b>同一个</b>形变梯度 $F$、<b>同一族</b>应变能密度 $\psi(F)$、<b>同一个</b> Piola 应力 $P=\partial\psi/\partial F$；区别只在于「$F$ 住在哪、力怎么传」——FEM 把 $F$ 钉在网格单元上，MPM 把 $F$ 随物质点携带、力经背景网格中转。本篇这套 $F\to\psi\to P$ 是连续介质弹性的<b>共用地基</b>，FEM 与 MPM 共享它。所以这一篇不只为 Part 10 服务，它也是 Part 13 的前置。</li>
+          <li><b>MPM 也复用它（Part 13）</b>：你可能以为 $F$ 和 $\psi$ 是 FEM 专属——并不。<a href="../13-mpm/13-4-F-update-constitutive.html">MPM</a> 用的是<b>同一个</b>形变梯度 $F$、<b>同一族</b>应变能密度 $\psi(F)$、<b>同一个</b> Piola 应力 $P=\partial\psi/\partial F$；区别只在于「$F$ 住在哪、力怎么传」——FEM 把 $F$ 钉在网格单元上，MPM 把 $F$ 随物质点携带、力经背景网格中转。本篇这套 $F\to\psi\to P$ 是连续介质弹性的<b>共用地基</b>，FEM 与 MPM 共享它。</li>
         </ul>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 把所有单元能量求和 $\Psi=\sum_e V_0^e\psi(F^e)$ 塞回 $G(x)=\text{惯性}+\Psi$，FEM 就<b>整个</b>是 $\min G(x)$ 的弹性项——和弹簧的 $\sum\tfrac12 k(l-l_0)^2$ 是同一个模板填了不同内容，<b>弹簧不过是一维的 FEM 单元</b>。(2) VBD/Newton 解它的方式和解弹簧<b>逐字相同</b>：每个顶点收集邻接单元的 $\mathbf f/\mathbf H$、连同惯性项累加、解 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$——同一个装配口、同一行求逆、同一个单调下降。(3) <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 是这套地基在 Newton 里的落地、<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影为本篇单元 Hessian 服务、附录 <a href="../appendix/a-8-fem-references.html">a-8</a> 是深入入口，而 Part 13 的 MPM 将复用同一个 $F$/$\psi$/$P$——<b>$\min G(x)$ 从未改变，只是弹性项从弹簧升级成了连续介质</b>。</p>
-        <p>FEM 篇到此收束：你已经拿到连续介质弹性的整块地基。下一步可以顺着它走进应用——<a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 10（真实弹性与碰撞）</a>看这套地基怎么在 production VBD 里跑起一块布、一团软体；或翻到附录 <a href="../appendix/a-8-fem-references.html">a-8</a> 按图索骥读原始论文。等 Part 13 的 MPM 写就，你会第三次见到同一个 $F$ 与 $\psi$——那时你已经是熟手了。</p>
+        <p>三句话：(1) 把所有单元能量求和 $\Psi=\sum_e V_0^e\psi(F^e)$ 塞回 $G(x)=\text{惯性}+\Psi$，FEM 就提供了 $\min G(x)$ 的连续介质弹性项；单弹簧只是在两节点轴向能量与装配结构上类比一维 truss/bar。(2) 弹簧与 FEM 共享 per-vertex $\mathbf f/\mathbf H$ 装配口，但 raw full Newton 不自动单调；精确 block minimization 或经 backtracking 验收的局部下降，才会在其他 block 固定时保证全局 $G$ 下降。(3) <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 是这套地基在 Newton 里的落地，<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 讨论当前实现的 PSD 稳健化，附录 <a href="../appendix/a-8-fem-references.html">a-8</a> 是深入入口，而 Part 13 的 MPM 复用同一个 $F$/$\psi$/$P$。</p>
+        <p>FEM 篇到此收束：你已经拿到连续介质弹性的整块地基。下一步可以顺着它走进 <a href="../10-elasticity-collision/10-1-elastic-elements.html">Part 10（真实弹性与碰撞）</a>，看这套地基怎样在 production VBD 里跑起一块布、一团软体；也可以跳到 <a href="../13-mpm/13-4-F-update-constitutive.html">Part 13 的 MPM 本构</a>，第三次见到同一个 $F$ 与 $\psi$；或翻到附录 <a href="../appendix/a-8-fem-references.html">a-8</a> 按图索骥读原始论文。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

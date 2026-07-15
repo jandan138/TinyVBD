@@ -45,7 +45,7 @@
 
         <h2 id="audience">这本书假设你已经会什么</h2>
         <p>我假设你上过 <span class="term">GAMES103</span>：知道质点、弹簧、显式/隐式时间积分这些词，自己写过弹簧质点系统。我也假设你对 <span class="term">PBD</span> 的理解停留在课堂例子那一层——粗暴调位置、反复迭代——还没深究过它和「真正的弹性力学」是什么关系。</p>
-        <p>我<b>不</b>假设你对隐式欧拉背后的数学本质很清楚。事实上，很多人写过隐式积分却说不清「它到底在求什么」。这本书会专门花一个 Part 把这件事讲透——因为它是理解 VBD（以及 PBD / XPBD / Projective Dynamics 全家）的那把钥匙。</p>
+        <p>我<b>不</b>假设你对隐式欧拉背后的数学本质很清楚。事实上，很多人写过隐式积分却说不清「它到底在求什么」。这本书会专门花一个 Part 把这件事讲透——因为它是理解 VBD 的钥匙，也是比较 PBD / XPBD / Projective Dynamics 时的一把共同尺子；共享这套视角，不等于它们都直接最小化同一个固定目标。</p>
 
         <div class="callout note">
           <div class="c-h">一个语言约定</div>
@@ -56,8 +56,8 @@
         <p>这本书有一条精心安排的坡度，建议顺着读：</p>
         <ul>
           <li><b>Part 1 · 数学地基</b>：补回那块发虚的拼图——隐式欧拉的「<span class="term">variational</span> 真身」：<b>一步隐式欧拉 = 最小化一个能量 $G(\mathbf x)$</b>。这是全书的地基。</li>
-          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，发现它们其实都在解同一个 $\min G(\mathbf x)$，只是「怎么解」不同。你对 PBD 的旧印象会在这里被校准。</li>
-          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点。为什么「局部下降」能保证「全局下降」，为什么它又快又稳。</li>
+          <li><b>Part 2 · 谱系</b>：把 PBD / XPBD / Projective Dynamics 摆在一起，分清它们共享的增量动力学 / 能量-约束视角，以及各自真正处理的位置投影、KKT 系统或可投影能量。你对 PBD 的旧印象会在这里被校准。</li>
+          <li><b>Part 3 · VBD 核心思想</b>：<span class="term">block coordinate descent</span>——一次只动一个顶点。为什么通过验收的「局部下降」就是同一步的「全局下降」，以及 raw Newton 候选还缺哪些保护。</li>
           <li><b>Part 4 · 读代码</b>：把 TinyVBD 的 <code>forwardStep()</code> / <code>solve()</code> / Chebyshev 加速逐行读透，每一行都对得上前面的公式。</li>
           <li><b>Part 5 · 实验</b>：亲手复现论文里的招牌实验——高质量比、高刚度比、弯曲——并理解每个实验在「考」VBD 的什么。</li>
           <li><b>Part 6 + 附录</b>：VBD 的位置、局限与后续，外加术语表、公式速查、参考文献。</li>
@@ -70,7 +70,7 @@
           </thead>
           <tbody>
             <tr><td><b>Part 1</b><br>数学地基</td><td>隐式欧拉的 variational 真身</td><td>一步隐式欧拉 = $\arg\min G(\mathbf x)$</td><td><code>potential-landscape</code></td></tr>
-            <tr><td><b>Part 2</b><br>谱系</td><td>PBD / XPBD / PD 都在解同一个 $\min G$</td><td>区别只在「怎么解」，不在「解什么」</td><td><code>pbd-stiffness</code> / <code>pd-local-global</code></td></tr>
+            <tr><td><b>Part 2</b><br>谱系</td><td>共享动力学目标，不同数学对象与解法</td><td>PBD 是位置近似，XPBD 迭代 KKT，PD 做受限能量的 local/global</td><td><code>pbd-stiffness</code> / <code>pd-local-global</code></td></tr>
             <tr><td><b>Part 3</b><br>VBD 核心</td><td><span class="term">block coordinate descent</span>：一次只动一个顶点</td><td>局部下降 ⇒ 全局下降</td><td><code>vbd-sweep</code></td></tr>
             <tr><td><b>Part 4</b><br>读代码</td><td><code>forwardStep</code> / <code>solve</code> / Chebyshev 逐行读透</td><td>每一行都对得上前面的公式</td><td><code>chebyshev</code></td></tr>
           </tbody>

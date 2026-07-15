@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 13 · 13-5</div>
         <h1>显式 vs 隐式 MPM：隐式 = 网格上的 $\min G(x)$</h1>
-        <p class="lede">到上一节为止，MPM 一步循环里我们默认 grid solve 是<b>显式</b>的：节点收齐力，直接 $v_i\leftarrow v_i+\Delta t\,\mathbf f_i/m_i$ 更新动量，干净利落。代价是显式法那条老命门——步长一大就炸。这一节把这条命门讲透，然后亮出解药：<b>隐式 MPM</b>。而它的真身，正是全书主线 $\min G(x)$ 的又一次原样回归——只不过这一次，被最小化的自由度从「网格顶点」换成了「背景网格节点」。读完你会确认一件让人安心的事：MPM 看起来跳出了 mesh、跳出了 FEM，但<b>它一步都没逃出 $\min G(x)$</b>，VBD（Part 3）、IPC 全局 Newton（<a href="../12-ipc/12-9-solver-cost.html">12.9</a>）里那套牛顿步、线搜索、SPD 投影，在这里成建制地回来了。</p>
+        <p class="lede">到上一节为止，MPM 一步循环里我们默认 grid solve 是<b>显式</b>的：节点收齐力，直接 $v_i\leftarrow v_i+\Delta t\,\mathbf f_i/m_i$ 更新动量，干净利落。代价是显式法那条老命门——步长一大就炸。这一节把这条命门讲透，然后亮出解药：<b>隐式 MPM</b>。而它的真身，正是全书主线 $\min G(x)$ 的又一次原样回归——只不过这一次，被最小化的自由度从「网格顶点」换成了「背景网格节点」。读完你会确认一件让人安心的事：MPM 看起来跳出了 mesh、跳出了 FEM，但<b>它一步都没逃出 $\min G(x)$</b>，VBD（Part 3）、IPC 全局 Newton（<a href="../12-ipc/12-9-solver-cost.html">12.9</a>）里那套牛顿步、线搜索、PSD modified-Hessian 策略，在这里也能复用。</p>
 
         <h2 id="explicit">显式 MPM：便宜，但步长被刚度死死卡住</h2>
         <p>显式 grid solve 就一行：网格节点收齐 P2G 散来的内力 $\mathbf f_i$（<a href="13-4-F-update-constitutive.html">13.4</a> 的 $-V_p^0P_p\nabla w_{ip}$ 之和）加上重力，按牛顿第二定律推动量：</p>
@@ -39,14 +39,14 @@
         <h2 id="implicit-idea">隐式 MPM：用未来的力，换一个要解的方程</h2>
         <p>隐式法的念头和全书第一节（<a href="../01-foundations/1-2-variational-euler.html">1.2</a>）讲隐式欧拉时一模一样：别用旧位形的力，<b>用更新后（未来）位形的力</b>。把上面那行改成隐式：</p>
         <div class="math-block">$$v_i^{n+1}=v_i^{n}+\Delta t\,\frac{\mathbf f_i(x^{n+1})}{m_i},\qquad x^{n+1}=x^n+\Delta t\,v^{n+1}.$$</div>
-        <p>右边的力依赖 $x^{n+1}$，而 $x^{n+1}$ 又依赖 $v^{n+1}$——未知量出现在等式两边，这是个要<b>解</b>的非线性方程组，不再是一行外推。代价是每步要解方程；回报是<b>步长解放</b>：隐式法把「未来的回复力」纳入这一步的平衡，过冲被自动压住，于是可以迈大得多的稳定步长，硬材料也不炸。这正是 1.2 讲过的隐式欧拉的全部好处，原封不动搬到 MPM 的网格上。</p>
+        <p>右边的力依赖 $x^{n+1}$，而 $x^{n+1}$ 又依赖 $v^{n+1}$——未知量出现在等式两边，这是个要<b>解</b>的非线性方程组，不再是一行外推。代价是每步要解方程；回报是隐式法通常允许比显式 CFL 大得多的稳定步长，因为未来回复力被纳入这一步的平衡。但这不是「任意步长都收敛」或 static stability 的保证：非线性求解、材料定义、约束处理与 line search 仍可能限制可用步长。</p>
 
         <h2 id="min-G">关键一跃：隐式 MPM 就是网格上的 $\min G(x)$</h2>
         <p>现在是这一节的题眼。<a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那个全书最重要的结论说：<b>一步隐式欧拉 = 最小化一个 incremental potential $G(x)$</b>。这个等价在 MPM 上<b>原样成立</b>——隐式 grid solve 不是去解那个非线性方程组本身，而是去最小化同一个增量势能，只不过自变量是<b>网格节点的位置/速度增量</b>：</p>
         <div class="math-block">$$x_g^{n+1}=\arg\min_{x_g}\ G(x_g),\qquad G(x_g)=\underbrace{\sum_i \tfrac{m_i}{2\Delta t^2}\lVert x_{g,i}-\hat x_{g,i}\rVert^2}_{\text{惯性项（网格节点）}}+\underbrace{\sum_p V_p^0\,\psi\bigl(F_p(x_g)\bigr)}_{\text{弹性项（粒子本构）}}.$$</div>
         <p>逐块对照你早就熟的 $G(x)$：</p>
         <ul>
-          <li><b>惯性项</b>：和 <a href="../01-foundations/1-2-variational-euler.html">1.2</a>、<a href="../09-fem/9-4-piola-assembly.html">9.4</a> 里那个 $\frac{m}{2h^2}\lVert x-\hat x\rVert^2$ 一字不差的「定海神针」——只是 $m$ 现在是<b>网格节点质量</b>（P2G 散来的），$\hat x_{g,i}$ 是节点的惯性目标（旧速度 + 重力外推）。它恒正定，给整个优化兜底。</li>
+          <li><b>惯性项</b>：和 <a href="../01-foundations/1-2-variational-euler.html">1.2</a>、<a href="../09-fem/9-4-piola-assembly.html">9.4</a> 里那个 $\frac{m}{2h^2}\lVert x-\hat x\rVert^2$ 一字不差——只是 $m$ 现在是 P2G 散来的<b>网格节点质量</b>。它在 $m_i&gt;0$ 的 active 自由节点上正定；零质量节点要跳过，固定 / 约束节点要消元，不能笼统说整个未处理网格矩阵恒正定。</li>
           <li><b>弹性项</b>：能量来自<b>粒子上携带的 $F_p$</b>（<a href="13-4-F-update-constitutive.html">13.4</a>）。而 $F_p$ 是网格节点位移的函数（节点一动，插回粒子的 $\nabla v_p$ 就变，$F_p$ 跟着变），所以这一项确实是 $x_g$ 的函数。本构 $\psi$、应力 $P_p=\partial\psi/\partial F_p$ 全是 <a href="../09-fem/9-3-strain-energy.html">9.3</a>/<a href="../09-fem/9-4-piola-assembly.html">9.4</a> 那一套。</li>
         </ul>
         <p>就这样，MPM 的隐式求解被装回了你最熟的模子：<b>在一组 DOF 上最小化「惯性 + 弹性」的 $G$</b>。DOF 从 FEM/VBD 的「网格顶点」换成了「背景网格节点」，弹性能的来源从「固定单元的 $F$」换成了「粒子携带的 $F_p$」——但 $\min G(x)$ 这个骨架，一根螺丝都没换。</p>
@@ -55,12 +55,12 @@
           <p>把全书的 $\min G(x)$ 系谱排一排，你会看到它一路换 DOF 载体却从不换骨架：弹簧/cloth 顶点（Part 1–8）→ FEM 单元顶点（Part 9）→ IPC 全局顶点（Part 12）→ <b>MPM 背景网格节点（这里）</b>。VBD（Part 3）是「逐顶点 Gauss-Seidel 扫」这一组 DOF，IPC（<a href="../12-ipc/12-9-solver-cost.html">12.9</a>）是「一次全局 Cholesky 解」这一组 DOF，隐式 MPM 是「在网格节点这组 DOF 上」解同一个最小化。<b>主线一句话在这里第 N 次兑现：一切都是 $\min G(x)$，变的只是谁来当 $x$。</b>这也是 13.9 收尾把 MPM 和 VBD 关系总结成「同 $\min G(x)$、异 DOF」的依据。</p>
         </div>
 
-        <h2 id="newton-returns">于是牛顿步、线搜索、SPD 投影全回来了</h2>
+        <h2 id="newton-returns">于是牛顿步、线搜索、PSD modified Hessian 都能复用</h2>
         <p>一旦确认隐式 MPM 是在解 $\min_{x_g}G(x_g)$，求解机器就<b>不需要新发明</b>——前面整本书攒下的优化工具直接套用：</p>
         <ul>
-          <li><b>牛顿步</b>：在网格节点 DOF 上装配梯度 $-\nabla G$（即网格节点的合力 $\mathbf f$）和 Hessian $\nabla^2G$（即 $\mathbf H$），解 $\mathbf H\,\Delta x_g=\mathbf f$ 得下降方向——和 <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 那段 IPC 外迭代伪代码同一个套路（装配 → 解方向）。弹性项的力与 Hessian 仍来自粒子 $P_p$、$\partial P_p/\partial F_p$，经核梯度 $\nabla w_{ip}$ 散到节点上。</li>
+          <li><b>牛顿步</b>：在网格节点 DOF 上装配 $\mathbf f=-\nabla G$ 和 Hessian 模型 $\mathbf H$。正质量惯性、active / constrained DOF 处理及必要的 positive shift 使总系统 SPD 后，解 $\mathbf H\,\Delta x_g=\mathbf f$ 才得到严格下降方向。弹性项的力与 Hessian 仍来自粒子 $P_p$、$\partial P_p/\partial F_p$，经核梯度 $\nabla w_{ip}$ 散到节点上。</li>
           <li><b>线搜索</b>：解出方向 $\Delta x_g$ 不全盘接受，沿它做 Armijo 式线搜索挑一个真让 $G$ 下降的步长——和 <a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 的 line search 同源（MPM 这里没有 IPC 的 CCD/不穿透约束那一支，单纯是能量下降的线搜索）。</li>
-          <li><b>SPD 投影</b>：弹性 Hessian 在压缩/接近反转（$J\to0$）时不保正定——和 FEM 单元 Hessian 同样的毛病（<a href="../09-fem/9-4-piola-assembly.html">9.4</a> 讲透了）。所以装配进网格节点 $\mathbf H$ 之前，每个粒子贡献的 Hessian 块要先做 SPD 投影把负特征值钳正，这正是 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 那道工序，原样服务于此。</li>
+          <li><b>PSD modified Hessian（可选鲁棒策略）</b>：弹性 Hessian 即使 $J&gt;0$ 也不保证正定。一种常见做法是在装配前把粒子 / 求积块的负特征值截到 $0$，得到 PSD 近似；这不是所有隐式 MPM 的必经工序，PSD 还可能奇异，也不单独保证 inversion-free 或 static stability。若采用它，总系统仍需靠正质量惯性、约束消元或 positive shift 达到 SPD。</li>
         </ul>
         <p>换句话说，你为 VBD/FEM/IPC 学的每一样东西，在隐式 MPM 里几乎零成本复用。唯一真正 MPM 特有的复杂度，是「弹性能经由粒子 $F_p$ 间接依赖网格 DOF」这层链式关系——力和 Hessian 要透过 $F_p\to\nabla v_p\to\nabla w_{ip}$ 这条路传导。但这只是多了一层链式法则，优化骨架本身没变。</p>
         <div class="callout note">
@@ -69,7 +69,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) <b>显式 MPM</b> 用旧位形的力直接外推动量，便宜且天然并行，但被刚度 CFL 死死卡住步长——硬材料/细网格下易炸，这是 PB-MPM（<a href="13-7-pb-mpm.html">13.7</a>，接回 PBD/XPBD）要解的招牌痛点。(2) <b>隐式 MPM</b> 改用未来位形的力，把一步变成一个要解的方程——而它的真身就是 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 那个 $\min G(x)$ 原样回归：在<b>背景网格节点</b>这组 DOF 上最小化「惯性（网格节点）+ 弹性（粒子 $F_p$ 本构）」的同一个增量势能，DOF 换了载体、骨架一根螺丝没换。(3) 于是牛顿步、线搜索、SPD 投影（<a href="../12-ipc/12-8-ipc-iteration.html">12.8</a>/<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）成建制复用——MPM 跳出了 mesh，却一步没逃出 $\min G(x)$。</p>
+        <p>三句话：(1) <b>显式 MPM</b> 用旧位形的力直接外推动量，便宜且天然并行，但被刚度 CFL 卡住步长。(2) <b>隐式 MPM</b> 在背景网格节点上最小化「惯性 + 粒子本构弹性」的增量势能，通常扩大稳定步长范围，但不等于任意步长或 static stability 保证。(3) 牛顿装配、line search 与可选的 elementwise PSD modified-Hessian 策略都能复用；负特征值截到 $0$ 只得 PSD，总系统还须经正质量惯性 / 约束处理 / shift 成为 SPD，且 line search 仍控制 full step。</p>
         <p>隐式 MPM 把变分骨架搬上了网格，但也带来了「PPC × 宽核」的求解开销。下一节是本篇的主讲：<b>MPM Lite</b> 怎样让粒子主要只作运动状态的载体、求解时去掉基于粒子的求积、改用线性核，把这块开销砍下来——我们会照 <a href="../12-ipc/12-7-worked-example.html">12.7</a>/<a href="../12-ipc/12-8-ipc-iteration.html">12.8</a> 的做法，给它配一段手算 + 一段伪代码走读。去 <a href="13-6-mpm-lite.html">13.6（MPM Lite 主讲：线性核、无粒子求积）</a>。</p>
       </article>
     </main>

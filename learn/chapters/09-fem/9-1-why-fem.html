@@ -25,35 +25,35 @@
       <article class="article">
         <div class="eyebrow">Part 9 · 9-1</div>
         <h1>为什么需要 FEM：从弹簧到连续介质</h1>
-        <p class="lede">你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过 Neo-Hookean 元件用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力——它们从哪来？这一篇补上地基。先回答一个更朴素的问题：<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧，能量 $\tfrac12k(l-l_0)^2$ 干净利落，为什么还要请出 <span class="term">FEM</span>（finite element method）这套重家伙？答案是：弹簧只有<b>一个自由度</b>——长度。可一块真实的布、一团软体，要管的远不止「长短」。这一节讲清楚弹簧抓不住什么，以及连续介质如何把那个 $\tfrac12k(l-l_0)^2$ 升级成 $\int\psi(\mathbf F)\,dV$。</p>
+        <p class="lede">你在 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 见过 Neo-Hookean 元件用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力——它们从哪来？这一篇补上地基。先回答一个更朴素的问题：<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧，能量 $\tfrac12k(l-l_0)^2$ 干净利落，为什么还要请出 <span class="term">FEM</span>（finite element method）这套重家伙？答案是：单根轴向弹簧只读取<b>一个形变量</b>——长度。可一块真实的布、一团软体，要管的远不止「长短」。这一节讲清楚单根弹簧、弹簧网络与连续介质各自能表达什么，以及如何把那个 $\tfrac12k(l-l_0)^2$ 推广成 $\int\psi(\mathbf F)\,dV$。</p>
 
-        <h2 id="spring-one-dof">弹簧的世界只有一根数轴：长度</h2>
+        <h2 id="spring-one-dof">单根轴向弹簧的世界只有一根数轴：长度</h2>
         <p>把 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧的能量再抄一遍：</p>
         <div class="math-block">$$E=\tfrac12 k\,(l-l_0)^2,\qquad l=\lVert\mathbf x_a-\mathbf x_b\rVert.$$</div>
         <p>注意它只依赖一个标量——当前长度 $l$。整根弹簧的「形变状态」被压缩成<b>一个数</b>：长度比 $l/l_0$。这是它的全部信息，也是它的全部局限。两个端点在三维里怎么摆、弹簧绕着自己的轴转多少、它周围的材料是被斜着剪了还是被压扁了——弹簧统统不知道，因为它只会量两端之间那段直线有多长。</p>
-        <p>对一根头发丝、一段绳子，这够用：它们本来就是一维的，「长短」几乎就是全部物理。可一旦材料有了<b>宽度、面积、体积</b>，麻烦就来了。</p>
+        <p>把它当作一维 truss/bar 的轴向拉压类比时，这个描述很有用；可一旦材料有了<b>宽度、面积、体积</b>，单根弹簧就不够了。至于许多弹簧连成网络后能表达多少，则取决于连接拓扑，不能把单根弹簧的局限直接推广成「所有网络都失明」。</p>
 
-        <h2 id="three-blind-spots">弹簧的三个盲区：剪切、面积/体积、各向异性</h2>
-        <p>把一块连续材料想象成「一团点 + 点之间连一堆弹簧」，你立刻撞上三件弹簧根本看不见的事。</p>
+        <h2 id="three-blind-spots">从单根弹簧到网络：拓扑能补什么，仍缺什么</h2>
+        <p>把一块连续材料想象成「一团点 + 点之间连一堆弹簧」时，关键不只在弹簧数量，还在连接拓扑与参数如何随网格变化。下面先把网络确实存在的机构，与中心力网络能够提供的响应分开。</p>
 
-        <h3 id="blind-shear">盲区一：剪切（shear）</h3>
-        <p>取一个正方形小片，四角拉成<span class="term-i">平行四边形</span>——这是纯<span class="term">shear</span>（剪切）。关键在于：<b>四条边的长度可以一点没变</b>，只是角度斜了。三条边、四条边各挂一根弹簧，它们量的全是边长，边长没变 → 弹簧<b>零反应</b>。可真实材料被剪歪是要花能量、要回弹的（想想一块橡皮你斜着推它）。弹簧对剪切彻底失明。</p>
+        <h3 id="blind-shear">四边框有剪切机构，不等于所有网络都失明</h3>
+        <p>取一个只沿四条边连接的正方形框，把它斜成菱形时四条边长可以不变；这个<b>未加斜撑的四边框</b>确实有一个 shear mechanism（剪切机构），边弹簧对此零反应。但加一条对角线把框三角化后，同样的斜动会改变对角线长度，网络便会响应。完整三角形的三条边长固定时，其形状已在刚体运动与镜像之外确定，不能再保持边长做连续剪切。更一般地，拓扑充分的 <span class="term">central-force network</span> 可以提供部分有效剪切刚度；四边框的机构不能推广成所有连接拓扑的共同性质。</p>
 
-        <h3 id="blind-volume">盲区二：面积与体积变化</h3>
-        <p>同理，一个三角形可以三条边长都不变，却被压扁成接近一条线（面积塌缩）；一个四面体可以所有边长都对，却被压成零体积甚至<b>翻面</b>。边弹簧只盯边长，对「面积比」「体积比」是瞎的——而真实材料强烈抗拒体积塌缩（你压不瘪一块水球，它会鼓到别处去）。这种「体积守恒」的脾气，弹簧网络编码不出来。</p>
+        <h3 id="blind-volume">完整边长决定绝对面积/体积，但不记录朝向</h3>
+        <p>非退化三角形的三条边长通过 Heron 公式决定面积；四面体的六条边长也通过 Cayley-Menger 行列式决定体积的绝对值。因此它们不可能在所有完整边长都保持不变时被连续压到零面积/体积。真正缺失的是<b>有符号朝向</b>：一个单纯依赖距离的能量无法区分原构型与镜像构型。中心力弹簧会在连续翻转路径上因边长变化而产生阻力，却不直接提供 $J=\det F&gt;0$ 的定义域、$J\to0^+$ 的体积 barrier，或可独立标定的体积模量；朝向保持与体积响应因此很难靠简单边弹簧稳健编码。</p>
 
-        <h3 id="blind-aniso">盲区三：各向异性（anisotropy）</h3>
-        <p>真实材料常常<b>方向不同、软硬不同</b>：肌肉顺纤维方向硬、横着软；织物经纬两个方向刚度不一样。这叫 <span class="term">anisotropy</span>。要在弹簧网络里凑出方向性，你得手工布不同刚度的弹簧、还得祈祷它们的合力恰好对——又脆又不准。连续介质则把方向性直接写进材料模型里，是一等公民。</p>
+        <h3 id="blind-aniso">真正的局限：网格方向偏置与本构标定</h3>
+        <p>中心力网络当然可以做出方向性，甚至可以借不同方向与刚度的边近似某些各向同性或各向异性响应；难点是这些响应被<b>边方向与连接拓扑</b>绑住。换一次三角化，等效剪切、体积与 Poisson 响应就可能变化；想独立控制这些连续体参数、保持旋转客观性并随网格加密得到一致材料，需要仔细设计拓扑和标定。连续介质本构则把这些要求直接写进 $\psi(F)$，材料参数与单条网格边不再一一绑定。</p>
 
         <div class="callout warn">
-          <div class="c-h">误区：弹簧网络密一点就能逼近连续体</div>
-          <p>很自然会想「弹簧不够，多加几根、加密网格不就逼近真材料了？」——加密能让<b>拉伸</b>逼近得更好，但<b>剪切和体积</b>这两个盲区是结构性的，不是密度问题。无论多密，一堆只认边长的弹簧对纯剪切仍然零反应、对等体积的翻面仍然无感。问题出在「只用标量长度描述形变」这个起点上，得换一个能描述<b>整块小材料怎么被线性变换</b>的量——那就是下一节的形变梯度 $\mathbf F$。</p>
+          <div class="c-h">误区：把四边框机构推广到所有网络</div>
+          <p>四边框的零能剪切来自<b>缺少斜撑的拓扑</b>，不是中心力网络的普遍定理；三角化或更充分的连接可以响应部分剪切与体积变化。但「有响应」不等于「自动得到目标连续体」：网格方向偏置、剪切/体积参数的独立控制、有符号朝向与体积 barrier、以及跨网格标定仍然困难。形变梯度 $F$ 的价值，是先完整描述一小块材料的局部线性变换，再由 $\psi(F)$ 明确指定这些响应。</p>
         </div>
 
         <h2 id="continuum-F">连续介质的答案：用 F 描述「整块怎么变」</h2>
         <p>连续介质力学换了个起点：不再问「这条边多长」，而问「rest 状态里的一小块材料，被映成 world 里的什么形状」。把 rest 坐标记作 $\mathbf X$、world 坐标记作 $\mathbf x$，这个映射的局部线性化就是<span class="term">deformation gradient</span>（形变梯度）：</p>
         <div class="math-block">$$\mathbf F=\frac{\partial\mathbf x}{\partial\mathbf X}.$$</div>
-        <p>$\mathbf F$ 是个<b>矩阵</b>（2D 里 $2\times2$、3D 里 $3\times3$），它一口气编码了拉伸、剪切、旋转、面积/体积变化——上面那三个盲区，全在 $\mathbf F$ 里有据可查。弹簧那个标量长度比 $l/l_0$，其实就是 $\mathbf F$ 在一维退化成的「一个数」。从 1 个自由度升到一整个矩阵，就是「从弹簧到连续介质」这一步的全部含义。下一节 <a href="9-2-deformation-gradient.html">9.2</a> 专讲 $\mathbf F$ 怎么从顶点坐标算出来、怎么读它。</p>
+        <p>$\mathbf F$ 是个<b>矩阵</b>（2D 里 $2\times2$、3D 里 $3\times3$），它一口气记录拉伸、剪切、旋转、面积/体积变化；再由 $\psi(F)$ 决定哪些形变要付多少能量。单根弹簧的长度比 $l/l_0$ 只可类比为一维杆件的轴向形变量，不能替代二维或三维的完整 $F$。从一个方向的长度测量升到整块材料的局部线性映射，才是「从弹簧到连续介质」的关键。下一节 <a href="9-2-deformation-gradient.html">9.2</a> 专讲 $\mathbf F$ 怎么从顶点坐标算出来、怎么读它。</p>
 
         <h2 id="energy-generalizes">弹性项的升级：从 Σ½k(l−l₀)² 到 ∫ψ(F)dV</h2>
         <p>现在把视角拉回全书主线。无论弹簧还是连续体，我们解的<b>始终</b>是那个 <a href="../01-foundations/1-2-variational-euler.html">1.2</a> 的</p>
@@ -62,16 +62,16 @@
         <div class="math-block">$$\Psi_{\text{spring}}=\sum_{\text{edges}}\tfrac12 k\,(l-l_0)^2.$$</div>
         <p>连续介质把它升级成一个<b>积分</b>：每一小块材料 $dV$ 储存的能量是<span class="term">strain energy density</span>（应变能密度）$\psi(\mathbf F)$，对整块材料积分：</p>
         <div class="math-block">$$\Psi_{\text{FEM}}=\int_\Omega \psi(\mathbf F)\,dV.$$</div>
-        <p>读这两行的对照：求和 $\to$ 积分；标量长度比 $\to$ 矩阵 $\mathbf F$；半刚度乘平方 $\to$ 一个更丰富的能量密度函数 $\psi$（它能同时罚拉伸、剪切、体积变化——三个盲区一次补齐）。本质一点没变：还是「储存的弹性能」。$\psi$ 该长什么样、有哪些经典选择，是 <a href="9-3-strain-energy.html">9.3</a> 的主题。</p>
+        <p>读这两行的对照：求和 $\to$ 积分；单个轴向长度 $\to$ 矩阵 $\mathbf F$；半刚度乘平方 $\to$ 一个更丰富的能量密度函数 $\psi$。它可以独立组织拉伸、剪切、体积与各向异性响应，而不必把材料参数硬绑到若干网格边上。本质一点没变：还是「储存的弹性能」。$\psi$ 该长什么样、有哪些经典选择，是 <a href="9-3-strain-energy.html">9.3</a> 的主题。</p>
 
         <h2 id="discretize">FEM = 把积分离散成单元，每个单元一个常数 F</h2>
         <p>$\int_\Omega\psi(\mathbf F)\,dV$ 是个连续积分，计算机不能直接算无穷多个点。<span class="term">FEM</span> 的全部技术内核就一句话：<b>把材料切成一个个小单元（element）</b>——2D 用三角形、3D 用四面体——在每个单元内部，假设形变是最简单的<b>线性</b>的，于是单元内 $\mathbf F$ 处处<b>相同、是个常数</b>（这叫 <span class="term">constant-strain</span> 单元）。积分就塌缩成对各单元求和：</p>
         <div class="math-block">$$\Psi_{\text{FEM}}=\int_\Omega \psi(\mathbf F)\,dV\;\approx\;\sum_{e}V_0^e\,\psi(\mathbf F^e),$$</div>
-        <p>其中 $V_0^e$ 是单元 $e$ 的 rest 体积（2D 是面积）、$\mathbf F^e$ 是它那个常数形变梯度。看出来了吗——<b>这又变回了一串求和</b>，和弹簧的 $\sum\tfrac12k(l-l_0)^2$ 结构同形！每个单元就像一根「升级版弹簧」：它有自己的能量 $V_0^e\psi(\mathbf F^e)$，能对顶点求导出力与 Hessian，再装配进每个顶点的 $\mathbf f_i/\mathbf H_i$——和弹簧一模一样的口。装配怎么做，是 <a href="9-4-piola-assembly.html">9.4</a>；把它整个塞回 $\min G(x)$ 的全景，是 <a href="9-6-fem-is-minG.html">9.6</a>。</p>
+        <p>其中 $V_0^e$ 是单元 $e$ 的 rest 体积（2D 是面积）、$\mathbf F^e$ 是它那个常数形变梯度。看出来了吗——<b>这又变回了一串求和</b>，和弹簧的 $\sum\tfrac12k(l-l_0)^2$ 在「逐元件能量求导再装配」这一结构上同形。每个单元有自己的能量 $V_0^e\psi(\mathbf F^e)$，能对顶点求导出力与 Hessian，再装配进每个顶点的 $\mathbf f_i/\mathbf H_i$。装配怎么做，是 <a href="9-4-piola-assembly.html">9.4</a>；把它整个塞回 $\min G(x)$ 的全景，是 <a href="9-6-fem-is-minG.html">9.6</a>。</p>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 弹簧就是一维的 FEM 单元</div>
-          <p>别把 FEM 当成另起炉灶的新东西——它就是 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那根弹簧的连续介质推广。弹簧是<b>一维的 FEM 单元</b>：它的「形变」就是长度比 $l/l_0$（$\mathbf F$ 退化成一个数），它的能量密度就是 $\tfrac12k(l-l_0)^2$，它把这份能量对两个端点求导、装配出力与 Hessian。FEM 做的事一字不差，只是把「长度比」升级成形变梯度 $\mathbf F$（一个矩阵，能看见剪切和体积），把标量能量升级成 $\psi(\mathbf F)$，把两端点升级成三角形/四面体的几个顶点。<b>$\min G(x)$ 没变、装配口没变、下降原理没变——变的只是单元内部那个能量长什么样。</b>你吃透了一根弹簧，就已经吃透了 FEM 的骨架。</p>
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 单弹簧只类比一维 truss/bar</div>
+          <p>别把结构类比说成严格等号。单根 Hookean 弹簧与一维 truss/bar 都只读取轴向长度变化，并把能量对两个端点求导，所以它们共享「逐元件求力/Hessian，再装配」的骨架；但杆单元还涉及参考长度、截面与材料能量，二维/三维连续体更不能靠改名得到。FEM 把轴向类比升级成完整的形变梯度 $F$ 与本构 $\psi(F)$。<b>$\min G(x)$ 的目标形式和装配口可以相同，具体步是否下降仍取决于求解与步长验收。</b>弹簧 Hessian 的平行/横向结构见 <a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a>。</p>
         </div>
 
         <h2 id="preview-1001">这套地基落在哪：10-1 的 Neo-Hookean</h2>
@@ -79,12 +79,12 @@
         <ul>
           <li><b>Neo-Hookean membrane</b>（布的面内能量，$\mathbf F$ 是 $3\times2$）——它的 $\psi$、$I_c$、$J_s$，正是这一篇要从头讲清的应变能密度（<a href="9-3-strain-energy.html">9.3</a>）。</li>
           <li><b>volumetric Neo-Hookean</b>（软体的体积能量，$\mathbf F$ 是 $3\times3$）——那个抗翻面的 $\ln J$ 项，下一篇你会看到它从哪来。</li>
-          <li><b>SPD projection</b>（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）——正是为 FEM 单元 Hessian 在压缩时不定而设的修复，和 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 压缩弹簧那个变负的 $\lambda_\perp$ 同源（<a href="9-4-piola-assembly.html">9.4</a> 会接回）。</li>
+          <li><b>PSD clamp / projection</b>（<a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a>）——是当前实现处理某些单元负曲率的稳健化策略；把负特征值截到 0 得到的是半正定近似，不是正定单元块（<a href="9-4-piola-assembly.html">9.4</a> 会接回）。</li>
         </ul>
         <p>换句话说，10.1 是「应用 FEM」——它已经在用 $\mathbf F$、$\psi(\mathbf F)$、Piola 应力，但从没讲它们的来历。这一篇 FEM 篇就是给它补地基。读完 9.1–9.6，再回头看 10.1 的每个公式，你都能说出它从哪一步长出来。</p>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 弹簧只有<b>一个自由度</b>（长度比 $l/l_0$），对剪切、面积/体积变化、各向异性这三件事结构性失明，加密网格也补不回来；(2) 连续介质用形变梯度 $\mathbf F=\partial\mathbf x/\partial\mathbf X$（一个矩阵）描述「整块小材料怎么被线性变换」，把弹性项从 $\sum\tfrac12k(l-l_0)^2$ 升级成 $\int_\Omega\psi(\mathbf F)\,dV$；(3) <span class="term">FEM</span> 就是把这个积分离散成一个个 constant-strain 单元（三角形/四面体），每单元一个常数 $\mathbf F$，能量求和 $\sum_e V_0^e\psi(\mathbf F^e)$——又变回弹簧那种「逐元件求和再装配」的口。</p>
+        <p>三句话：(1) 单根轴向弹簧只读长度，但不能据此断言所有弹簧网络都看不见剪切：未加斜撑的四边框有剪切机构，三角化或充分连接的中心力网络可以响应部分剪切；完整三角形/四面体的边长分别决定面积/体积的绝对值。(2) 简单中心力网络真正难处理的是网格方向偏置、本构参数的独立控制、有符号朝向与体积 barrier，以及跨网格标定；连续介质用 $F=\partial x/\partial X$ 与 $\psi(F)$ 直接表达这些量。(3) <span class="term">FEM</span> 把 $\int_\Omega\psi(F)\,dV$ 离散成 constant-strain 单元之和 $\sum_e V_0^e\psi(F^e)$，在「逐元件求导再装配」这一层与弹簧共享接口。</p>
         <p>$\min G(x)$ 没动，只是弹性项从弹簧长成了连续体。下一节 <a href="9-2-deformation-gradient.html">9.2</a> 把这一篇反复点名的主角 $\mathbf F$ 立起来：它怎么从顶点坐标算（$\mathbf F=\mathbf D_s\mathbf D_m^{-1}$）、$J=\det\mathbf F$ 读什么、为什么刚体旋转不该花能量（极分解 $\mathbf F=\mathbf R\mathbf S$）。形变梯度立住了，应变能密度和 Piola 应力才有地方挂。</p>
       </article>
     </main>

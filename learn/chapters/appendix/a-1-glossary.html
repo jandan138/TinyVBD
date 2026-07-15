@@ -33,7 +33,7 @@
           <tbody>
             <tr>
               <td><span class="term">Vertex Block Descent</span> (VBD)</td>
-              <td>本书主角。把隐式欧拉的最小化问题，用「一次只动一个顶点的 3 自由度」的 block coordinate descent 来解；primal、保留完整局部 Hessian、$G$ 单调下降。</td>
+              <td>本书主角。把隐式欧拉的最小化问题，用「一次只动一个顶点的 3 自由度」的 block coordinate descent 来解；primal、保留完整局部 Hessian。只有精确 block 最小化或经过下降验收的候选，才给出 $G$ 的单调链。</td>
               <td><a href="../00-orientation/0-1-where-we-go.html">0.1</a> · <a href="../03-vbd/3-1-block-descent.html">3.1</a></td>
             </tr>
             <tr>
@@ -65,17 +65,17 @@
             </tr>
             <tr>
               <td><span class="term">Hessian</span></td>
-              <td>能量对位置的二阶导矩阵。顶点 Hessian $\mathbf H_i=\frac{m_i}{h^2}\mathbf I+\sum_j\partial^2 E_j/\partial\mathbf x_i^2$，VBD 牛顿步要解的 3×3 矩阵。</td>
-              <td><a href="../01-foundations/1-5-spring-energy.html">1.5</a> · <a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
+              <td>能量 gradient 对位置的 Jacobian，即 $H=\nabla^2E$；若力 $f=-\nabla E$，则 force Jacobian 是 $-H$。二次型 $q^\top Hq$ 给出沿 $q$ 的局部方向曲率。</td>
+              <td><a href="../01-foundations/1-5-spring-energy.html">1.5</a> · <a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a> · <a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a></td>
             </tr>
             <tr>
               <td><span class="term">SPD</span> / positive definite</td>
-              <td>对称正定。Hessian 正定时局部能量是个有唯一谷底的碗。惯性项恒正定，是 VBD 不必强制 SPD 投影也能稳的关键。</td>
-              <td><a href="../03-vbd/3-6-stability.html">3.6</a></td>
+              <td>对称正定：任意非零 $q$ 都有 $q^\top Hq&gt;0$。只有先满足一阶平衡、并限制到允许扰动后，正定 Hessian 才给出严格局部极小；把负特征值截到 0 得到的是 PSD（半正定），不是 SPD。PSD 可能奇异，不能单独保证 inverse、普通 Cholesky 或严格下降。</td>
+              <td><a href="../03-vbd/3-6-stability.html">3.6</a> · <a href="../14-curvature-mass/14-3-buckling-newton.html">14.3</a></td>
             </tr>
             <tr>
               <td><span class="term">Newton's method</span></td>
-              <td>牛顿法。用 Hessian 解 $\Delta\mathbf x=\mathbf H^{-1}\mathbf f$。VBD 对每个顶点做<b>一步</b>局部牛顿；全局 Newton 则解整个大稀疏系统。</td>
+              <td>牛顿法。用 $\mathbf H\Delta\mathbf x=\mathbf f=-\nabla G$ 求方向；自由系统 SPD 时该方向严格下降，但 full step 仍需 line search。VBD 对每个顶点做局部步，全局 Newton 则解整个大稀疏系统。</td>
               <td><a href="../03-vbd/3-3-newton-step.html">3.3</a></td>
             </tr>
             <tr>
@@ -107,6 +107,53 @@
               <td><span class="term">skip spring</span> (bending)</td>
               <td>跳跃弹簧。连接顶点 $i$ 与 $i+2$ 的额外弹簧，用来近似<b>弯曲</b>刚度。TinyVBD 用 <code>stiffnessSkipSpring</code> 控制。</td>
               <td><a href="../05-experiments/5-3-skip-spring-iterations.html">5.3</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="curvature-mass">二阶结构、质量与模态</h2>
+        <table>
+          <thead><tr><th>术语</th><th>中文解释</th><th>详见</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="term">directional curvature</span> / <span class="term">Rayleigh quotient</span></td>
+              <td>沿路径 $E(x+s q)$ 观察能量，二阶导为 $q^\top Hq$；除以 $q^\top q$ 得 Rayleigh quotient，其最小值就是 $H$ 的最小特征值。</td>
+              <td><a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">eigenpair</span> / <span class="term">eigenspace</span></td>
+              <td>满足 $Hv=\lambda v$ 的特征值与特征向量。$v$ 给主曲率方向，$\lambda$ 给单位欧氏位移的曲率；符号和尺度任意，重根时只有整个特征子空间唯一。</td>
+              <td><a href="../14-curvature-mass/14-1-hessian-geometry.html">14.1</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">orthogonal projector</span></td>
+              <td>正交投影矩阵。弹簧方向 $u$ 给出 $\Pi_\parallel=uu^\top$ 与 $\Pi_\perp=I-uu^\top$，分别保留平行和横向分量；两者对称、幂等且互补。</td>
+              <td><a href="../14-curvature-mass/14-2-spring-projectors.html">14.2</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">buckling</span></td>
+              <td>屈曲。总势能先满足平衡后，最小允许 tangent eigenvalue 随载荷降到 0 并穿负的结构失稳；单个非平衡受压弹簧的负横向曲率只是局部原料，不等于完整屈曲结论。</td>
+              <td><a href="../14-curvature-mass/14-3-buckling-newton.html">14.3</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">consistent mass</span></td>
+              <td>一致质量矩阵。把同一组 FEM shape functions 用于速度插值与连续动能积分，得到 $M_{ij}=\int\rho N_iN_j\,dV$；相邻节点的非对角项表示共同搬运材料的惯性耦合。</td>
+              <td><a href="../14-curvature-mass/14-4-consistent-mass.html">14.4</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">mass lumping</span> / <span class="term">row-sum</span></td>
+              <td>质量集中 / 行和集中。令 $M^L_{ii}=\sum_jM_{ij}$，把耦合质量守恒地移到对角；P1 simplex 上方便且为正，高阶单元则可能产生零或负节点质量，不能盲用。</td>
+              <td><a href="../14-curvature-mass/14-5-mass-lumping.html">14.5</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">mass metric</span></td>
+              <td>质量度量。自由切空间上 SPD 的 $M$ 定义内积 $\langle u,v\rangle_M=u^\top Mv$，是连续 $L^2(\rho)$ 动能内积离散后的矩阵表示。</td>
+              <td><a href="../14-curvature-mass/14-6-mass-metric-modes.html">14.6</a></td>
+            </tr>
+            <tr>
+              <td><span class="term">generalized eigenproblem</span> / <span class="term">physical mode</span></td>
+              <td>广义特征问题 / 物理模态。小振动满足 $K\phi=\omega^2M\phi$；$\phi$ 是按节点重排后的位移场，$\omega$ 是角频率，不同模态可取为 $M$-orthogonal。</td>
+              <td><a href="../14-curvature-mass/14-6-mass-metric-modes.html">14.6</a></td>
             </tr>
           </tbody>
         </table>
@@ -222,7 +269,7 @@
             </tr>
             <tr>
               <td><span class="term">PSD projection</span></td>
-              <td>半正定投影：把局部 Hessian 的负特征值钳到 0（$\max(0,\lambda_i)$）保证下降方向；接回原书 10-2 的 SPD 投影。</td>
+              <td>半正定投影：把局部 Hessian 的负特征值钳到 0（$\max(0,\lambda_i)$），构造 PSD modified Hessian。它可能奇异，只是 elementwise 鲁棒策略之一；总系统需由正质量惯性、约束消元或 positive shift 成为 SPD 后才有普通 inverse / Cholesky 与严格下降方向，full step 仍由 line search 控制。它本身不保证 inversion-free、intersection-free 或 static stability。</td>
               <td><a href="../12-ipc/12-4-barrier-grad-psd.html">12.4</a></td>
             </tr>
             <tr>
@@ -257,7 +304,7 @@
             </tr>
             <tr>
               <td><span class="term">CHOLMOD</span></td>
-              <td>稀疏 Cholesky 库（挂 MKL LAPACK/BLAS），IPC 做符号分解 + 并行数值分解用它。</td>
+              <td>稀疏 Cholesky 库（挂 MKL LAPACK/BLAS），IPC 做符号分解 + 并行数值分解用它；普通 Cholesky 要求约束处理后的自由系统 SPD，局部 PSD projection 本身不够。</td>
               <td><a href="../12-ipc/12-9-solver-cost.html">12.9</a></td>
             </tr>
             <tr>

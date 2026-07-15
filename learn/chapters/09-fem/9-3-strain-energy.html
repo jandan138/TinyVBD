@@ -63,10 +63,10 @@
         <div class="math-block">$$\psi_{\text{corot}}=\mu\,\lVert\mathbf S-\mathbf I\rVert_F^2+\tfrac{\lambda}{2}\,\big(\operatorname{tr}(\mathbf S-\mathbf I)\big)^2\quad(\text{等价地用 }\lVert\mathbf F-\mathbf R\rVert_F^2).$$</div>
         <p>它的好处：因为旋转被极分解干净地剥离了，<b>大转动下不失真</b>（这正是线弹性做不到的），而且压缩行为比 StVK 健康得多——它惩罚的是 $\mathbf S-\mathbf I$ 的线性量，不会像 StVK 那样在压缩区掉头。代价是它需要每步做一次极分解（求 $\mathbf R$，有点贵），且因为对 $\mathbf S$ 是<b>线性</b>惩罚、没有 $\ln J$ 那种屏障，对极端压缩到塌缩翻面仍不是天然免疫。它是工程上很常用的折中：稳、直观、比 StVK 安全。</p>
 
-        <h2 id="neohookean">Neo-Hookean（stable）：production 标准，抗翻面</h2>
+        <h2 id="neohookean">Neo-Hookean（stable）：在 $J\to0^+$ 前建立能量屏障</h2>
         <p><span class="term">Neo-Hookean</span> 是目前 production 仿真的默认选择，本书 <a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 用的就是它的稳定版（<span class="term">stable Neo-Hookean</span>，Smith et al. 2018）。一个常见写法是：</p>
         <div class="math-block">$$\psi_{\text{NH}}=\tfrac{\mu}{2}\,(I_C-3)-\mu\ln J+\tfrac{\lambda}{2}\,(\ln J)^2,\qquad I_C=\operatorname{tr}(\mathbf F^\top\mathbf F),\ J=\det\mathbf F.$$</div>
-        <p>它的杀手锏是那些 $\ln J$ 项。读 $\psi$ 的三块：$\tfrac{\mu}{2}(I_C-3)$ 罚形变（剪切+拉伸）；$\tfrac{\lambda}{2}(\ln J)^2$ 罚体积偏离；而 $-\mu\ln J$ 是抗反转的关键——当 $J\to0^+$（体积被压向塌缩），$\ln J\to-\infty$、$-\mu\ln J\to+\infty$，能量<b>冲向无穷</b>。于是材料在被压穿之前就遇到一堵无限高的能量墙，<b>天然抗拒翻面与塌缩</b>。这正是 StVK 缺的那道屏障，也是 Neo-Hookean 在重压、强碰撞下不内爆的原因。</p>
+        <p>它的杀手锏是那些 $\ln J$ 项。读 $\psi$ 的三块：$\tfrac{\mu}{2}(I_C-3)$ 罚形变（剪切+拉伸）；$\tfrac{\lambda}{2}(\ln J)^2$ 罚体积偏离；而 $-\mu\ln J$ 是抗反转的关键——当 $J\to0^+$（体积被压向塌缩），$\ln J\to-\infty$、$-\mu\ln J\to+\infty$，能量<b>冲向无穷</b>。这在 $J&gt;0$ 的可行域内部提供了很强的抗塌缩屏障；但能量墙本身不保证任意离散 full step 都不会从一侧跨到 $J\le0$，inversion-free 仍需从可行位形出发并配合保持 $J&gt;0$ 的步长控制 / line search。</p>
         <div class="callout note">
           <div class="c-h">和 10.1 里那个变体对得上</div>
           <p><a href="../10-elasticity-collision/10-1-elastic-elements.html">10.1</a> 的 membrane 写的是 $\psi=\tfrac{\mu}{2}(I_c-2)+\tfrac{\lambda}{2}(J_s-\alpha)^2$、volumetric 写的是 $\tfrac{\mu}{2}(I_1-3-2\ln J)+\tfrac{\lambda}{2}(J-1)^2$——这是同一族 stable Neo-Hookean 的不同变体（膜版降一维、体积版换了体积项与 $\alpha=1+\mu/\lambda$ 的 rest-无应力修正）。<b>具体哪一项怎么写会随实现略有差别，本书以 10.1 已用的为准</b>；但骨架是统一的：一个 $I_C$ 形变项 + 一个体积项 + 一个含 $\ln J$ 或 $1/J$ 的抗反转屏障。能量的绝对量级随 $\mu,\lambda$ 与单位整体缩放，要较真的是<b>$J\to0$ 处能量发散</b>这条趋势。</p>
@@ -83,8 +83,8 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) 应变能密度 $\psi(\mathbf F)$ 是 FEM 弹性的心脏，必须 <span class="term">hyperelastic</span>（只依赖当前 $\mathbf F$）且 <span class="term">rotation-invariant</span>（刚体旋转不储能），最省事的做法是只用旋转不变量 $I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)$、$J=\det\mathbf F$ 搭它；(2) 模型谱按压缩/翻转行为分高下——StVK 简单但有<b>压缩反转灾难</b>（压过头能量掉头、乐意翻面不回弹），co-rotational 抽掉旋转后稳、压缩比 StVK 健康，Neo-Hookean 靠 $\ln J$ 在 $J\to0$ 处筑无限能量墙、天然抗翻面，是 production 标准（10.1 用的就是它）；(3) Lamé 参数 $\mu,\lambda$ 分管抗剪切与抗体积，与杨氏模量 $E$、泊松比 $\nu$ 可互换。</p>
-        <p>有了 $\psi(\mathbf F)$，弹性能量就齐了——但求解器要的不是能量本身，是<b>力</b>和 <b>Hessian</b>。下一节 <a href="9-4-piola-assembly.html">9.4</a> 对 $\psi$ 求导：第一 Piola-Kirchhoff 应力 $\mathbf P=\partial\psi/\partial\mathbf F$ 怎么来、单元力 $\mathbf f=-V_0\,\mathbf P\,\mathbf D_m^{-\top}$ 怎么把应力分配到各节点、又怎么和弹簧一样装配进每顶点的 $\mathbf f_i/\mathbf H_i$，以及压缩时单元 Hessian 不定该怎么办（接 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 SPD 投影）。</p>
+        <p>三句话：(1) 应变能密度 $\psi(\mathbf F)$ 是 FEM 弹性的心脏，必须 <span class="term">hyperelastic</span>（只依赖当前 $\mathbf F$）且 <span class="term">rotation-invariant</span>（刚体旋转不储能），最省事的做法是只用旋转不变量 $I_C=\operatorname{tr}(\mathbf F^\top\mathbf F)$、$J=\det\mathbf F$ 搭它；(2) 模型谱按压缩/翻转行为分高下——StVK 简单但有<b>压缩反转灾难</b>（压过头能量掉头、乐意翻面不回弹），co-rotational 抽掉旋转后稳、压缩比 StVK 健康，Neo-Hookean 靠 $\ln J$ 在 $J\to0^+$ 前筑能量墙，但离散 inversion-free 仍依赖可行初值与步长控制；(3) Lamé 参数 $\mu,\lambda$ 分管抗剪切与抗体积，与杨氏模量 $E$、泊松比 $\nu$ 可互换。</p>
+        <p>有了 $\psi(\mathbf F)$，弹性能量就齐了——但求解器要的不是能量本身，是<b>力</b>和 <b>Hessian</b>。下一节 <a href="9-4-piola-assembly.html">9.4</a> 对 $\psi$ 求导：第一 Piola-Kirchhoff 应力 $\mathbf P=\partial\psi/\partial\mathbf F$ 怎么来、单元力 $\mathbf f=-V_0\,\mathbf P\,\mathbf D_m^{-\top}$ 怎么把应力分配到各节点、又怎么和弹簧一样装配进每顶点的 $\mathbf f_i/\mathbf H_i$，以及 Hessian 不定时可采用的 modified-Hessian 鲁棒策略（接 <a href="../10-elasticity-collision/10-2-spd-damping.html">10.2</a> 的 PSD clamp / projection）。这种 elementwise PSD 修正是策略之一，不是所有 FEM 的必经工序，也不单独保证 inversion-free 或 static stability。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

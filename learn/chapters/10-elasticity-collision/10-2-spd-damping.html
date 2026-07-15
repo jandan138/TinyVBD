@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPD 投影与 Rayleigh damping · TinyVBD 教程</title>
+  <title>PSD clamp、SPD 总块与 Rayleigh damping · TinyVBD 教程</title>
   <link rel="stylesheet" href="../../assets/css/book.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -24,18 +24,18 @@
     <main>
       <article class="article">
         <div class="eyebrow">Part 10 · 10-2</div>
-        <h1>SPD 投影与 Rayleigh damping</h1>
-        <p class="lede">在 TinyVBD 那根 strand 上，我们做了一个大胆的决定：解 $\Delta\mathbf x_i=\mathbf H_i^{-1}\mathbf f_i$ 时<b>不</b>对局部 Hessian 做 <span class="term">SPD projection</span>，全靠惯性项 + 行列式阈值 + 单调下降三层兜底（<a href="../03-vbd/3-6-stability.html">3.6</a>）。那是因为 strand 只有弹簧、只有一种会变负的特征值，惯性项几乎总能压住。可一旦上了 Newton 的 production 规模——cloth 的 Neo-Hookean membrane、tet 的 volumetric、bending、还有接触——元件的 Hessian 不定起来更凶、更频繁。这一节看 Newton 怎么在每个元件层面把这件事按死：把 per-element Hessian 直接<b>投成 SPD</b>，再配上一个干净的 Rayleigh damping。</p>
+        <h1>PSD clamp、SPD 总块与 Rayleigh damping</h1>
+        <p class="lede">先把三个对象分开：原始元件 Hessian 的定性取决于材料模型与当前构型；把负特征值截到 0 得到的是 <span class="term">PSD clamp / projection</span>；再加正定惯性项后，装配出的局部总块才可能成为 SPD。当前 Newton 对部分元件采用 elementwise PSD 作为 robustness strategy，但它不是所有 FEM 的前置条件，也不保证防反转或静态稳定。TinyVBD C++ 则直接用 QR 解 raw 局部系统并接受 full step；Newton/Warp 的 determinant heuristic 只筛显式求逆前的近奇异情形，不是下降验收。这一节把这些边界讲清，再接上 Rayleigh damping。</p>
 
-        <h2 id="why-project">为什么 production 要在元件层面投影</h2>
-        <p>回忆 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个核心事实：一根被压缩的弹簧，Hessian 在垂直方向特征值 $k(1-l_0/l)$ 会变负，矩阵不定——这是 <span class="term">buckling</span>（屈曲）方向的忠实编码。strand 里只有这一种元件、这一种负特征值来源，所以 TinyVBD 敢赌「惯性项 $\frac{m_i}{h^2}\mathbf I$ 多半能把它顶回正」。</p>
-        <p>但 Newton 的 cloth 用的是 stable <span class="term">Neo-Hookean</span> membrane，能量里那个体积/面积项 $(J_s-\alpha)$ 在<b>压缩</b>（$J_s&lt;\alpha$，面积被压小）时同样会让 Hessian 出现负特征值——和压缩弹簧一模一样的毛病，只是来自一个更复杂的能量。tet 的 volumetric、bending 也各有自己的不定方向。把这么多元件的负特征值叠到一个顶点的 $\mathbf H_i$ 上，惯性项不一定每次都兜得住。Newton 的选择不是赌，而是在<b>每个元件装配进 $\mathbf H_i$ 之前</b>，先把它那一块的 Hessian 投成 SPD（positive semi-definite）。</p>
+        <h2 id="why-project">为什么当前实现选择元件级 PSD clamp</h2>
+        <p>回忆 <a href="../01-foundations/1-5-spring-energy.html">1.5</a>：一根被压缩的弹簧在当前构型下有横向特征值 $k(1-l_0/l)&lt;0$。这说明局部二次模型存在负曲率方向，但不自动证明 buckling；屈曲必须先有平衡，再结合外载、约束与允许扰动检查全局切线谱，见 <a href="../14-curvature-mass/14-3-buckling-newton.html">14.3</a>。同样，FEM 单元是否不定也必须按具体能量和构型判断，不能由「压缩」「tet」或「bending」标签直接决定。</p>
+        <p>在当前 stable <span class="term">Neo-Hookean</span> membrane 实现里，面积项系数 $s=\lambda_\text{NH}(J_s-\alpha)$ 在某些压缩构型下为负，原始 per-vertex 块可能出现负曲率。Newton 选择在这类元件装配前构造 PSD 近似，避免该负曲率直接进入局部 Newton 模型。这是明确的工程取舍：可用 modified Cholesky、trust region、damped Newton 或 line search 替代或配合，而不是「所有 FEM 必须先投影」的定理。</p>
 
-        <h2 id="membrane-clamp">membrane 的 SPD-clamp：max(0, ·)</h2>
-        <p>以 membrane 为例，Newton 的实现里那一步极其朴素。能量 $\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2$ 装配 per-vertex Hessian 时，体积项贡献一个标量系数 $s=\lambda_\text{NH}(J_s-\alpha)$；Newton 直接对它做一次<b>下截断</b>：</p>
+        <h2 id="membrane-clamp">membrane 的 PSD clamp：max(0, ·)</h2>
+        <p>以 membrane 为例，Newton 的实现里那一步极其朴素。能量 $\psi=\frac{\mu}{2}(I_c-2)+\frac{\lambda}{2}(J_s-\alpha)^2$ 装配 per-vertex Hessian 时，面积项贡献一个标量系数 $s=\lambda_\text{NH}(J_s-\alpha)$；Newton 直接对它做一次<b>下截断</b>：</p>
         <div class="math-block">$$s_\text{clamp}=\max\!\big(0,\;\lambda_\text{NH}\,(J_s-\alpha)\big).$$</div>
-        <p>当面积被压缩到 $J_s&lt;\alpha$，$s$ 本会变负、把 Hessian 块拉向不定；$\max(0,\cdot)$ 把它<b>夹到 0</b>，于是这一块退化成「只保留恒正定部分」的 PSD 近似。代码注释把它讲得很白：这是 membrane per-vertex 块的 <span class="term-i">tight PSD clamp</span>。装配进 $\mathbf H_i$ 的，永远是已经投过影的块——$\mathbf H_i$ 从源头就难再不定。</p>
-        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># --- Hessian (per-vertex 3x3, SPD-projected) ---
+        <p>当 $s&lt;0$ 时，$\max(0,\cdot)$ 把它<b>夹到 0</b>，得到这个 membrane per-vertex 块的 <span class="term-i">tight PSD clamp</span>。这里的名字必须准确：最小特征值允许等于 0，所以修改后的块是<b>半正定（PSD）</b>，不是正定（SPD）。装配后的 $\mathbf H_i$ 还包含惯性与其他元件贡献，不能只凭这一夹就断言总块 SPD。</p>
+        <div class="code" data-lang="python"><div class="code-h"><span class="fn">particle_vbd_kernels.py</span><button class="cp">复制</button></div><pre><code># --- Hessian (per-vertex 3x3, PSD-clamped) ---
 # max(0, s) is the tight PSD clamp for the membrane per-vertex block.
 s_clamp = wp.max(0.0, s)   # s = lmbd_nh * (J_s - alpha)
 r = s_clamp * inv_J_s
@@ -44,21 +44,21 @@ c1 = lmbd_nh - r</code></pre></div>
         <h2 id="clamp-by-hand">手算一遍钳取：压缩元件的两个特征值</h2>
         <p>$\max(0,\cdot)$ 听着抽象，代两个特征值进去就一目了然。复用 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那个弹簧 Hessian $\mathbf H_{aa}=k\big[\mathbf I-\frac{l_0}{l}(\mathbf I-\frac{\mathbf d\mathbf d^\top}{l^2})\big]$——它有两类特征向量，特征值闭式可写：沿弹簧方向 $\hat{\mathbf d}$ 的是 $k$，垂直方向的是 $k(1-l_0/l)$。取一个<b>被压缩</b>的元件（当前长 $l&lt;l_0$，比如 $l_0/l=1.25$），并把 $k$ 归一到 $1$ 让数字干净：</p>
         <div class="math-block">$$\lambda_\parallel=k=+1\ (\text{沿 }\hat{\mathbf d}),\qquad \lambda_\perp=k\Big(1-\frac{l_0}{l}\Big)=1\times(1-1.25)=-0.25\ (\text{垂直 }\hat{\mathbf d})$$</div>
-        <p>沿弹簧方向永远硬（$+1$，拉/压都抗）；垂直方向因为被压缩而<b>翻负</b>（$-0.25$）——这就是 <span class="term">buckling</span> 方向，矩阵在这里不定。没有 SPD 投影，牛顿步就可能沿这个负特征值方向跑出上坡。Newton 的做法是把惹事的那一项系数钳到非负，等价于把这个负特征值<b>拍到 0</b>：</p>
+        <p>沿弹簧方向的曲率是 $+1$；垂直方向因为被压缩而<b>翻负</b>（$-0.25$），所以当前局部 Hessian 不定。这只是负曲率示例，不是单凭一个元件就宣布结构屈曲。raw Newton 方向可能因此上坡；PSD clamp 的谱图像，是把这个负特征值<b>截到 0</b>：</p>
         <div class="math-block">$$\lambda_\perp^{\text{clamp}}=\max(0,\,-0.25)=0\quad\Rightarrow\quad \text{特征值变成}\ \{+1,\ 0,\ 0\}\ (\text{半正定})$$</div>
-        <p>钳完这块 Hessian 只剩半正定（最小特征值 $0$，还差一口气到正定）。这时 VBD 自带的<b>惯性项接力</b>：$\frac{m}{h^2}\mathbf I$ 给每个方向都加一个严格为正的底。沿用全书参数 $m=1,\ h=\tfrac{1}{60}$，惯性底是 $\frac{m}{h^2}=3600$，于是合成后的特征值是</p>
+        <p>钳完这块 Hessian 只剩半正定（最小特征值 $0$）。在这个简化例子里，若顶点质量为正且其余装配贡献也不引入负曲率，惯性项 $\frac{m}{h^2}\mathbf I$ 会给每个方向加一个严格为正的底。沿用参数 $m=1,\ h=\tfrac{1}{60}$，惯性底是 $\frac{m}{h^2}=3600$，于是合成后的特征值是</p>
         <div class="math-block">$$\{+1,0,0\}+3600\cdot\{1,1,1\}=\{3601,\ 3600,\ 3600\}\;>\;0$$</div>
-        <p>三个特征值全严格为正——$\mathbf H_i$ 正定，$3\times3$ 求逆稳稳可解、$\Delta\mathbf x$ 是可靠下降方向。两道一起看：<b>SPD 投影先把 $-0.25$ 拍到 $0$（半正定），惯性项再把 $0$ 顶成 $3600$（正定）</b>。对照 strand：TinyVBD 跳过第一道、只靠惯性项硬扛——单根弹簧时 $3600$ 远大于 $|{-0.25}|$（甚至 $1.4$ 那种 $k=100$ 的 $\lambda_\perp=-100$ 也压得住，因为 $3600\gg100$），所以赌得过；但 production 多元件把许多负特征值叠到一个顶点上时，惯性底未必次次够，才必须先投影。</p>
+        <p>这个简化总块的三个特征值全严格为正，因此 $\mathbf H_i$ 是 SPD；在 $\mathbf f=-\nabla G$ 的符号约定下，它给出下降方向。但这仍不保证 $\alpha=1$ 的 full step 降低非线性 $G$。两道一起看：<b>PSD clamp 把 $-0.25$ 截到 $0$，正定惯性项才把这个例子的局部总块抬成 SPD</b>。这组数字只说明术语与机制，不证明每个模型都需要 elementwise clamp，也不证明惯性在任意参数下都足够。</p>
 
         <div class="callout note">
           <div class="c-h">这组特征值是自洽示例，量级随材料/单位变</div>
-          <p>$+1/-0.25$、惯性底 $3600$ 是<b>为手算挑的干净自洽数</b>（$k$ 归一到 $1$、用全书的 $m=1,h=\tfrac1{60}$）。真实 membrane 的负特征值来自 $s=\lambda_\text{NH}(J_s-\alpha)$、量级随 Lamé 参数与网格尺度缩放，可能远大于这里的 $0.25$。能写准也值得记的是<b>机理</b>：压缩 → 垂直特征值翻负 → $\max(0,\cdot)$ 拍到 0（半正定）→ 惯性项 $\frac{m}{h^2}\mathbf I$ 抬成正定。具体数字会变，这条链不变。</p>
+          <p>$+1/-0.25$、惯性底 $3600$ 是<b>为手算挑的干净自洽数</b>（$k$ 归一到 $1$、用 $m=1,h=\tfrac1{60}$）。真实 membrane 的谱随材料模型、构型、Lamé 参数与网格尺度变化。值得记的是这组示例中的术语链：负曲率 → $\max(0,\cdot)$ 截到 0 得 PSD → 正定惯性加入后局部总块才可能 SPD；它不是对所有构型的统一因果公式。</p>
         </div>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">拖动弹簧，看垂直特征值怎么翻负</span></div>
           <div class="lab-body" data-widget="spring-hessian"></div>
-          <div class="lab-cap">把弹簧拖到<b>压缩</b>（当前长 &lt; rest 长），看垂直方向的特征值由正转负——正是上面手算的 $-0.25$ 那个分量的现场版。这块不定的 Hessian，就是 Newton 要 $\max(0,\cdot)$ 投影、再靠惯性项 $\frac{m}{h^2}\mathbf I$ 顶回正定的对象。</div>
+          <div class="lab-cap">把弹簧拖到<b>压缩</b>（当前长 &lt; rest 长），看垂直方向的特征值由正转负——正是上面手算的 $-0.25$ 那个分量的现场版。它展示的是当前构型的局部负曲率；可用 PSD/modified Hessian 构造稳健方向，但不能仅凭这张局部谱图判定 buckling。</div>
         </div>
 
         <h2 id="stable-nh">stable Neo-Hookean：让 rest state 无应力</h2>
@@ -67,13 +67,13 @@ c1 = lmbd_nh - r</code></pre></div>
         <p>再配上 $\alpha=1+\mu_\text{NH}/\lambda_\text{NH}$，这套约定保证一件要紧的事：在 rest configuration（$F$ 为等距、$J_s=1$）下能量的梯度恰好为零，也就是<b>静止状态无应力</b>（stress-free）。否则材料一放进场景就自己鼓一下、缩一下，rest 形状都站不稳。这是 production 弹性必须做对、而 strand 那种纯 Hookean 弹簧天然不需要操心的细节——弹簧的 $E=\frac12 k(l-l_0)^2$ 在 $l=l_0$ 处梯度本就为零。</p>
 
         <div class="callout warn">
-          <div class="c-h">naive（不投影）Hessian 会怎样拖垮 production 求解器</div>
-          <p>设想 Newton 不做这一步：直接把元件原始的、可能不定的 Hessian 累加进 $\mathbf H_i$。一旦合成的 $\mathbf H_i$ 带了负特征值，$\mathbf H_i^{-1}\mathbf f_i$ 就<b>可能指向上坡</b>——这一步不是在降 $G$，而是在升 $G$；轻则这个顶点抖、收敛变慢，重则在高刚度大网格上把整块 cloth 推爆。strand 上靠「惯性项 + det 阈值跳过」兜底，是因为不定来得稀、来得弱；放大到上百万顶点、多种元件，这种侥幸不再成立。<b>SPD projection 的作用，就是从每个元件源头掐掉负特征值</b>，让累加出来的 $\mathbf H_i$ 结构性地保持半正定，每一步都是可靠的下降方向。而 VBD 自带的惯性项 $\frac{m_i}{h^2}\mathbf I$ 仍在帮忙——它给 PSD 的 $\mathbf H_i$ 再抬一个严格为正的底，把「半正定」顶成「正定」，$3\times3$ 求逆稳稳可解。两道一起上，才是 production 该有的保险。</p>
+          <div class="c-h">PSD clamp 不是防翻面或静态稳定证明</div>
+          <p>原始总块不定时，raw Newton 方向可能上坡；elementwise PSD clamp 是处理方向的一种办法，modified Cholesky、trust region 与 damped Newton 也能修改二次模型，line search 则负责只接受实际下降的步长。把负曲率截掉并不保证 full step 单调、$J&gt;0$ 或 inversion-free，也不证明静态切线稳定；它还可能抹掉真实临界模态，让算法停在本应屈曲的对称分支。防反转需要 barrier 的有效定义域与可行步长，静态稳定和 buckling 应检查未 clamp 的物理切线矩阵。</p>
         </div>
 
         <div class="bridge tinyvbd">
-          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 同一个负特征值，两种处理哲学</div>
-          <p>你在 strand 上亲眼见过：压缩弹簧 → 垂直方向特征值 $k(1-l_0/l)$ 变负 → 局部 $\mathbf H$ 不定（<a href="../01-foundations/1-5-spring-energy.html">1.5</a> 的 <span class="term-i">spring-hessian</span> 部件拖一下就能看到）。TinyVBD 的回应是「<b>不投影、赌惯性项</b>」（<a href="../03-vbd/3-6-stability.html">3.6</a>）：靠 $\frac{m_i}{h^2}\mathbf I$ 抬底、det 太小就跳过、单调下降兜大局——三层兜底，省掉 SPD 投影的开销，在单根 strand 上够用。Newton 面对的是同样的负特征值（只是从 Neo-Hookean、tet、bending 多个能量里冒出来、更密更猛），但它不能赌：在每个元件上<b>提前 $\max(0,\cdot)$ 投成 SPD</b>，再让惯性项接力。一句话——<b>$\min G(\mathbf x)$ 没变，压缩元件会让 Hessian 不定这件事也没变；变的是「单根赌惯性」升级成了「整网在 GPU 上逐元件 SPD 投影 + 惯性接力」。</b></p>
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> C++ QR 与 Warp determinant 是不同实现细节</div>
+          <p>TinyVBD <code>main.cpp</code> 装配原始局部 $\mathbf H$ 后，直接执行 <code>h.colPivHouseholderQr().solve(f)</code>，再用 <code>vertex += dx</code> 接受 raw full step；代码里没有 determinant guard、PSD 修改或 line search/能量验收。Newton/Warp 的另一条路径在显式求逆前检查 <code>abs(det(H)) &gt; 1e-8</code>，那只是尺度相关的近奇异 heuristic：不定矩阵也可能有很大的 determinant，所以它不判断 SPD，更不保证下降。当前 Newton 的 elementwise PSD clamp 又是独立的模型稳健化步骤，不能把这些不同实现细节拼成 TinyVBD 的联合稳定保证。</p>
         </div>
 
         <h2 id="rayleigh">Rayleigh damping：D = kd·ke</h2>
@@ -86,8 +86,8 @@ c1 = lmbd_nh - r</code></pre></div>
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三句话：(1) production VBD 在<b>每个元件</b>把 Hessian 投成 SPD（membrane 用 $s_\text{clamp}=\max(0,\lambda_\text{NH}(J_s-\alpha))$ 这种 tight PSD clamp），从源头掐掉压缩带来的负特征值，再让 VBD 自带的惯性项 $\frac{m_i}{h^2}\mathbf I$ 把半正定顶成正定；(2) stable Neo-Hookean 用 $\lambda_\text{NH}=\lambda_\text{Lamé}+\mu_\text{Lamé}$（Smith 2018 §3.4）保证 rest state 无应力；(3) 阻尼用无量纲 Rayleigh 约定 $D=k_d\cdot k_e$，比 TinyVBD 把阻尼直接塞进弹簧力更规整、可移植，但要记得它是相对刚度的系数。</p>
-        <p>到这里，元件的力、Hessian、SPD 投影、阻尼都齐了——一个 cloth/soft body 顶点该装配的能量项全部就位。但 production 仿真还差最后、也最难的一块：物体不能互相穿插。下一节 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 进入 <span class="term">self-collision</span> 与 <span class="term">penetration-free</span>——Newton 怎么用 BVH 检测 vertex-triangle / edge-edge 接触、怎么在每色 sweep 后做保守截断保证不穿透，而这正是 TinyVBD 那根 strand <b>完全没有</b>的一整块世界。</p>
+        <p>三句话：(1) Hessian 的定性取决于模型与构型；当前 Newton 对 membrane 使用 $s_\text{clamp}=\max(0,\lambda_\text{NH}(J_s-\alpha))$ 这种 elementwise PSD clamp，截到 0 只得到半正定块，加入正定惯性后局部总块才可能 SPD。(2) 这是一种 robustness strategy，不是 FEM 前置条件；modified Cholesky、trust region、damped Newton 与 line search 各有替代或配套角色，投影也不保证 inversion-free/静态稳定并可能隐藏物理屈曲。(3) stable Neo-Hookean 用 $\lambda_\text{NH}=\lambda_\text{Lamé}+\mu_\text{Lamé}$ 保证 rest state 无应力，阻尼则用无量纲 Rayleigh 约定 $D=k_d\cdot k_e$。</p>
+        <p>到这里，元件的力、Hessian 稳健化与阻尼都齐了。但 production 仿真还差接触：下一节 <a href="../10-elasticity-collision/10-3-collision.html">10.3</a> 进入 <span class="term">self-collision</span> 与 <span class="term">penetration-free</span>，讨论与 Hessian PSD clamp 不同的几何防穿透机制。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

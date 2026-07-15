@@ -1,7 +1,7 @@
 /* =========================================================================
-   vbd-core.js — 一个忠实的 2D Vertex Block Descent strand 求解器
-   直接对应 TinyVBD 的 Strand.h / main.cpp 里的 solve()/forwardStep()，
-   只是降到 2D 便于在 canvas 上画。供 strand-lab / vbd-sweep / mass-ratio 复用。
+   vbd-core.js — 教学用 2D Vertex Block Descent strand 求解器
+   数学装配对应 TinyVBD 的 Strand.h / main.cpp，但数值保护不是逐行移植；
+   降到 2D 便于在 canvas 上画。供 strand-lab / vbd-sweep / mass-ratio 复用。
 
    incremental potential:  G(x) = Σ m_i/(2h²)|x_i - y_i|²  +  Σ_e ½k_e(|x_a-x_b| - l0_e)²
    per-vertex Newton step:  Δx_i = H_i⁻¹ f_i,   f_i = -∂G_i/∂x_i,  H_i = ∂²G_i/∂x_i²
@@ -10,7 +10,8 @@
   // 2x2 线性求解 H x = f
   function solve2x2(H, f) {
     const det = H[0] * H[3] - H[1] * H[2];
-    if (Math.abs(det) < 1e-12) return [0, 0]; // det 阈值跳过（对应论文 |det(H_i)|≤ε 则跳过该顶点）
+    // 仅供 JS 演示防 NaN/Infinity：TinyVBD C++ 用 QR 且没有 det guard；此检查也不判断 SPD 或下降。
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return [0, 0];
     const inv = 1 / det;
     return [
       inv * (H[3] * f[0] - H[1] * f[1]),
@@ -100,15 +101,31 @@
     // 惯性项
     let f = [m * inv * (this.yx[iV] - this.px[iV]), m * inv * (this.yy[iV] - this.py[iV])];
     let H = [m * inv, 0, 0, m * inv];
+    const degenerateEdges = [];
     for (const eid of this.adj[iV]) {
       const e = this.edges[eid];
       const a = e.a, b = e.b;
       let dx = this.px[a] - this.px[b], dy = this.py[a] - this.py[b];
-      const l = Math.hypot(dx, dy) || 1e-9;
+      const l = Math.hypot(dx, dy);
       const k = e.k, l0 = e.l0;
+      if (!Number.isFinite(l) || !Number.isFinite(k) || !Number.isFinite(l0)) {
+        throw new RangeError("Strand contains a non-finite spring state");
+      }
+      if (l === 0 && l0 === 0) {
+        H[0] += k;
+        H[3] += k;
+        continue;
+      }
+      // The original positive-rest-length energy is not differentiable only at exact overlap.
+      // Keep inertia/other edges usable, but report that this is not a true Newton assembly.
+      if (l0 > 0 && l === 0) {
+        degenerateEdges.push(eid);
+        continue;
+      }
       // Hessian: k (I - (l0/l)(I - dd^T/l²))
       const c = l0 / l;
-      const xx = dx * dx / (l * l), yy = dy * dy / (l * l), xy = dx * dy / (l * l);
+      const ux = dx / l, uy = dy / l;
+      const xx = ux * ux, yy = uy * uy, xy = ux * uy;
       H[0] += k * (1 - c * (1 - xx));
       H[1] += k * (c * xy);
       H[2] += k * (c * xy);
@@ -119,7 +136,8 @@
       else { f[0] -= s * dx; f[1] -= s * dy; }
     }
     const d = solve2x2(H, f);
-    return { f: f, H: H, dx: d };
+    this.lastDegenerateEdges = degenerateEdges.slice();
+    return { f: f, H: H, dx: d, degenerateEdges: degenerateEdges };
   };
 
   // 对单个顶点做一次更新
@@ -135,7 +153,7 @@
     for (let i = 1; i < this.n; i++) this.solveVertex(i, dt);
   };
 
-  // Chebyshev 加速：x^(n) = ω(x̄ - x^(n-2)) + x^(n-2)
+  // Chebyshev 外推：可能加速，也可能破坏 raw sweep 的能量单调性。
   Strand.prototype.omega = function (iter) {
     const rho = this.rho;
     if (iter <= 1) return 1;
