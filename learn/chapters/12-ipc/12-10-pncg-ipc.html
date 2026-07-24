@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>换求解器不换能量：PNCG-IPC 怎么把全局 Newton 换成实时 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="12-10">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 12 · IPC · 12-10</div>
+        <h1>换求解器不换能量：PNCG-IPC 怎么把全局 Newton 换成实时</h1>
+        <p class="lede">上一节 <a href="12-9-solver-cost.html">12-9</a> 摊开了一笔账：IPC 的严格 intersection-free 是用<b>全局稀疏 Newton + 稀疏直接解 + CCD</b> 买来的，所以它稳但贵。这一节回答一个自然的问题——「能不能不换那套能量，只换求解器，把它拉到实时？」答案是 <span class="term">PNCG</span>（Preconditioned Nonlinear Conjugate Gradient）：Shen et al.（网易伏羲，SIGGRAPH 2024）把 IPC 的增量势能<b>原样保留</b>，只把「全局 Newton 解方向 + CCD 线搜索」换成「Jacobi 预条件非线性共轭梯度 + 一次成型解析步长」，在 GPU 上做到 10 万+ 四面体自碰撞场景的实时无穿透。它证明了一件对全书都很重要的事：<b>能量与求解器是可分离的两层</b>。</p>
+
+        <h2 id="same-energy">第一层没变：还是那套 IPC 能量</h2>
+        <p>先把最容易混淆的地方钉死。PNCG <b>没有</b>发明新的接触模型，也<b>没有</b>简化材料。它最小化的目标，和 <a href="12-1-why-ipc.html">12-1</a>～<a href="12-8-ipc-iteration.html">12-8</a> 的 IPC <b>一模一样</b>：</p>
+        <div class="math-block">$$E(\mathbf x)=\frac12(\mathbf x-\tilde{\mathbf x})^\top M(\mathbf x-\tilde{\mathbf x})+h^2\Psi(\mathbf x)+\kappa\sum_k b(d_k,\hat d),$$</div>
+        <p>其中 $\Psi$ 是超弹性能（Neo-Hookean 等），$b(d,\hat d)$ 就是 <a href="12-2-barrier-energy.html">12-2</a> 那个 log-barrier（$b=-(d-\hat d)^2\ln(d/\hat d)$，在 $0&lt;d&lt;\hat d$ 内激活、$d\to0$ 发散）。接触集（谁和谁可能相碰）仍然每迭代由 spatial hashing 的 broad phase 重建。也就是说，<b>你前九节学的能量、barrier、距离几何、摩擦（PNCG 原文不含摩擦）、装配，全部原样成立</b>。变的只有接下来「怎么最小化它」。</p>
+
+        <div class="callout note">
+          <div class="c-h">名字别读错：PN = Preconditioned Nonlinear，不是 Projective Newton</div>
+          <p>PNCG 里的 PN 是 <b>Preconditioned Nonlinear</b>（预条件非线性），CG 是 Conjugate Gradient（共轭梯度）。它和 Part 2 的 projective dynamics 没有关系——PNCG 论文明确说「我们不依赖 projective dynamics 这类材料简化」。这是第一次看到它的人最容易读错的一点，先记下来。</p>
+        </div>
+
+        <h2 id="what-changes">第二层变了：Newton 换成非线性 CG</h2>
+        <p>IPC（<a href="12-8-ipc-iteration.html">12-8</a>）每一步是「装配全局 $H$、解 $H\Delta\mathbf x=-\nabla E$ 得方向、再 line search」。这要求 $H$ 是 SPD，且要解一个和顶点数同阶的稀疏线性系统——12-9 说过，这一步要么 CHOLMOD 稀疏分解（内存与符号分解开销），要么迭代法但受条件数折磨。PNCG 干脆不解这个线性系统，而是直接用<b>非线性共轭梯度</b>在原始能量 $E$ 上迭代：</p>
+        <div class="math-block">$$\mathbf p_k=-\mathbf g_k+\beta_k\,\mathbf p_{k-1},\qquad \mathbf x_{k+1}=\mathbf x_k+\alpha_k\mathbf p_k,$$</div>
+        <p>其中 $\mathbf g_k=\nabla E(\mathbf x_k)$ 是当前梯度，$\beta_k$ 决定新方向在多大程度上沿用上一个方向。它只需要梯度，<b>不需要装配、存储或分解整个 Hessian</b>——这正是它能上 GPU、能处理百万自由度的原因。</p>
+
+        <h3 id="preconditioner">预条件：为什么 Jacobi 对角就够</h3>
+        <p>纯最速下降在窄谷里会 zigzag 爬行（<a href="../04-code/4-4-chebyshev.html">4.4</a> 的 Chebyshev 部分给过同一个几何直觉）。PNCG 给每一步加一个<b>预条件子</b> $P$：先用 $P^{-1}$ 把梯度「预缩放」，再走 CG。PNCG 用的是<b>最简单的 Jacobi 预条件</b>——取 Hessian 的对角线 $P=\operatorname{diag}(H)$，于是</p>
+        <div class="math-block">$$\tilde{\mathbf g}_k=P^{-1}\mathbf g_k=\operatorname{diag}(H)^{-1}\,\nabla E(\mathbf x_k).$$</div>
+        <p>为什么这对读者不陌生？<a href="../03-vbd/3-3-newton-step.html">3-3</a> 里 VBD 每个顶点用的就是「该顶点的局部 Hessian 对角块」，而 $\operatorname{diag}(H)$ 正是把所有这些局部对角信息拼起来的全局版。Jacobi 预条件等价于「先按每个自由度的局部曲率归一化梯度」，再让 CG 在这个更好条件的坐标里走。它在 GPU 上几乎免费（一次逐元素除法），却显著加速收敛。</p>
+
+        <h3 id="beta">Dai–Kou β：五种 CG 变体里选最稳的那个</h3>
+        <p>CG 的方向更新系数 $\beta$ 有多个经典公式（Fletcher–Reeves、Polak–Ribière、Hestenes–Stiefel……）。PNCG 论文比较了 FR、PRP、CD、HZ、DK 五种，选了 <b>Dai–Kou（DK）</b>——它是「最接近 scaled memoryless BFGS 方向」的 CG 变体，在超弹性 + barrier 的强非线性地形上收敛最快最稳。你不用背公式，只要记住一点：<b>$\beta$ 的选择不是细节，它决定 CG 在弯弯曲曲的能量面上是直线冲刺还是来回震荡</b>。这是 PNCG 相对朴素 NCG 的第一个工程胜负手。</p>
+
+        <h2 id="line-search">不用 CCD 的解析一步线搜索</h2>
+        <p>这是 PNCG 和 IPC 最不一样、也最微妙的一步。IPC 用 <a href="12-5-ccd-linesearch.html">12-5</a> 的 <b>CCD-filtered line search</b>：沿方向 $\mathbf p$ 求 time-of-impact $t^\star$，再把步长截到 $c\,t^\star$ 以内。PNCG 把这一步换成<b>一次成型的解析步长</b>：沿 $\mathbf p$ 对能量做一个二次（Newton-on-$\alpha$）模型</p>
+        <div class="math-block">$$\bar\alpha=-\frac{\mathbf g^\top\mathbf p}{\mathbf p^\top H\mathbf p},$$</div>
+        <p>它只用到梯度 $\mathbf g$、方向 $\mathbf p$、以及一个 Hessian-向量积 $\mathbf p^\top H\mathbf p$——后者可以<b>不装配 $H$ 直接逐单元累加</b>（matrix-free，正呼应 <a href="../14-curvature-mass/14-1-hessian-geometry.html">14-1</a> 的 HVP）。再叠一个 CFL 式保守上界 $\alpha_{\text{upper}}=\hat d/(2\lVert\mathbf p\rVert_\infty)$，取 $\alpha=\min(\bar\alpha,\alpha_{\text{upper}})$。这样<b>完全去掉了 CCD 模块</b>，每迭代只剩「算梯度 + 一次二次步长」，成本骤降。</p>
+
+        <div class="callout warn">
+          <div class="c-h">诚实边界：这是保守启发式，不是认证式保证</div>
+          <p>这一点必须说清楚。IPC 的 CCD 是<b>认证式</b>的：它精确求出 time-of-impact，配合保守界，数学上保证每一步严格 intersection-free。PNCG 的解析步长是一个<b>保守的二次近似 + 经验上界</b>——它非常快、实践中无穿透，但它<b>没有</b> CCD 那种「对所有中间位形逐一验证」的严格认证。论文也承认结果对 $\hat d$、$\kappa$ 这些超参更敏感（它用更大的 $\hat d$ 做预过滤来对冲）。所以 PNCG 和 IPC 的差别不是「更快还不丢保证」，而是<b>用一部分认证强度，换来了实时性</b>。理解这条取舍，比背下公式更重要。</p>
+        </div>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例：同一个接触能量，两种求解器的差别在哪</div>
+          <p>回到 <a href="12-7-worked-example.html">12-7</a> 那个点-线段接触。IPC 的做法：装配 $\mathbf p$ 的接触 Hessian（特征值 $+0.909$ 与 $-0.141$）→ 钳负成 PSD → 与惯性 $3600\,\mathbf I$ 相加 → 解 $H\Delta\mathbf x=-\nabla G$ 得方向 → CCD 求 $t^\star$ → line search。PNCG 在同一能量上：先算梯度 $\mathbf g=\nabla E$ → 用 $\operatorname{diag}(H)^{-1}$ 预缩放（$\operatorname{diag}(H)$ 近似就是 $[3600+0.909,\;3600-0.141]$ 的对角）→ 沿 Dai–Kou 方向走一步 → 用 $\bar\alpha=-\mathbf g^\top\mathbf p/(\mathbf p^\top H\mathbf p)$ 估步长，不跑 CCD。两者面对<b>同一个能量、同一组接触对、同一个 $\hat d$</b>，只是「怎么沿这个能量往下走」的算法不同。这就是「换求解器不换能量」的字面含义。</p>
+        </div>
+
+        <h2 id="cost-compare">为什么它就快了：砍掉的是哪几笔账</h2>
+        <p>把 <a href="12-9-solver-cost.html">12-9</a> 那三笔账对着 PNCG 重算一遍，你会看到它精确地砍在最贵的两笔上：</p>
+        <table>
+          <thead><tr><th>IPC 的代价（12-9）</th><th>PNCG 怎么应对</th><th>保留了什么</th></tr></thead>
+          <tbody>
+            <tr><td>全局稀疏 Newton 解（CHOLMOD 分解 / 符号分解 / 内存）</td><td>不解线性系统，NCG 只算梯度</td><td>同一个能量、同一个 barrier</td></tr>
+            <tr><td>CCD-filtered line search（time-of-impact 求根）</td><td>一次成型解析步长 + CFL 上界</td><td>broad phase 的 contact set 重建仍在</td></tr>
+            <tr><td>barrier 收紧 → 条件数爆炸 → 迭代变多</td><td>Jacobi 预条件 + Dai–Kou β 缓解</td><td>$\hat d$、$\kappa$ 仍须调，只是更敏感</td></tr>
+          </tbody>
+        </table>
+        <p>保留下来的两笔<b>仍在</b>：每次迭代仍要重建 contact set（spatial hashing broad phase 没省），仍要算完整梯度（遍历所有单元和接触对）。所以 PNCG 不是免费午餐——它省的是「全局线性解」和「CCD」这两个最贵、最难 GPU 并行的环节，代价是失去认证式保证、对超参更敏感。论文报告在 RTX 4090 上 10 万+ 四面体场景达到实时；具体数字以原文为准，本教程不写死。</p>
+
+        <h2 id="in-family">放回谱系：PNCG 站在 VBD 和 IPC 中间</h2>
+        <p>PNCG 在全书谱系里的位置非常耐人寻味。你看它和两位老朋友的关系：</p>
+        <ul>
+          <li><b>像 VBD</b>：Jacobi 预条件 $\operatorname{diag}(H)^{-1}$ 本质就是「每个自由度的局部 Hessian 对角信息」的全局用法——和 <a href="../03-vbd/3-3-newton-step.html">3-3</a> 每个顶点解局部 $3\times3$ 是同一种「用局部曲率归一化」的思想。它也 matrix-free、GPU 友好、不用分解大矩阵。</li>
+          <li><b>像 IPC</b>：最小化的是同一个增量势能 + log-barrier 接触能，目标一模一样，都追求无穿透。</li>
+        </ul>
+        <p>所以 PNCG 可以被读成<b>「IPC 的能量 + 一种介于 VBD 与全局 Newton 之间的求解器」</b>。它比 VBD 更全局（一次 CG 步考虑所有自由度），又比 IPC 的全局 Newton 更轻（不解线性系统）。这也正好回答 <a href="12-9-solver-cost.html">12-9</a> 结尾埋的问题：直接法之外，确实还有迭代 Krylov / 非线性 CG 这条路，而且它和 VBD 的局部思想是相通的。</p>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">一分钟自测：Jacobi 预条件到底在做什么？</div>
+          <p>用一个 2×2 玩具想清楚。设某一步 Hessian 对角 $\operatorname{diag}(H)=\operatorname{diag}(100,1)$，梯度 $\mathbf g=(10,1)^\top$。不用预条件时，最速下降方向是 $-\mathbf g=(-10,-1)^\top$，几乎全压在第一个（已经很硬的）自由度上。加 Jacobi 预条件后 $\tilde{\mathbf g}=\operatorname{diag}(H)^{-1}\mathbf g=(0.1,1)^\top$，两个自由度的「单位曲率梯度」变得可比，CG 不会再被那个硬方向主导。亲手算一遍，你就明白了「按局部曲率归一化梯度」是什么意思——它和 <a href="../14-curvature-mass/14-1-hessian-geometry.html">14-1</a> 的 Rayleigh quotient、<a href="../14-curvature-mass/14-5-mass-lumping.html">14-5</a> 的对角质量，是同一类「先归一化再优化」的直觉。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>三句话：(1) <b>PNCG = IPC 的能量 + 换掉的求解器</b>——增量势能、log-barrier、接触集、装配全部不变，只把「全局 Newton 解方向 + CCD 线搜索」换成「Jacobi 预条件非线性共轭梯度 + 一次成型解析步长」，从而能上 GPU 做实时；(2) 三个工程胜负手是 <b>Jacobi 预条件</b>（$\operatorname{diag}(H)^{-1}$，matrix-free、近 VBD 思想）、<b>Dai–Kou β</b>（强非线性地形上最稳的 CG 变体）、<b>解析步长</b>（用 $\bar\alpha=-\mathbf g^\top\mathbf p/(\mathbf p^\top H\mathbf p)$ 代替 CCD）；(3) 它<b>没有</b>免费午餐——保留下来的接触集重建与全梯度仍在，且解析步长是保守启发式而非 IPC 那样的认证式保证，对 $\hat d,\kappa$ 更敏感；它证明的是全书反复出现的那条原则：<b>能量与求解器是可分离的两层，同一套物理可以配很多种解法</b>。</p>
+        <p>理解了「换求解器」，下一节 <a href="12-11-abd.html">12-11：ABD——把 IPC 用在近刚体上</a> 我们看另一种「换」：不换求解器，而是<b>换自由度</b>——当物体是近刚体时，用 12 个仿射自由度代替几千个顶点，IPC 的 intersection-free 保证白白继承。之后 <a href="12-12-three-roads.html">12-12</a> 把 penalty / AVBD / IPC 三条路并排收线。</p>
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/book.js"></script>
+</body>
+</html>

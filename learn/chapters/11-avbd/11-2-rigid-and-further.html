@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 11 · 11-2</div>
         <h1>rigid AVBD 一瞥与进一步阅读</h1>
-        <p class="lede">上一节（<a href="11-1-avbd-idea.html">11.1</a>）我们看清了 augmented Lagrangian 怎么把硬约束和高刚度比塞进 VBD 的下降骨架。这一节是全书最后一站：先到 Newton 的 rigid 一侧瞄一眼——同一套 AVBD 思想是怎么去管刚体的 joint 和 contact 的；然后摊开一份进一步阅读清单，最后合上这本书。我们不深挖 rigid kernel，只看它和你已经吃透的那根 strand 是怎么一脉相承的。</p>
+        <p class="lede">上一节（<a href="11-1-avbd-idea.html">11.1</a>）我们看清了 augmented Lagrangian 怎么把硬约束和高刚度比塞进 VBD 的下降骨架。这一节先到 Newton 的 rigid 一侧瞄一眼——同一套 AVBD 思想是怎么去管刚体的 joint 和 contact 的——然后摊开一份进一步阅读清单。我们不深挖 rigid kernel，只看它和你已经吃透的那根 strand 是怎么一脉相承的。全书还没完：接下来 <a href="../12-ipc/12-1-why-ipc.html">Part 12</a> 讲的 IPC 接触的第三条路，正是这条谱系里与 penalty / AVBD 并列的重要一极。</p>
 
         <h2 id="rigid-side">SolverVBD 的另一半：rigid 用 AVBD</h2>
         <p>从第一节 Newton 篇起，我们一直只看 <span class="term">SolverVBD</span> 的 particle 那一半——粒子、布料、软体，全是 per-vertex 的 VBD。但这个求解器的类 docstring 早就写明了它的双重身份：<b>对 particle 用 VBD，对 rigid body 用 AVBD</b>。换句话说，上一节那套 augmented Lagrangian 不是停在纸面上的理论，它就是 Newton 用来积分刚体的引擎。</p>
@@ -88,8 +88,8 @@
           <li><b>AVBD 2D 参考实现</b>——Chris Giles 的 <span class="term">savant117/avbd-demo2d</span>，一个干净的二维参考 demo，外加 Utah 的 AVBD 项目页。想像我们读 TinyVBD 那样「逐行读懂一个最小实现」，这是 AVBD 的对应物。</li>
         </ul>
 
-        <h2 id="closing">合上这本书</h2>
-        <p>回头看这一整段旅程，它其实只讲了一件事，从一根线讲到一座引擎：</p>
+        <h2 id="closing">这一段的收束</h2>
+        <p>回头看这一段旅程，它其实只讲了一件事，从一根线讲到一座引擎：</p>
         <p>你从 <b>TinyVBD</b> 那根 strand 出发——一根「头发」，~400 行 C++，串行扫一遍顶点，每个顶点解一个 $3\times3$ 的牛顿步。然后我们把它搬上 GPU：<b>Newton 的 particle VBD</b> 把同一套局部牛顿步铺成一块布、用 Warp 的 kernel 按颜色并行扫，加上多种弹性元件、自碰撞、penetration-free。再往前一步，<b>AVBD</b> 用 augmented Lagrangian 补上了 VBD 留下的两块短板——硬约束和高刚度比——并把同一台机器开到了刚体的 joint 与 contact 上。</p>
 
         <div class="bridge tinyvbd">
@@ -97,8 +97,8 @@
           <p>strand → GPU cloth 这一段，particle VBD 可以直接沿用增量势能 $G(\mathbf x)=\frac{1}{2h^2}\lVert\mathbf x-\mathbf y\rVert_M^2+E(\mathbf x)$；加入硬约束与 rigid AVBD 后，数学对象多了 multiplier、penalty 和约束残差。AVBD 每轮在当前 $k,\lambda$ 下处理一份 augmented-Lagrangian 子问题，更新这些量后目标也随之变化。TinyVBD 与 rigid AVBD 共享的是一步动力学的惯性 / 能量 / 约束视角、局部 block 装配和着色调度，<b>不是从头到尾同一道固定的 $\arg\min G$</b>。</p>
         </div>
 
-        <p>如果你把这两本（原书 + Newton 篇）连起来读完了，那你现在拥有的不是「VBD 怎么实现」这一条知识，而是一种能把任何 position/optimization-based 仿真方法<b>放回谱系</b>的眼光：它在最小化什么？primal 还是 dual？Gauss-Seidel 还是 Jacobi？保留了多少 Hessian？约束是软的惩罚还是硬的 Lagrangian？怎么并行的——着的是顶点图还是约束图？这几个问题，足够你从容地拆解下一个遇到的新方法。</p>
-        <p>谢谢你一路读到这里。需要随时回查时，附录就在那儿：<a href="../appendix/a-4-newton-glossary.html">Newton / Warp 术语表（a-4）</a>、<a href="../appendix/a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查（a-5）</a>、<a href="../appendix/a-6-newton-references.html">参考文献（a-6）</a>。现在，去把 Newton 装起来，<code>builder.color()</code>、<code>SolverVBD</code>、跑一块真正在 GPU 上抖动的布——剩下的，就交给好奇心了。</p>
+        <p>如果你把这两条路线连起来读完了，那你现在拥有的不是「VBD 怎么实现」这一条知识，而是一种能把任何 position/optimization-based 仿真方法<b>放回谱系</b>的眼光：它在最小化什么？primal 还是 dual？Gauss-Seidel 还是 Jacobi？保留了多少 Hessian？约束是软的惩罚还是硬的 Lagrangian？怎么并行的——着的是顶点图还是约束图？这几个问题，足够你从容地拆解下一个遇到的新方法。</p>
+        <p>需要随时回查时，附录就在那儿：<a href="../appendix/a-4-newton-glossary.html">Newton / Warp 术语表（a-4）</a>、<a href="../appendix/a-5-mapping-cheatsheet.html">TinyVBD ↔ Newton ↔ Isaac 对照速查（a-5）</a>、<a href="../appendix/a-6-newton-references.html">参考文献（a-6）</a>。而接触的故事才讲了一半——<a href="../12-ipc/12-1-why-ipc.html">Part 12</a> 将回答 AVBD 之外那条更严格的第三条路：用 interior-point barrier + CCD 把「不穿透」从逼近变成保证。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

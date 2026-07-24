@@ -88,9 +88,14 @@
 
         <p>所以「IPC 稳但贵」这句话现在有了精确的含义：它的<b>稳</b>是 intersection-free 的严格保证 + 大形变/极端压缩下的鲁棒；它的<b>贵</b>是全局稀疏 Newton（CHOLMOD 分解）+ 每步全局 CCD + barrier 病态带来的多迭代。VBD/AVBD 用局部下降买到了便宜和并行，代价是无穿透只能靠截断兜底或 ramp 逼近。两边谁也没占便宜，只是把成本花在了不同地方。</p>
 
+        <div class="callout note">
+          <div class="c-h">那么，能不能只换求解器、不换能量？</div>
+          <p>上面那笔账里最贵的两笔——<b>全局稀疏线性解</b>和<b>每步 CCD</b>——恰恰是可以被替换的「求解器层」零件，而不是「能量层」的物理。这正是下一节 <a href="12-10-pncg-ipc.html">12-10：PNCG-IPC</a> 要回答的问题：Shen et al.（SIGGRAPH 2024）把 IPC 的增量势能原样保留，只把「全局 Newton + 稀疏直接解 + CCD」换成「Jacobi 预条件非线性共轭梯度 + 一次成型解析步长」，在 GPU 上做到实时。读完 12-9 的账，你正好带着「哪两笔最贵」的眼光去看它怎么砍。</p>
+        </div>
+
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) IPC 的每一次迭代是一个<b>全局稀疏 Newton 步</b>：局部弹性与 barrier 块可做 PSD modified-Hessian 修正，与惯性装配后经约束处理 / 必要 shift 得到 SPD 自由系统，再用 <span class="term">CHOLMOD</span> 做普通 Cholesky；PSD 本身不推出 Cholesky。(2) 它「贵」在每步全局 CCD、全局稀疏线性解，以及 barrier 导致的坏条件数；严格 intersection-free 来自 CCD-filtered line search，而不是 PSD 或全局解本身。(3) 对照 VBD/AVBD 的便宜可并行局部下降，IPC 是用更多全局工作换方向耦合与可行步长控制。</p>
-        <p>下一节 <a href="12-10-abd.html">12.10：ABD——把 IPC 用在近刚体上</a>，我们看 IPC 这套「贵但有保证」的机器怎么被聪明地复用：当物体是<b>近刚体</b>时，用 12 个仿射自由度代替几千个顶点，IPC 的 intersection-free 保证白白继承下来，求解却快上几个数量级。之后 <a href="12-11-three-roads.html">12.11：三条路总对照</a> 再把 penalty / AVBD / IPC 三条路并排成一张大表，给整本书的接触主线画上句号——并诚实地说一句「没有银弹」。</p>
+        <p>下一节 <a href="12-10-pncg-ipc.html">12.10：PNCG-IPC——换求解器不换能量</a>，看怎么把全局 Newton 换成实时。之后 <a href="12-11-abd.html">12.11：ABD</a> 看另一种「换」：换自由度，把 IPC 用在近刚体上。最后 <a href="12-12-three-roads.html">12.12：三条路总对照</a> 把 penalty / AVBD / IPC 并排收线。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

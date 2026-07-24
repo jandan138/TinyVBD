@@ -50,8 +50,14 @@
             arXiv：<a href="https://arxiv.org/abs/2307.15908" target="_blank" rel="noopener">arXiv:2307.15908</a>。
           </li>
           <li>
-            <b>Affine Body Dynamics（ABD）.</b> Lei Lan, Danny M. Kaufman, Minchen Li, Chenfanfu Jiang, Yin Yang；ACM <span class="term">TOG</span> 41(4)（SIGGRAPH 2022）。在 IPC 框架上做<b>刚硬材料</b>的快速无穿透仿真：洞见是「刚体的好处是<b>坐标紧凑</b>而非刚性」，于是用仿射变换 $\mathbf x=A\mathbf X+\mathbf p$ 把每物体表达成 12 个自由度、再用一个 orthogonality 正交能量软性近似刚性，既<b>原样继承 IPC 的 intersection-free 保证</b>，又把求解系统压到极小。本书 <a href="../12-ipc/12-10-abd.html">12.10</a> 专门讲它，并放进「FEM ↔ ABD ↔ 刚体」的刚柔光谱。想在 IPC 的保证下高效跑大量近刚体，读它。
+            <b>Affine Body Dynamics（ABD）.</b> Lei Lan, Danny M. Kaufman, Minchen Li, Chenfanfu Jiang, Yin Yang；ACM <span class="term">TOG</span> 41(4)（SIGGRAPH 2022）。在 IPC 框架上做<b>刚硬材料</b>的快速无穿透仿真：洞见是「刚体的好处是<b>坐标紧凑</b>而非刚性」，于是用仿射变换 $\mathbf x=A\mathbf X+\mathbf p$ 把每物体表达成 12 个自由度、再用一个 orthogonality 正交能量软性近似刚性，既<b>原样继承 IPC 的 intersection-free 保证</b>，又把求解系统压到极小。本书 <a href="../12-ipc/12-11-abd.html">12.11</a> 专门讲它，并放进「FEM ↔ ABD ↔ 刚体」的刚柔光谱。想在 IPC 的保证下高效跑大量近刚体，读它。
             arXiv：<a href="https://arxiv.org/abs/2201.10022" target="_blank" rel="noopener">arXiv:2201.10022</a>。
+          </li>
+          <li>
+            <b>PNCG（Preconditioned Nonlinear Conjugate Gradient Method for Real-time Interior-point Hyperelasticity）.</b> Xing Shen, Runyuan Cai, Mengxiao Bi, Tangjie Lv；ACM SIGGRAPH 2024（网易伏羲），Article 96。<b>「换求解器不换能量」的代表作</b>：把 IPC 的增量势能与 log-barrier 原样保留，只把「全局 Newton + 稀疏直接解 + CCD」换成「Jacobi 预条件非线性共轭梯度（Dai–Kou β）+ 一次成型解析步长（无 CCD）」，在 GPU 上做到 10 万+ 四面体自碰撞场景的实时无穿透。本书 <a href="../12-ipc/12-10-pncg-ipc.html">12.10</a> 专门讲它。想理解「能量与求解器可分离」、以及 IPC 的严格保证如何被换成保守启发式换实时性，读它。
+            arXiv：<a href="https://arxiv.org/abs/2405.08001" target="_blank" rel="noopener">arXiv:2405.08001</a> ·
+            DOI：<a href="https://doi.org/10.1145/3641519.3657490" target="_blank" rel="noopener">10.1145/3641519.3657490</a> ·
+            代码：<a href="https://github.com/Xingbaji/PNCG_IPC" target="_blank" rel="noopener">github.com/Xingbaji/PNCG_IPC</a>。
           </li>
         </ul>
 

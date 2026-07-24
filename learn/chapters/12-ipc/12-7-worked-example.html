@@ -73,14 +73,34 @@
         </div>
 
         <h2 id="step5">第五步 · Hessian → PSD modified model → 总系统方向</h2>
-        <p>力定了方向，还差曲率才能解牛顿步。barrier 的 Hessian 由 <a href="12-4-barrier-grad-psd.html">12-4</a> 的两项构成：一项来自 $b''(d)\,\hat{\mathbf n}\hat{\mathbf n}^\top$（沿法向的刚度，半正定），一项来自 $b'(d)\,\partial^2 d/\partial\mathbf x^2$（距离的二阶项，<b>不保证半正定</b>）。后者可能带来负特征值，让这块 Hessian 不定——直接拿去解牛顿步会跑出上坡方向。</p>
-        <p>一种常用 modified-Hessian 做法是 <b>PSD projection</b>：把这块接触 Hessian 的负特征值钳到零，再与惯性项 $\frac{m}{h^2}\mathbf I$、弹性项一起装进总 $\mathbf H$。这个局部 PSD 块可能奇异，不能单独保证 inverse 或严格下降；只有正质量惯性、约束消元或 positive shift 使自由 DOF 上的<b>总系统 SPD</b> 后，下面的反解才给出严格下降方向：</p>
-        <div class="math-block">$$\mathbf H_{\mathrm{total}}\,\Delta\mathbf x=\mathbf f_{\mathrm{total}}=-\nabla G$$</div>
-        <p>对 $\mathbf p$ 而言，能写准的是接触<b>力贡献</b>沿 $+\hat{\mathbf n}=(0,1)$，明确地朝「抬离线段」方向出力；不能只凭这一项断言合成后的 $\Delta\mathbf x_{\mathbf p}$ 必有向上分量，因为 $\mathbf H_{\mathrm{total}}^{-1}$ 会耦合其它自由度与能量项。本例没有装配完整矩阵，因此不编造 $\Delta\mathbf x$ 的大小或分量。</p>
-        <p>再补一句把全链接上：即便总系统 SPD、解出了严格下降方向，也不立刻全盘接受 full step——还要过 <a href="12-5-ccd-linesearch.html">12-5</a> 的 <span class="term">CCD</span> + Armijo line search，求一个安全且实际降低能量的步长 $\alpha\in(0,1]$。本例的接触力朝外，但完整方向与 $\alpha=1$ 是否可接受仍由总系统、CCD 和 line search 共同决定；PSD modified Hessian 本身不提供 intersection-free 保证。</p>
+        <p>力定了方向，还差曲率才能解牛顿步。barrier 的 Hessian 由 <a href="12-4-barrier-grad-psd.html">12-4</a> 的两项构成：一项来自 $b''(d)\,\hat{\mathbf n}\hat{\mathbf n}^\top$（沿法向的刚度，半正定），一项来自 $b'(d)\,\partial^2 d/\partial\mathbf x^2$（距离的二阶项，<b>不保证半正定</b>）。后者可能带来负特征值，让这块 Hessian 不定——直接拿去解牛顿步会跑出上坡方向。为了让你亲手看见这件事怎么发生，我们不再止于抽象：用 <a href="12-4-barrier-grad-psd.html">12-4</a> 的两项式，把 $\mathbf p$ 那一个<b>接触分量</b>的 Hessian 真正算出来，再和惯性项比大小。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例：把接触 Hessian 和惯性项算到特征值</div>
+          <p>延续前四步的 $d=0.30$、$\hat d=0.40$、$\hat{\mathbf n}=(0,1)$，并取 barrier 刚度 $\kappa=1$。先求 barrier 对距离的两阶导数：</p>
+          <div class="math-block">$$\begin{aligned}
+b'(d)&amp;=-\Big[2(d-\hat d)\ln\tfrac{d}{\hat d}+(d-\hat d)\Big],\\
+b''(d)&amp;=-\Big[2\ln\tfrac{d}{\hat d}+3-\tfrac{\hat d}{d}\Big].
+\end{aligned}$$</div>
+          <p>代入 $d=0.30$、$\hat d=0.40$（$\ln 0.75\approx-0.288$）：</p>
+          <div class="math-block">$$b'(0.30)\approx-0.0424,\qquad b''(0.30)\approx0.909.$$</div>
+          <p>接下来是 <a href="12-4-barrier-grad-psd.html">12-4</a> 的两项式。这里只保留 $\mathbf p$ 那一对接触 Hessian 的<b>法向/切向分解</b>——这正是它的特征结构：沿法向 $\hat{\mathbf n}$，距离梯度贡献 $\partial d/\partial\mathbf p=\hat{\mathbf n}$、距离二阶项 $\partial^2d/\partial\mathbf p^2$ 在该方向的作用为零（对 $\hat{\mathbf n}$ 投影得零），于是</p>
+          <div class="math-block">$$\lambda_\parallel=b''(d)\;\bigl(\hat{\mathbf n}^\top\hat{\mathbf n}\bigr)^2+b'(d)\cdot 0=0.909\;\;(&gt;0).$$</div>
+          <p>沿切向 $\mathbf t$（垂直于 $\hat{\mathbf n}$），$\hat{\mathbf n}\hat{\mathbf n}^\top$ 项为零，$\partial^2d/\partial\mathbf p^2$ 把切向扰动映射出 $1/d$ 的弯曲，于是</p>
+          <div class="math-block">$$\lambda_\perp=0+b'(d)\cdot\frac{1}{d}=\frac{-0.0424}{0.30}\approx-0.141\;\;(&lt;0).$$</div>
+          <p>所以这块接触 Hessian 有<b>一正一负</b>两个特征值：沿法向“顶开点”的方向是 $+0.909$，沿切向“让点在平面上滑动”的方向是 $-0.141$。<b>不定</b>——这就是 <a href="12-4-barrier-grad-psd.html">12-4</a> 说“不能直接拿原始 Hessian 解牛顿步”的原因。再做 PSD projection：特征值是现成算好的，把负的那个钳到 0，PSD 修正块就是</p>
+          <div class="math-block">$$\lambda_\parallel^{+}=0.909,\qquad \lambda_\perp^{+}=0.$$</div>
+          <p>现在把它和惯性项比大小。取时间步 $h=1/60$、$\mathbf p$ 处质量 $m=1$，惯性 Hessian 是</p>
+          <div class="math-block">$$\frac{m}{h^2}\mathbf I=\frac{1}{(1/60)^2}\mathbf I=3600\,\mathbf I.$$</div>
+          <p>惯性项在两个方向都加了 $3600$，远大于接触项的 $0.909$ 与 $-0.141$：加总后</p>
+          <div class="math-block">$$\lambda_\parallel^{\text{总}}=3600+0.909\approx3600.91,\qquad \lambda_\perp^{\text{总}}=3600-0.141\approx3599.86\;\;(\text{都}&gt;0).$$</div>
+          <p>所以在这个具体例子里，<b>单靠惯性项就把总系统拉成了 SPD</b>——这正对应 <a href="../01-foundations/1-5-spring-energy.html">1.5</a> 那句“$\frac{m}{h^2}\mathbf I$ 给每个特征值加一份正偏置”的现场版：当时间步小、惯性项大，它能压过接触 Hessian 的小负特征值，总系统仍 SPD，牛顿步才是严格下降方向。但这只是这个参数的巧合；时间步稍大、接触更紧时 $-0.141$ 这一侧可能反超，仍须先做 PSD projection 再谈反解。</p>
+        </div>
+
+        <p>把这个数字链收回全局：即便惯性把总系统拉成 SPD、解出了严格下降方向，也不立刻全盘接受 full step——还要过 <a href="12-5-ccd-linesearch.html">12-5</a> 的 <span class="term">CCD</span> + Armijo line search，求一个安全且实际降低能量的步长 $\alpha\in(0,1]$。本例只算了 $\mathbf p$ 那一对接触 Hessian 的特征结构，没有装配其它能量项；它告诉你<b>为什么要先 PSD 修正、再求方向</b>，不替你猜完整 $\Delta\mathbf x$。</p>
 
         <h2 id="chain">回头看这条链</h2>
-        <p>把五步连起来念一遍，就是 IPC 一个接触对的完整生命：<b>几何给出 $d=0.30$、$\hat{\mathbf n}=(0,1)$、权重 $0.5/0.5$（12-3）→ 代进 barrier 得正能量 $\approx2.9\times10^{-3}$、确认在激活窗口内（12-2）→ 链式法则得力 $-b'(d)\hat{\mathbf n}$，方向沿 $+\hat{\mathbf n}$ 顶开点（12-4）→ 按 barycentric 把力分成点拿满、两端各 $-0.5\hat{\mathbf n}$，净力为零（12-3）→ 局部 Hessian 可做 PSD modified-Hessian 修正，与惯性/弹性合成；总系统 SPD 后解候选下降方向，再经 CCD + line search 选取可行且下降的实际步长</b>。本例算准了能量与力，但没有从单项力臆测完整 $\Delta\mathbf x$。</p>
+        <p>把五步连起来念一遍，就是 IPC 一个接触对的完整生命：<b>几何给出 $d=0.30$、$\hat{\mathbf n}=(0,1)$、权重 $0.5/0.5$（12-3）→ 代进 barrier 得正能量 $\approx2.9\times10^{-3}$、确认在激活窗口内（12-2）→ 链式法则得力 $-b'(d)\hat{\mathbf n}$，方向沿 $+\hat{\mathbf n}$ 顶开点（12-4）→ 按 barycentric 把力分成点拿满、两端各 $-0.5\hat{\mathbf n}$，净力为零（12-3）→ 同一接触 Hessian 沿法向 $+0.909$、沿切向 $-0.141$，先钳掉负特征值成 PSD，再与惯性 $\frac{m}{h^2}\mathbf I$ 相加；本例 $3600$ 的惯性把它整体拉成 SPD → 总系统解候选下降方向，再经 CCD + line search 选取可行且下降的实际步长</b>。这条链每一步都能用 14-4 的特征值和 1.5 的惯性偏置亲手验证。</p>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">把点设到 (0, 0.30)，对照这一节的算法</span></div>
@@ -89,7 +109,7 @@
         </div>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>三件事：(1) 一个接触对从距离到候选牛顿方向是一条<b>每环都接得上</b>的链——几何（$d,\hat{\mathbf n}$，barycentric）→ barrier 能量 → 链式法则求力 → 按权重落到顶点 → 局部 PSD modified Hessian 与惯性/弹性合成 → 总系统 SPD 后求方向 → CCD + line search 选实际步长。(2) <b>能写准的写准</b>（距离、法向、权重、力的方向与符号、净力为零）；完整 $\Delta\mathbf x$ 的分量没有在本例中计算，不能由单项力直接推出。(3) 这组数是为讲解构造的自洽示例（非论文复现），barrier 形式以论文为准；重点是<b>方向和连接</b>，不是某个小数。</p>
+        <p>三件事：(1) 一个接触对从距离到候选牛顿方向是一条<b>每环都接得上</b>的链——几何（$d,\hat{\mathbf n}$，barycentric）→ barrier 能量 → 链式法则求力 → 按权重落到顶点 → 接触 Hessian（本例特征值 $+0.909$ 与 $-0.141$，先钳负成 PSD）→ 与惯性 $\frac{m}{h^2}\mathbf I$ 相加（本例 $3600$ 使总系统 SPD）→ 总系统解方向 → CCD + line search 选实际步长。(2) <b>能写准的写准</b>（距离、法向、权重、力的方向与符号、净力为零、接触 Hessian 的两个特征值、惯性项如何拉正总系统）；完整 $\Delta\mathbf x$ 的分量没有在本例中计算，不能由单项力直接推出。(3) 这组数是为讲解构造的自洽示例（非论文复现），barrier 形式以论文为准；重点是<b>方向、特征值和连接</b>，不是某个小数。</p>
         <p>单个接触对算清了，下一节我们拉高一层：把整个 IPC 外迭代当成一段<b>伪代码</b>逐行走读——assemble → PSD-project → solve direction → CCD → line search → accept，像 <a href="../04-code/4-3-solve.html">4.3</a> 解剖 <code>solve()</code> 那样用手指点到每一行。去 <a href="12-8-ipc-iteration.html">12-8（一次完整迭代的伪代码走读）</a>。</p>
       </article>
     </main>

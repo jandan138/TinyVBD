@@ -9,7 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="12-10">
+<body data-root="../../" data-section="12-11">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -23,7 +23,7 @@
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">Part 12 · 12-10</div>
+        <div class="eyebrow">Part 12 · 12-11</div>
         <h1>ABD：把 IPC 用在近刚体上</h1>
         <p class="lede">上一节我们算清了 IPC 「稳但贵」的账：每一步一个<b>全局稀疏 Newton</b>，顶点越多越贵。那如果物体本身又硬又几乎不形变——一块石头、一个齿轮、一颗螺丝——还有必要给它几千个顶点自由度吗？<span class="term">ABD</span>（Affine Body Dynamics，仿射体动力学）的回答是：不必。它用<b>一整个物体只 12 个自由度</b>替掉那几千个顶点，IPC 的 intersection-free 保证<b>原封不动继承</b>下来，求解却轻快几个数量级。这一节看它怎么做到，以及它如何在「可形变（FEM）↔ 刚体」之间补上一格。</p>
 
@@ -82,7 +82,7 @@
         <p>所以一句话概括 ABD 的卖点：<b>它把 IPC 那台「贵但有严格保证」的机器，套在一个只有 12 维的小系统上</b>。Newton 系统从「几千维顶点」缩成「每物体 12 维」，每步的稀疏求解瞬间变小，而 intersection-free 这个 IPC 最值钱的保证，<b>白白继承、一分没丢</b>。这对「场景里有大量近刚体、又要绝对不穿模」的场合（机器人、机械装配、堆叠）是量身定做。</p>
         <div class="callout warn">
           <div class="c-h">天下没有白拿的：代价在哪</div>
-          <p>诚实地说两条代价。其一，那个正交能量 $E_{\text{ortho}}$ 是<b>非线性</b>的（$A^\top A$ 里 $A$ 是二次的），所以每次 Newton 迭代<b>都要重新装配并分解</b>系统矩阵——不能像纯线性问题那样一次分解반复用。其二，12 个自由度终究比刚体的 6 个多，单看「每物体的开销」ABD 比传统刚体法（RBD）更重。它的净胜，靠的是<b>整体系统变小</b>带来的稀疏求解收益，以及 IPC 保证省下的「事后处理穿透」的麻烦——而不是每个物体单独更便宜。<b>具体快多少属于性能数字，本教程不写死</b>（见下方诚实声明），但机制上的取舍就是这样：用「每物体略重」换「整体系统极小 + 保证不穿」。</p>
+          <p>诚实地说两条代价。其一，那个正交能量 $E_{\text{ortho}}$ 是<b>非线性</b>的（$A^\top A$ 里 $A$ 是二次的），所以每次 Newton 迭代<b>都要重新装配并分解</b>系统矩阵——不能像纯线性问题那样一次分解反复用。其二，12 个自由度终究比刚体的 6 个多，单看「每物体的开销」ABD 比传统刚体法（RBD）更重。它的净胜，靠的是<b>整体系统变小</b>带来的稀疏求解收益，以及 IPC 保证省下的「事后处理穿透」的麻烦——而不是每个物体单独更便宜。<b>具体快多少属于性能数字，本教程不写死</b>（见下方诚实声明），但机制上的取舍就是这样：用「每物体略重」换「整体系统极小 + 保证不穿」。</p>
         </div>
 
         <h2 id="spectrum">刚柔光谱：ABD 补上了 FEM 和刚体之间的那一格</h2>
@@ -104,7 +104,7 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) ABD 的出发点是一个洞见——<b>刚体的好处是「坐标紧凑」而非「刚性」</b>，于是它保留紧凑、放开刚性，用仿射变换 $\mathbf x=A\mathbf X+\mathbf p$ 把每物体描述成 <b>12 个自由度</b>，并用一个 <b>orthogonality 正交能量</b> $\tfrac\kappa2\lVert A^\top A-I\rVert^2$ 软性地把它拉回近刚体（$\kappa$ 控制硬度）；(2) 它<b>仍是 $\min G(x)$</b>，只是未知量从顶点位置换成仿射参数——和 <a href="../13-mpm/13-5-implicit-mpm.html">13.5</a> 隐式 MPM「换 DOF」是同一手法；接触直接用 IPC 的 barrier + CCD，<b>原样继承 intersection-free 保证</b>，代价是每迭代重装配、12 维比刚体的 6 维略重；(3) 它在全书补上了 <b>FEM（可形变）↔ ABD（近刚体）↔ 刚体（完全刚性）</b> 这条刚柔光谱里中间那一格——同一个变分框架、同一套 IPC 接触，区别只在用哪套坐标。</p>
-        <p>下一节 <a href="12-11-three-roads.html">12.11：三条路总对照</a>，我们把 penalty / AVBD / IPC 三条处理接触的路并排成一张大表，给整本书的接触主线画上句号。</p>
+        <p>下一节 <a href="12-12-three-roads.html">12.12：三条路总对照</a>，我们把 penalty / AVBD / IPC 三条处理接触的路并排成一张大表，给整本书的接触主线画上句号。</p>
       </article>
     </main>
     <aside class="rail" id="rail"></aside>

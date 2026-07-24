@@ -7,7 +7,7 @@
     const c = (n) => VBW.c(n);
     const stages = [
       { k: "assemble", t: "装配 H, f", d: "遍历所有顶点/接触对，累加惯性+弹性+barrier 的力与 Hessian → 全局稀疏 H、f" },
-      { k: "psd",      t: "PSD 投影", d: "对每块局部 Hessian 投负特征值为零，保证全局 H 半正定 → Newton 方向必下降" },
+      { k: "psd",      t: "PSD 投影", d: "对每块局部 Hessian 把负特征值截到 0，得到 PSD 块；它可能奇异——还需惯性/消元/shift 使总系统 SPD，才有严格下降方向" },
       { k: "solve",    t: "解方向 p", d: "全局稀疏线性解 H p = f（CHOLMOD 分解）→ 得到这一步的下降方向 p" },
       { k: "ccd",      t: "CCD 求 t*", d: "filtered CCD 沿 p 求最大不穿透步长 t*（time of impact）" },
       { k: "ls",       t: "line search α", d: "α = min(α_Newton, c·t*, α_CFL)：既要能量下降，又不许跨过几何边界" },

@@ -29,7 +29,7 @@
 
         <h2 id="barrier-not-enough">能量墙再陡，离散的一步也能跨过去</h2>
         <p>先把上一节的结论接过来：barrier $b(d,\hat d)$ 在距离 $d$ 趋近零时能量发散，对应的接触力可以变得任意大。在<b>连续</b>的意义上，这道墙确实拦得住任何东西——没有有限的力能把距离压到零。可一旦真正去解，你面对的是一个迭代：每一步先求出一个下降方向，再沿这个方向走一段。问题就出在「走一段」这三个字上。</p>
-        <p>设当前位形是 $\mathbf x$，全局 Newton 解出了一个方向 $\mathbf p$（怎么解出来的下一节再说，这里只当它是一个「往能量更低处去」的方向）。接下来要决定<b>步长</b> $\alpha$，更新成 $\mathbf x + \alpha\,\mathbf p$。如果 $\alpha$ 取得太大，哪怕能量墙在 $d=0$ 处是无穷高，离散的这一跳也可能<b>直接落到墙的另一侧</b>——两个几何元件已经交叉，距离变成了「负」的，barrier 公式甚至失去意义。能量发散保证的是「连续轨迹跨不过」，它管不住「离散采样跳过去」。</p>
+        <p>设当前位形是 $\mathbf x$，全局 Newton 解出了一个方向 $\mathbf p$（这个方向怎么装配、求解出来，<a href="12-8-ipc-iteration.html">12-8</a> 和 <a href="12-9-solver-cost.html">12-9</a> 会展开；这里只当它是一个「往能量更低处去」的方向）。接下来要决定<b>步长</b> $\alpha$，更新成 $\mathbf x + \alpha\,\mathbf p$。如果 $\alpha$ 取得太大，哪怕能量墙在 $d=0$ 处是无穷高，离散的这一跳也可能<b>直接落到墙的另一侧</b>——两个几何元件已经交叉，距离变成了「负」的，barrier 公式甚至失去意义。能量发散保证的是「连续轨迹跨不过」，它管不住「离散采样跳过去」。</p>
 
         <div class="callout warn">
           <div class="c-h">这正是 10-3 你已经撞过的那堵墙</div>
@@ -40,7 +40,14 @@
         <p>IPC 的办法不是「先走完再检查、穿了再砍」，而是<b>在走之前就先问清楚：沿方向 $\mathbf p$ 最多能走多远而不发生任何交叉？</b>回答这个问题的，是 <span class="term">CCD</span>——continuous collision detection（连续碰撞检测）。</p>
         <p>CCD 和我们熟悉的「离散碰撞检测」不同。离散检测只看某个时刻的快照：这一帧有没有交叉。CCD 看的是<b>整段运动</b>：把每个顶点从 $\mathbf x$ 到 $\mathbf x + \mathbf p$ 想象成一条直线轨迹，问「在这段连续扫掠的过程中，第一次发生 point-triangle 或 edge-edge 接触（距离归零）是在哪个比例 $t^\star\in(0,1]$」。这个 $t^\star$ 就是<b>最大不穿透步长</b>（time of impact）：只要 $\alpha \le t^\star$，整段运动里就<b>没有任何一对几何元件穿过对方</b>。</p>
         <div class="math-block">$$t^\star \;=\; \max\;\bigl\{\,t\in(0,1] \;:\; \mathbf x + s\,\mathbf p \ \text{对所有 } s\in[0,t]\ \text{都无交叉}\,\bigr\}$$</div>
-        <p>所谓 <span class="term">filtered</span>，是说 CCD 不会傻乎乎对每一对几何元件都做这套连续求根——那是平方级灾难。它先用空间加速结构和保守的包围盒「过滤」掉绝大多数不可能在这步内相撞的元件对，只对真正逼近的少数几对做精确的 time-of-impact 计算。这一步是 IPC 每次迭代里实打实的开销，也是后面 12-6 要讲「IPC 贵在哪」的第一笔账。</p>
+        <p>所谓 <span class="term">filtered</span>，是说 CCD 不会傻乎乎对每一对几何元件都做这套连续求根——那是平方级灾难。它先用空间加速结构和保守的包围盒「过滤」掉绝大多数不可能在这步内相撞的元件对，只对真正逼近的少数几对做精确的 time-of-impact 计算。这一步是 IPC 每次迭代里实打实的开销，也是后面 12-9 要讲「IPC 贵在哪」的第一笔账。</p>
+
+        <div class="callout note" id="worked-example">
+          <div class="c-h">手算例：一个点撞一面墙，t* 到底怎么求</div>
+          <p>把上面 widget 里的小场景搬到纸上：设点 $\mathbf p_0=(0,3)$ 竖直向下朝 $y=0$ 那面墙运动，Newton 给的方向是 $\mathbf v=(0,-2)$。轨迹是 $\mathbf p(s)=\mathbf p_0+s\mathbf v=(0,3-2s)$。点到墙的距离是 $d(s)=3-2s$。求第一次接触（$d=0$）的 $t^\star$：</p>
+          <div class="math-block">$$3-2t^\star=0\;\Longrightarrow\; t^\star=\frac{3}{2}=1.5.$$</div>
+          <p>若 Newton 想走 full step $\alpha=1$，走到 $s=1$ 时距离 $d(1)=1&gt;0$，还没穿墙；所以这一步 $t^\star=1.5&gt;1$，full step 安全。若方向更陡，$\mathbf v=(0,-6)$，则 $t^\star=3/6=0.5&lt;1$：走到 $s=0.5$ 就贴墙了，再走就穿。此时 line search 必须把步长截到 $\alpha\le0.5$，再按 <a href="#cfl-bound">下面</a> 的 CFL 式保守界往回收一点，让走完仍留正缝。</p>
+        </div>
 
         <div class="lab">
           <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">CCD 求最大安全步长：点永远停在墙前</span></div>
@@ -79,6 +86,11 @@
 
         <h2 id="takeaway">这一节你要带走的</h2>
         <p>三句话：(1) barrier 在连续意义上挡穿透，但<b>离散的一步可能跨过能量墙</b>——10-3 和 IPC 都有这个风险，区别全在解法；(2) IPC 的解法是 <b>CCD-filtered line search</b>：用连续碰撞检测求出最大不穿透步长 $t^\star$，再叠一道 <span class="term">CFL</span> 式保守接触界把步长进一步收紧，最终 $\alpha=\min(\alpha_{\text{Newton}},\,c\,t^\star,\,\alpha_{\text{CFL}})$，<b>永远停在可行域内部</b>；(3) 因为这道保证<b>烤进了每一次非线性迭代</b>（而非像 10-3 那样在求解步之外做事后截断），所以整个 time step 严格 <span class="term">intersection-free</span>，与压缩程度无关——这就是 IPC「保证」二字的真正来源。</p>
+
+        <div class="callout note" id="exercise">
+          <div class="c-h">一分钟自测：换一个更陡的方向，full step 还安全吗？</div>
+          <p>沿用上面的点 $\mathbf p_0=(0,3)$ 朝 $y=0$ 的墙运动，但这次 Newton 给的方向是 $\mathbf v=(0,-9)$。先别算 line search，直接求轨迹与墙的交点：轨迹是 $(0,3-9s)$，令距离为零得 $t^\star=3/9=1/3$。因为 $1/3&lt;1$，走到 $s=1/3$ 时已经贴墙，再走就穿。所以这一步 full step $\alpha=1$<b>不安全</b>，line search 必须把步长截到 $\alpha\le1/3$ 以下（再按保守界往回收）。若方向换成 $(0,-1)$，则 $t^\star=3&gt;1$，full step 才安全。这个一手就能算出的数，正是 IPC line search 要替你做的判断。</p>
+        </div>
         <p>到这里 IPC 的「不穿透」这条主线讲完了。但真实接触从不只有「推开」，还有<b>沿着接触面相互摩擦</b>。理想 Coulomb 摩擦有一处 Newton 最讨厌的不连续阶跃——下一节 <a href="12-6-friction.html">12-6：摩擦——lagged、光滑化的 Coulomb</a>，我们看 IPC 怎么把摩擦也<b>塞进同一个优化框架</b>，并把那个阶跃磨成可微的曲线。</p>
       </article>
     </main>

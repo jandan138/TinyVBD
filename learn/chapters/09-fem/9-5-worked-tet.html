@@ -25,7 +25,7 @@
       <article class="article">
         <div class="eyebrow">Part 9 · 9-5</div>
         <h1>手把手算一遍：一个单元从 $F$ 到 $\Delta x$</h1>
-        <p class="lede">前四节把零件都讲齐了——形变梯度 $F=D_s D_m^{-1}$（<a href="9-2-deformation-gradient.html">9.2</a>）、应变能密度 $\psi(F)$（<a href="9-3-strain-energy.html">9.3</a>）、Piola 应力 $P=\partial\psi/\partial F$ 与单元力 $-V_0 P D_m^{-\top}$（<a href="9-4-piola-assembly.html">9.4</a>）。这一节把它们在一个具体三角形单元上拼起来，用真实数字算一遍。我们仿照 <a href="../12-ipc/12-7-worked-example.html">12.7</a> 解剖一个接触对的节奏：摆出一组数 → 每一步对一个公式 → 把中间值写出来让你能拿计算器复算 → callout 说明「为什么这样」。算完你会看到从「三角形被拉大 10%」到「回复力怎样装进牛顿系统」的完整链；实际位移还取决于本节没有计算的 Hessian 与其它装配项。</p>
+        <p class="lede">前四节把零件都讲齐了——形变梯度 $F=D_s D_m^{-1}$（<a href="9-2-deformation-gradient.html">9.2</a>）、应变能密度 $\psi(F)$（<a href="9-3-strain-energy.html">9.3</a>）、Piola 应力 $P=\partial\psi/\partial F$ 与单元力 $-V_0 P D_m^{-\top}$（<a href="9-4-piola-assembly.html">9.4</a>）。这一节把它们在一个具体三角形单元上拼起来，用真实数字算一遍。我们仿照 <a href="../04-code/4-3-solve.html">4.3</a> 解剖一次 sweep 的节奏：摆出一组数 → 每一步对一个公式 → 把中间值写出来让你能拿计算器复算 → callout 说明「为什么这样」。算完你会看到从「三角形被拉大 10%」到「回复力怎样装进牛顿系统」的完整链；实际位移还取决于本节没有计算的 Hessian 与其它装配项。</p>
 
         <h2 id="setup">摆出这个单元：rest 单位直角三角形，world 拉伸 10%</h2>
         <p>为了能手算，我们用一个最干净的 <b>2D 三角形单元</b>。rest 形状取<b>单位直角三角形</b>，三个顶点：</p>
@@ -81,7 +81,7 @@
         <div class="math-block">$$\mathbf f_{x_1}=(-0.1388,\ 0),\qquad \mathbf f_{x_2}=(0,\ -0.1388),\qquad \mathbf f_{x_0}=-(\mathbf f_{x_1}+\mathbf f_{x_2})=(+0.1388,\ +0.1388).$$</div>
         <p>读出物理，这是全节最该记的一段：$x_1$ 在 $(1.1,0)$，受力 $(-0.1388,0)$——<b>沿 $-x$ 被拉回原点方向</b>，把拉开的那条边收短；$x_2$ 在 $(0,1.1)$，受力 $(0,-0.1388)$——<b>沿 $-y$ 被拉回</b>，同理。$x_0$ 在原点，受 $(+0.1388,+0.1388)$，被推向单元内部。三股合力</p>
         <div class="math-block">$$\mathbf f_{x_0}+\mathbf f_{x_1}+\mathbf f_{x_2}=(+0.1388,+0.1388)+(-0.1388,0)+(0,-0.1388)=(0,0).$$</div>
-        <p><b>净力恰好为零</b>——<a href="9-4-piola-assembly.html">9.4</a> 说的「节点 0 取负和」在这里兑现，单元不产生净外力。整组力一致地在做一件事：<b>把被拉大 10% 的单元往 rest 收</b>。这正是 <a href="../12-ipc/12-7-worked-example.html">12.7</a> 接触对「点拿满、两端按权重分、净力归零」的同一守恒逻辑，也是 <a href="../04-code/4-3-solve.html">4.3</a> 弹簧两端 $\pm$ 等大反向那条铁律的多节点版。</p>
+        <p><b>净力恰好为零</b>——<a href="9-4-piola-assembly.html">9.4</a> 说的「节点 0 取负和」在这里兑现，单元不产生净外力。整组力一致地在做一件事：<b>把被拉大 10% 的单元往 rest 收</b>。这正是 <a href="../04-code/4-3-solve.html">4.3</a> 弹簧两端 $\pm$ 等大反向那条铁律的多节点版；<a href="../12-ipc/12-7-worked-example.html">12.7</a> 还会在接触对上再兑现一次同一守恒逻辑。</p>
 
         <div class="callout note">
           <div class="c-h">符号自检：拉伸 → 收缩力，方向必须对</div>
