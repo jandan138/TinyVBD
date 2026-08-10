@@ -306,6 +306,15 @@ window.VBOOK = {
       ],
     },
     {
+      id: "p17",
+      label: "Part 17",
+      title: "实战复盘 · Field Notes",
+      sections: [
+        { id: "17-1", title: "实战复盘：一条专家轨迹的跨后端复刻战役", file: "chapters/17-field-notes/17-1-gripper-saga.html",
+          keywords: "field notes interview 面试 实战 复盘 case study taskbook p7 newton isaac kamino row 166 friction_only 坐标合同 冷启动 确定性 信封溢出 资格 qualification" },
+      ],
+    },
+    {
       id: "pa",
       label: "Appendix",
       title: "附录 · Reference",
