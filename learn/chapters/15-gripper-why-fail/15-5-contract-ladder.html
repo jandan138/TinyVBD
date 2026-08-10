@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SECTION_TITLE · TinyVBD 教程</title>
+  <title>合同梯子（物理版） · TinyVBD 教程</title>
   <link rel="stylesheet" href="../../assets/css/book.css" />
-  <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="X-Y">
+<body data-root="../../" data-section="15-5">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -19,30 +18,49 @@
     <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
     <div class="progress"></div>
   </header>
-
   <div class="scrim"></div>
   <div class="layout">
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">PART_LABEL · SECTION_ID</div>
-        <h1>SECTION_TITLE</h1>
-        <p class="lede">导言。</p>
+        <div class="eyebrow">Part 15 · Why the Grip Fails · 15-5</div>
+        <h1>合同梯子（物理版）</h1>
+        <p class="lede">15.4 让我们在玩具里看清了覆盖。但回到真实失败现场，「夹不住」只是一个终态描述，能导致它的原因分布在三座楼里。这一节给你一架三层梯子：几何、驱动拓扑、求解结构——先问哪一层合同先裂，再决定拧什么。</p>
 
-        <h2 id="s1">小节标题</h2>
-        <p>正文。</p>
+        <h2 id="ladder">三层梯子</h2>
+        <p>为什么需要梯子？因为直接扑向求解器，可能几何那一层早就裂了——你在对比的两个后端，碰的压根不是同一个苹果。建议的检查顺序（从外到内）：</p>
+
+        <div class="lab">
+          <div class="lab-h"><span class="lab-tag">interactive</span><span class="lab-t">点一层，看它能证明什么</span></div>
+          <div class="lab-body" data-widget="contract-ladder"></div>
+          <div class="lab-cap">每一层都写清「已证 / 未证」，防止把候选说成根因。</div>
+        </div>
+
+        <h3 id="geo">第一层：几何</h3>
+        <p>凸包、凸分解、原始三角网格，是三种不同的碰撞表示。同一个苹果模型，convex hull 会把果柄处的凹陷填平，接触点位置和法向全都搬家。几何不一致时，后面所有「力对不对得上」的对比，都是在比两件不同的事。所以它排在梯子最底层：先确认两边碰的是同一个东西，否则一切免谈。</p>
+        <h3 id="topo">第二层：Drive / Mimic 拓扑</h3>
+        <p>控制图也要对齐。「一个主动关节 + 一个被动 mimic」和「两指各自 PD 驱动」，是两种完全不同的意图表达：前者的从动指力永远由联动约束给出，后者的两指可以各自抢戏。拓扑没对齐就吵求解器迭代次数，等于在两张不同的考卷上比分数。</p>
+        <h3 id="solve">第三层：接触求解结构</h3>
+        <p>两层都对齐了，才轮到本篇的主角：顺序投影 vs 一次冲量平衡。它在顶层不是因为它不重要，而是因为它最难隔离——只有下面两层先钉死，它的信号才干净。这正是梯子的用处：让你爬到这一层时，手里拿的是筛过的证据，而不是一锅粥。</p>
+
+        <div class="callout warn">
+          <div class="c-h">优先候选 ≠ 因果证明</div>
+          <p>在那只苹果的个案里，碰撞表示（convex vs 原始网格）与 drive/mimic 拓扑曾被列为优先合同差异——优先候选，不是已证唯一根因。这正是梯子的正确用法：它帮你排序实验，不替你宣布结论。没做隔离 A/B 之前，每个候选都保持候选身份。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>排查顺序：先几何，再拓扑，再求解结构；每一层都分清「已证 / 未证」。不过，梯子爬到顶层之前，有两个旋钮总在半路上被人伸手拧——$\mu$ 和执行顺序。下一节 <a href="15-6-mu-and-ordering-not-enough.html">15.6</a> 把这两个最诱人的捷径钉死。</p>
+
       </article>
     </main>
     <aside class="rail" id="rail"></aside>
   </div>
-
   <div class="search-overlay" id="search-overlay">
     <div class="search-box">
-      <input id="search-input" placeholder="搜索…" />
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
       <div class="search-results" id="search-results"></div>
     </div>
   </div>
-
   <script src="../../content.js"></script>
   <script src="../../assets/js/widgets/registry.js"></script>
   <script src="../../assets/js/widgets/vbd-core.js"></script>
@@ -92,5 +110,6 @@
   <script src="../../assets/js/widgets/bounded-drive-curve.js"></script>
   <script src="../../assets/js/widgets/gripper-lab.js"></script>
   <script src="../../assets/js/book.js"></script>
+
 </body>
 </html>

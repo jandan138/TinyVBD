@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SECTION_TITLE · TinyVBD 教程</title>
+  <title>PADMM 直觉（不为证明定理） · TinyVBD 教程</title>
   <link rel="stylesheet" href="../../assets/css/book.css" />
-  <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
-<body data-root="../../" data-section="X-Y">
+<body data-root="../../" data-section="16-2">
   <header class="topbar">
     <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
     <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
@@ -19,30 +18,48 @@
     <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
     <div class="progress"></div>
   </header>
-
   <div class="scrim"></div>
   <div class="layout">
     <nav class="sidebar" id="sidebar"></nav>
     <main>
       <article class="article">
-        <div class="eyebrow">PART_LABEL · SECTION_ID</div>
-        <h1>SECTION_TITLE</h1>
-        <p class="lede">导言。</p>
+        <div class="eyebrow">Part 16 · One Coupled Solve · 16-2</div>
+        <h1>PADMM 直觉（不为证明定理）</h1>
+        <p class="lede">16.1 列出了四笔要谈妥的冲量，这一节给「谈妥」找一种算法语言。你不需要先吞下半本凸优化——只要抓住一件事：对偶变量就是冲量，算法在找一组让所有约束同时点头的冲量。</p>
 
-        <h2 id="s1">小节标题</h2>
-        <p>正文。</p>
+        <h2 id="dual">对偶变量 = 冲量账本</h2>
+        <p><span class="term">PADMM</span>（一种 primal-dual 分裂算法）在接触动力学里常用来解大对偶问题。教学直觉是三句话：</p>
+        <ul>
+          <li>原变量：运动学状态如何走——位置、速度；</li>
+          <li>对偶变量：各约束要「使多大劲」——正是 16.1 那四笔冲量；</li>
+          <li>迭代降低原始/对偶残差，直到一组 $\lambda$ 让大家都认：约束满足了，冲量也稳定了。</li>
+        </ul>
+        <p>拿它和 XPBD 对照，差异一目了然。XPBD 也有 $\lambda$，但那是<b>逐约束</b>各自记账：mimic 的 $\lambda$ 不知道接触的 $\lambda$ 刚才干了什么，15.3 说的顺序性原封不动。PADMM 风格的做法，是把多条约束的对偶变量放进<b>同一个</b>对偶问题，迭代时原始残差（约束还差多少没满足）和对偶残差（冲量还差多少没稳定）一起往下压。这才是谈判：所有约束同时在场，任何一条都没法在别人散会后单独改状态。</p>
+        <p>这也解释了 Part 15 的病为什么在 XPBD 框架里治不好：病不在某条约束的刚度含义——那是 <a href="../02-family/2-2-xpbd.html">2.2</a> 已经治过的——而在约束之间缺少同时性。药自然要下在同时性上。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 不一样的「一次只动一块」</div>
+          <p>VBD 的 block 是顶点坐标；这里的 block 是约束冲量。都是分而治之，但夹爪病要的是约束之间的同时性，不是再把位置投影得更勤。你已经见过两种「分块」哲学，别再把它们混为一谈。</p>
+        </div>
+
+        <div class="callout warn">
+          <div class="c-h">本教程不证明收敛率</div>
+          <p>我们只借用 PADMM 这个名字背后的工程含义：联合对偶求解。至于步长怎么选、残差怎么定义、收敛有多快，以各求解器实现为准——那些细节不改变本篇的结构论点。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>PADMM ≈「一次谈妥冲量」的算法家族代表；对偶变量视角让「约束之间互相看得见」成为可计算的事。语言有了，真实求解器里谁在说这种语言？下一节 <a href="16-3-kamino-on-the-map.html">16.3</a> 把 Newton 的求解器地图铺开，看 Kamino 站在哪、还缺哪块砖。</p>
+
       </article>
     </main>
     <aside class="rail" id="rail"></aside>
   </div>
-
   <div class="search-overlay" id="search-overlay">
     <div class="search-box">
-      <input id="search-input" placeholder="搜索…" />
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
       <div class="search-results" id="search-results"></div>
     </div>
   </div>
-
   <script src="../../content.js"></script>
   <script src="../../assets/js/widgets/registry.js"></script>
   <script src="../../assets/js/widgets/vbd-core.js"></script>
@@ -92,5 +109,6 @@
   <script src="../../assets/js/widgets/bounded-drive-curve.js"></script>
   <script src="../../assets/js/widgets/gripper-lab.js"></script>
   <script src="../../assets/js/book.js"></script>
+
 </body>
 </html>
