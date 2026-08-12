@@ -5,19 +5,19 @@
     const c = (n) => VBW.c(n);
     const state = { phase: 0 }; // 0 mimic, 1 drive, 2 contact, 3 mimic again
     const phases = ["1 · hard mimic", "2 · drive", "3 · contact", "4 · mimic 再覆盖"];
-    // finger positions in a toy timeline
-    let qL = -0.22, qR = 0.22;
-    const obj = { x: 0, half: 0.12 };
+    // A slightly off-center block makes mimic and bilateral contact conflict.
+    let qL = -0.12, qR = 0.12;
+    const obj = { x: 0.02, half: 0.12 };
 
     const cv = VBW.el("canvas"); const ctx = cv.getContext("2d");
     VBW.hidpi(cv, ctx, W, H);
     cv.style.cssText = "width:100%;max-width:" + W + "px;margin:auto;display:block;background:var(--surface-2);border-radius:10px";
 
     function applyPhase(p) {
-      if (p === 0) { qL = -0.22; qR = -qL; }
-      if (p === 1) { qL = -0.10; qR = -qL; } // drive closes
+      if (p === 0) { qL = -0.12; qR = -qL; }
+      if (p === 1) { qL = -0.08; qR = 0.12; } // leader drive closes
       if (p === 2) { qL = obj.x - obj.half; qR = obj.x + obj.half; } // contact places both
-      if (p === 3) { qR = -qL; } // overwrite: right yanked by mimic about 0, may leave contact
+      if (p === 3) { qL = obj.x - obj.half; qR = -qL; } // overwrite: right crosses the contact face
     }
 
     function draw() {
@@ -38,10 +38,10 @@
       ctx.fillStyle = c("ink"); ctx.font = "13px var(--mono)"; ctx.textAlign = "center";
       ctx.fillText(phases[state.phase], W / 2, 28);
       ctx.fillStyle = c("ink-faint"); ctx.font = "11px var(--mono)";
-      ctx.fillText("qL=" + qL.toFixed(2) + "  qR=" + qR.toFixed(2) + "  |  接触面 ±0.12", W / 2, H - 18);
+      ctx.fillText("qL=" + qL.toFixed(2) + "  qR=" + qR.toFixed(2) + "  |  接触面 -0.10 / +0.14", W / 2, H - 18);
       if (state.phase === 3) {
         ctx.fillStyle = "#e0463c";
-        ctx.fillText("follower 被硬 mimic 拽离右侧接触面 → 双侧夹紧被破坏", W / 2, 50);
+        ctx.fillText("follower 被 hard mimic 写过右侧接触面 → 双侧夹紧被破坏", W / 2, 50);
       }
       ctx.textAlign = "left";
     }
