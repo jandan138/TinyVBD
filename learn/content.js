@@ -303,6 +303,8 @@ window.VBOOK = {
           keywords: "physics gate zero friction negative control 门禁 零摩擦" },
         { id: "16-7", title: "收束：换后端要带走的语义", file: "chapters/16-coupled-impulse-lab/16-7-portable-semantics.html",
           keywords: "portable semantics genesis backend mimic bounded drive 语义 换后端" },
+        { id: "16-8", title: "摩擦的记忆：接触生命周期与材料锚点", file: "chapters/16-coupled-impulse-lab/16-8-contact-lifecycle-anchors.html",
+          keywords: "friction anchor contact lifecycle material point persistent manifold warm start 摩擦 锚点 接触生命周期 材料点 快照 alias 深拷贝 row 308" },
       ],
     },
     {

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>摩擦的记忆：接触生命周期与材料锚点 · TinyVBD 教程</title>
+  <link rel="stylesheet" href="../../assets/css/book.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body data-root="../../" data-section="16-8">
+  <header class="topbar">
+    <button class="iconbtn menu-toggle" aria-label="menu">☰</button>
+    <a class="brand" href="../../index.html"><b>TinyVBD</b> · 教程</a>
+    <span class="spacer"></span>
+    <button id="search-btn">🔍 <kbd>/</kbd></button>
+    <button class="iconbtn" id="theme-toggle" aria-label="theme">☾</button>
+    <div class="progress"></div>
+  </header>
+  <div class="scrim"></div>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main>
+      <article class="article">
+        <div class="eyebrow">Part 16 · One Coupled Solve · 16-8</div>
+        <h1>摩擦的记忆：接触生命周期与材料锚点</h1>
+        <p class="lede">到 16.7 为止，Part 16 谈的都是「同一帧内」的事：四类冲量同一次谈妥。但抓取还有一个正交维度——跨帧。摩擦是有记忆的，而记忆需要一个身份：记错了对象，前一帧捏得再紧，后一帧也会悄悄滑走。</p>
+
+        <h2 id="why-memory">为什么摩擦需要记忆</h2>
+        <p>静摩擦的本质，是抵抗「从某个参考构型开始的相对位移」。如果 sticking 接触每帧都从零重解，等价于每一步都默许接触面小幅滑动：宏观表现就是抖动、爬行、慢慢滑脱。所以工程实现给摩擦一个<b>锚点</b>：记住「这个接触上一帧停在材料上的哪个位置」，这一帧的位置摩擦就抵抗偏离锚点的位移，并被当前步的库仑上限卡住：</p>
+        <div class="math-block">$$\lvert\lambda_t\rvert \le \mu\,\lambda_n,\qquad \lambda_t \;\text{抵抗}\;\bigl(\mathbf x_{\mathrm{now}}-\mathbf x_{\mathrm{anchor}}\bigr).$$</div>
+        <p>不同求解器给这个思想起不同的名字——persistent manifold、warm starting、摩擦 patch——但都在回答同一个问题：<b>这个接触，上一帧的它，是谁？</b></p>
+
+        <h2 id="identity">用什么身份记住一个接触</h2>
+        <p>碰撞检测每帧重跑，输出一批临时编号的接触点。同一个物理接触，这一帧可能是 851 号，下一帧变成 859 号——编号是「这一帧的工牌」，不是「这个接触的身份」。若把摩擦锚点绑在临时编号上，编号一变，记忆就找不到主人。锚点等效丢失，而且<b>静默</b>丢失：没有报错、没有异常，只是苹果开始滑。</p>
+        <p>可靠的身份要用材料坐标显式建模：夹爪表面的局部点、苹果表面的局部点、接触法线、属于哪一侧夹爪。下一帧碰撞结束后，用几何匹配找回旧锚点——两侧都匹配、距离在容差内，才允许延续；匹配不上就当作新接触，绝不硬续。生命周期规则同样显式：分离、不匹配、reset 时清空历史，锚点不许活得比接触本身久——否则它就成了一个隐形搬运约束，正是 <a href="../15-gripper-why-fail/15-1-action-ok-grip-fail.html">15.1</a> 警告过的假成功。</p>
+
+        <h2 id="snapshot">快照要深拷贝，不要存引用</h2>
+        <p>锚点几何依赖「接触生成那一刻的位姿」。保存这帧位姿时，存引用和存拷贝是生与死的差别：若求解器把 <code>state_in</code>/<code>state_out</code> 当乒乓缓冲、在同一帧里反复覆写，引用指向的内存会被悄悄改掉——你以为冻结了历史，其实历史正在被现实改写。</p>
+        <p>纪律只有三条：substep 开始就把位姿深拷贝到独立缓冲；运行时校验这份拷贝不与任何求解器缓冲共用指针；求解前后对拷贝做 hash，必须不变。</p>
+
+        <div class="bridge tinyvbd">
+          <div class="c-h"><span class="tag">从 TinyVBD 看</span> 状态所有权的另一面</div>
+          <p>Part 15 讲「谁后写谁说了算」——约束之间抢同一份状态；这一节讲「谁能改我保存的历史」——缓冲区之间共享同一块内存。两件事是同一个主题：状态所有权。在仿真器里，它值得被显式画出来，而不是藏在指针里。</p>
+        </div>
+
+        <h2 id="not-inherit">记忆 ≠ 继承力</h2>
+        <p>锚点延续的只是参考位置，不是力。两条红线：</p>
+        <ul>
+          <li>不继承上一帧的法向冲量——摩擦预算是当前步的 $\lambda_n$ 给的；</li>
+          <li>不把上一帧的切向冲量当当前增量用——除非走完整一致的 warm-start 推导。</li>
+        </ul>
+        <p>同样地：正间隙不许产生摩擦；位置摩擦用锚点，速度摩擦仍用当前接触点与速度；库仑饱和时刷新锚点。真实个案里，两个看起来更省事的方案都被数据拒绝：每侧夹爪聚合成一个 Coulomb disk（关键窗口失稳，力矩分布被过度简化）；直接搬用上一帧的法向/切向冲量（要么无效，要么把苹果推偏约 3 mm）。</p>
+
+        <div class="callout note">
+          <div class="c-h">真实个案插叙（详见 17.1）</div>
+          <p>Newton 个案里，同一段持握的原始接触编号在相邻行间翻滚（851/859/868 → 845/853/862 → …），按编号存储的摩擦历史在第 308 行清空，苹果随后掉落。改用材料锚点后，最大接受匹配偏差 3.91 mm（容差 5 mm），同一条冻结轨迹完成搬运入碗。这是本节概念的出处，个案证据，不是通用定理。</p>
+        </div>
+
+        <h2 id="takeaway">这一节你要带走的</h2>
+        <p>一句话：摩擦的连续性要锚在材料点的永久身份上，并用深拷贝快照保护它的几何；临时编号和可变缓冲都不可靠。Part 16 至此补全了两个维度——帧内的同时性（16.1–16.7）与跨帧的连续性（本节）。下一页 <a href="../17-field-notes/17-1-gripper-saga.html">17.1</a>，看这两个维度在真实战役里的完整代价与验收。</p>
+
+      </article>
+    </main>
+    <aside class="rail" id="rail"></aside>
+  </div>
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+      <input id="search-input" placeholder="搜索小节标题、术语…（↑↓ 选择，Enter 跳转，Esc 关闭）" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+  <script src="../../content.js"></script>
+  <script src="../../assets/js/widgets/registry.js"></script>
+  <script src="../../assets/js/widgets/vbd-core.js"></script>
+  <script src="../../assets/js/widgets/euler-stability.js"></script>
+  <script src="../../assets/js/widgets/potential-landscape.js"></script>
+  <script src="../../assets/js/widgets/spring-hessian.js"></script>
+  <script src="../../assets/js/widgets/pbd-stiffness.js"></script>
+  <script src="../../assets/js/widgets/vbd-sweep.js"></script>
+  <script src="../../assets/js/widgets/chebyshev.js"></script>
+  <script src="../../assets/js/widgets/strand-lab.js"></script>
+  <script src="../../assets/js/widgets/mass-ratio.js"></script>
+  <script src="../../assets/js/widgets/warp-launch.js"></script>
+  <script src="../../assets/js/widgets/graph-coloring.js"></script>
+  <script src="../../assets/js/widgets/parallel-sweep.js"></script>
+  <script src="../../assets/js/widgets/cloth-core.js"></script>
+  <script src="../../assets/js/widgets/cloth-lab.js"></script>
+  <script src="../../assets/js/widgets/avbd-penalty-ramp.js"></script>
+  <script src="../../assets/js/widgets/barrier-curve.js"></script>
+  <script src="../../assets/js/widgets/ccd-linesearch.js"></script>
+  <script src="../../assets/js/widgets/friction-smooth.js"></script>
+  <script src="../../assets/js/widgets/contact-three-ways.js"></script>
+  <script src="../../assets/js/widgets/distance-gradient.js"></script>
+  <script src="../../assets/js/widgets/ipc-loop.js"></script>
+  <script src="../../assets/js/widgets/pd-local-global.js"></script>
+  <script src="../../assets/js/widgets/hessian-spd-guard.js"></script>
+  <script src="../../assets/js/widgets/substep-iteration-grid.js"></script>
+  <script src="../../assets/js/widgets/vert-adjacency.js"></script>
+  <script src="../../assets/js/widgets/solver-step-phases.js"></script>
+  <script src="../../assets/js/widgets/state-ping-pong.js"></script>
+  <script src="../../assets/js/widgets/collision-pipeline.js"></script>
+  <script src="../../assets/js/widgets/deformation-gradient-tri.js"></script>
+  <script src="../../assets/js/widgets/strain-energy-models.js"></script>
+  <script src="../../assets/js/widgets/element-assembly.js"></script>
+  <script src="../../assets/js/widgets/mpm-cycle.js"></script>
+  <script src="../../assets/js/widgets/transfer-apic.js"></script>
+  <script src="../../assets/js/widgets/mpm-kernel-compare.js"></script>
+  <script src="../../assets/js/widgets/newmark-ringing.js"></script>
+  <script src="../../assets/js/widgets/abd-affine.js"></script>
+  <script src="../../assets/js/widgets/positive-definite-bowl.js"></script>
+  <script src="../../assets/js/widgets/line-search.js"></script>
+  <script src="../../assets/js/widgets/projection-matrix.js"></script>
+  <script src="../../assets/js/widgets/triangle-mass.js"></script>
+  <script src="../../assets/js/widgets/gripper-core.js"></script>
+  <script src="../../assets/js/widgets/sequential-overwrite.js"></script>
+  <script src="../../assets/js/widgets/contract-ladder.js"></script>
+  <script src="../../assets/js/widgets/impulse-balance-board.js"></script>
+  <script src="../../assets/js/widgets/bounded-drive-curve.js"></script>
+  <script src="../../assets/js/widgets/gripper-lab.js"></script>
+  <script src="../../assets/js/book.js"></script>
+
+</body>
+</html>

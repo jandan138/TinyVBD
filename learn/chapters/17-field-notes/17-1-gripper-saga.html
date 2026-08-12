@@ -25,16 +25,16 @@
       <article class="article">
         <div class="eyebrow">Part 17 · Field Notes · 17-1</div>
         <h1>实战复盘：一条专家轨迹的跨后端复刻战役</h1>
-        <p class="lede">Part 15–16 讲的是「教科书版」的夹爪联合求解。这一页是它在真实项目里的出处：我在 EmbodiedEval OS 的 TaskBook-03B P7 系列里，把一条 Isaac 成功的专家轨迹复刻到 Newton 的完整战役。所有数字都出自工程记录（文中标注文件名），包括没有闭合的部分。</p>
+        <p class="lede">Part 15–16 讲的是「教科书版」的夹爪联合求解，16.8 补上了摩擦记忆的维度。这一页是它们在真实项目里的出处：我在 EmbodiedEval OS 的 TaskBook-03B P7 系列里，把一条 Isaac 成功的专家轨迹复刻到 Newton 的完整战役——包括它最终真正的根因。所有数字都出自工程记录（文中标注文件名）；已经闭合的与仍然开放的，我都会分清。</p>
 
         <div class="callout note">
           <div class="c-h">3 分钟电梯版（面试可直接讲）</div>
           <p>我做的难题是<b>跨后端物理复刻</b>：把一条在 Isaac 里成功「夹苹果入碗」的专家轨迹（425 行动作），在 Newton 上用真接触 + 摩擦重放——不允许用球铰把苹果粘在手上。</p>
           <p>第一层困难不是物理，是<b>数据合同</b>：最初 425 行全部执行却零接触，根因是 reset 时苹果和碗被镜像了 y 而机器人没有，两者相距 0.723 m。我把 reset 绑定、动作映射、模型状态拆成三份独立合同修复。</p>
           <p>第二层困难是<b>精确定位</b>：接触有了，但「碰到」变不成「捏住」。我用 Isaac/Newton 双端探针加 fail-closed 比较器，把分歧锁定在动作第 166 行：同样的指令目标，Isaac 双侧夹爪力激活 [true, true]，Newton 是 [true, false]——分歧发生在接触响应里，不在命令里。</p>
-          <p>第三层是<b>结构修复</b>：我把碰撞表示从原始三角网格换成源等价凸件、把「主动 drive + 被动 mimic」拓扑投影进求解器，苹果抬升 0.162 m、无支撑携带 57 行、成功入碗；零摩擦对照只有 0.005 m——因果闭环。</p>
-          <p>但<b>资格没有闭合</b>：换成 5 次冷启动资格队列，0/5——Newton 能抬能运，但保持不住持握完成放置。我把求解结构升级为「mimic、有界 drive、接触在同一外迭代里联合求解」，第一个 substep 闭合到亚微米（$5.9\times10^{-8}$ m），第二个 substep 仍不收敛。这期间还解决了两个隐藏难题：跨冷进程的惯量不确定性（并行归约顺序漂移）和一次伪装成物理崩溃的结果信封溢出。</p>
-          <p>这个故事的价值不在「成功了」，在于每一步都有证据边界：我知道问题收敛到了哪一层。</p>
+          <p>第三层是<b>根因</b>。先做凸包 + mimic 拓扑修复，单轨迹首次闭合（抬升 0.162 m 对零摩擦对照 0.005 m）；但 5 次冷启动资格 0/5，暴露了更深的病：摩擦的跨帧记忆绑在每帧重排的临时 contact id 上，摩擦历史在搬运段丢失，苹果在第 306–308 行掉落。复审还发现一个更隐蔽的 bug：号称冻结的「接触时刻位姿」只是一个引用，指向 XPBD 会反复覆写的乒乓缓冲。</p>
+          <p>修复是把摩擦锚点改为<b>材料身份</b>（双侧表面局部坐标 + 法线，几何匹配容差 5 mm，实际最大 3.91 mm），位姿改为深拷贝快照（hash 校验），摩擦仍只由当前真实接触和当前步法向预算决定。配对对照：同一冻结轨迹，双侧无支撑抬升 <b>152 行 vs 0 行</b>（右夹爪摩擦清零），终态入碗 true vs false，机器裁决通过、无 blocker，三次独立全程复跑一致。</p>
+          <p>所以「真的解决了吗」分三层：这条轨迹的物理复刻——<b>解决了</b>，有因果对照；Isaac/Newton 数值等价——<b>没有证明</b>；跨仿真器通用 gap——<b>没有消灭</b>，接触生命周期与材料锚点语义只是其中被补上的一个重要缺口。这个故事的价值不在「成功了」，在于每一步都有证据边界。</p>
         </div>
 
         <h2 id="background">背景：跨后端复刻在评什么</h2>
@@ -61,6 +61,24 @@
         <p>结构修复是 P7-11 的耦合 profile <code>newton_xpbd_128_coupled_passive_mimic_drive_contact_v1</code>：每个 XPBD 外迭代在同一共享广义状态上依次解 passive mimic → bounded drive → normal contact → friction。这场仗打得很难看：R5 广义增量一度炸到 $1.14\times10^{19}$（mimic 公式重复相减）；R11 数值上跑完了 128 迭代，右 jaw 却冲到 0.1475 m（冻结上限 0.044 m）——记录原句：<i>"This is numerical completion, not physical qualification."</i> 数值跑完不等于物理合格。最终 R128 把第一个 substep 闭合到亚微米：最大关节位置写误差 $5.86\times10^{-8}$ m、速度写误差 $4.15\times10^{-7}$ m/s。但<b>第二个物理 substep 的首次耦合外求解仍不收敛</b>，正式行 166 三冷启动资格 <b>0/3</b>，P7-12 因果诊断定格在 inconclusive。</p>
         <p>与此同时，代码里存在一条平行路线：一个版本锁定的 Kamino 兼容层（<code>newton_kamino_mimic_solver.py</code>），把两条 mimic 行作为双侧约束注入 Kamino 的 dense PADMM 求解——mimic 和 contact 进了同一次求解；但源 drive 的力限在 Kamino 车道仍是 <code>authored_but_not_enforced</code>（写了但求解器不执行）。<a href="../16-coupled-impulse-lab/16-3-kamino-on-the-map.html">16.3</a> 说的「更近的底座，不是写完的答案」，就是这里。</p>
 
+        <h2 id="act5">第五幕：真正的根因，和它的闭合</h2>
+        <p>确定性冷启动恢复后（P7-14），排查继续。P7-15 的直接探针把行 166 的失败钉到目标 substep 的外迭代 2：contact 残差 $4.7\times10^{-4}$，接触活跃集尝试了 272 个单顶点 KKT 边界、一个都没接受——「接触在该迭代不闭合」第一次成为可观测事实，而不是猜测（<code>2026-08-11-taskbook03b-p7-15-row166-outer2-contact-probe.md</code>）。P7-16 随后排除一个诱人的候选：把苹果的质量、质心、完整惯量张量全部对齐源端——苹果反而掉得更早（rows 287–288）。质量属性是影响参数，不是根修复（<code>2026-08-12-taskbook03b-p7-16-source-apple-mass-properties-ablation.md</code>）。</p>
+        <p>真正的根因在 P7-17 浮出水面，而且它不是 Part 15–16 主线里的「帧内覆盖」，是<b>跨帧的摩擦记忆</b>。诊断重放显示搬运段末端的崩塌过程：行 304→308，力激活的 jaw/apple 接触对从 5→7→2→1→0，苹果 z 从 0.182 m 塌到 0.038 m；同一窗口里，原始接触编号在相邻行之间翻滚——<code>851/859/868</code> → <code>845/853/862</code> → <code>849/857/866</code> → …，而累积切向冲量正存放在这些临时编号下，于第 308 行清空。Isaac 同窗口双 jaw 稳定在 0.0395/0.0398 m 附近、苹果持续上升、每 jaw effort 约 −19.7 N——苹果滑落不是动作要求的。一句话：<b>摩擦记忆绑在了每帧重发的临时工牌上，编号一换，锚点静默丢失</b>（<code>2026-08-12-taskbook03b-p7-17-persistent-jaw-patch-friction.md</code>）。</p>
+        <p>修复合同（profile <code>newton_xpbd_128_lift2_persistent_jaw_patch_friction</code>）的要点：锚点改用材料身份——夹爪局部点 + 苹果局部点 + 局部法线 + 所属侧；旧锚点经几何匹配才能延续（双侧匹配、距离容差 5 mm）；摩擦只许由当前穿透接触产生、只受当前步法向冲量的 Coulomb 上限约束；正间隙无摩擦；不继承上一帧法向/切向冲量；分离、不匹配或 reset 时清空全部历史。架构复审还抓到一个隐蔽 bug：首版实现把「接触生成时刻位姿」写成了对 <code>state_in.body_q</code> 的<b>引用</b>，而 XPBD 把它当乒乓缓冲反复覆写——锚点几何会被求解器偷偷改掉。修复为深拷贝进独立 Warp 缓冲，并运行时校验「不共用指针 + 求解前后 hash 不变」。这就是 <a href="../16-coupled-impulse-lab/16-8-contact-lifecycle-anchors.html">16.8</a> 那一节的全部出处。</p>
+        <p>验收是分层的。313 行搬运窗口：苹果从 0.198 m 持续升到 0.206 m，其中 rows 307/309 没有任何继承锚点匹配、仅靠当前物理接触完成——一条防止锚点变成隐形搬运约束的负检查。完整 425 行：三次独立执行复现同一终态。配对因果对照（共享 source bundle、reset、时间步与 pre-action 状态摘要）：</p>
+        <table>
+          <thead>
+            <tr><th>结果</th><th>正常摩擦</th><th>右夹爪摩擦清零</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>专家动作完成</td><td>425/425</td><td>425/425</td></tr>
+            <tr><td>双侧接触、无外部支撑抬升</td><td>152 行</td><td>0 行</td></tr>
+            <tr><td>最终苹果入碗</td><td>true</td><td>false</td></tr>
+            <tr><td>friction_only 禁令事件 / 隐藏抓取约束 / 直接写苹果状态</td><td>0</td><td>0</td></tr>
+          </tbody>
+        </table>
+        <p>最大接受的夹爪侧锚点重匹配距离 3.91 mm（容差 5 mm），机器裁决 <code>passed</code>、无 blocker。两个更省事的候选被数据明确拒绝：每侧夹爪聚合单个 Coulomb disk（关键窗口失稳）；直接搬用上一帧冲量（无效或把苹果推偏约 3 mm）。视频证据也在，但独立视觉评审只给到 WARN：支持运动与终态审阅，不足以单独证明双侧摩擦——物理轨迹与机器资格才是权威。这些边界，都写在记录里。</p>
+
         <h2 id="satellites">卫星故事：同一战役里的另外四场仗</h2>
         <p>主线之外，这四个独立难题同样塑造了最终结果。每个都能单独讲一轮面试。</p>
 
@@ -77,28 +95,31 @@
         <p>物理闭合后要做视频证据，但物理 jaw 是 <code>CONVEX_MESH</code>，光线追踪器不显示。第一个方案（r53）给渲染加两个克隆 mesh——被我自己拒了：它改变了模型 shape 数，扰动物理。接受的方案是给 <code>SensorTiledCamera</code> 单独的 renderer-only shape-type 数组，只把两个 shape ID 暴露为 <code>MESH</code>，模型 shape 数 <b>1209 → 1209 不变</b>；最终视频是对 425 个留存状态逐个验哈希后的零步后渲染（同 P7-4Q 记录）。渲染是观众，不是演员——它不许碰物理的状态空间。</p>
 
         <h2 id="boundary">边界：现在确切知道什么</h2>
-        <p>到 P7-14 为止，这页里每个声明的状态：</p>
+        <p>到 P7-17 为止，这页里每个声明的状态：</p>
         <ul>
-          <li><b>已闭合</b>：单轨迹摩擦因果（P7-4Q，含零摩擦对照）；reset 确定性（200/200 零散布）；冷启动可复现性（3/3 位精确）；row-83 溢出（协议级修复并跨越）。</li>
-          <li><b>未闭合</b>：行 166 资格 0/3；耦合求解第二 substep 不收敛；P7-12 因果诊断 inconclusive（P7-14 通过后已授权重启该队列）；Kamino 车道缺有界 drive 的求解内执行。</li>
-          <li><b>从未声明</b>：这页所有内容 model-free、score-free，不声称 Newton 与 Isaac 物理等价，不声称任何模型分数。</li>
+          <li><b>已闭合</b>：这条冻结轨迹的纯 Newton 摩擦复刻——抓取、无支撑抬升 152 行、搬运、释放、入碗，含右夹爪摩擦清零的配对因果对照与三次独立全程复跑（P7-17）；reset 确定性（200/200 零散布）；冷启动可复现性（3/3 位精确）；row-83 溢出（协议级修复并跨越）；单轨迹凸包 + mimic 修复（P7-4Q）。</li>
+          <li><b>未闭合</b>：Isaac/Newton 数值等价未证明（证明的是「同一动作在 Newton 也能以物理方式完成同一任务」，不是「Newton 复制了 PhysX」）；耦合求解第二 substep 不收敛、Kamino 车道 bounded drive 缺口仍在（P7-11 方向保留）；P7-12 因果队列重启后未完成；通用跨后端 gap 未消灭——还需更多任务、第三后端（Genesis 等）、pi0.5 闭环、以及对物理 gap / 视觉 OOD / 策略问题的失败区分。</li>
+          <li><b>从未声明</b>：这页所有内容 model-free、score-free，不声称任何模型分数、官方 EBench 分数或产品就绪。</li>
         </ul>
-        <p>面试里我最想传达的就是这张表：<b>「成功一次」与「资格通过」之间隔着可复现性工程，而我知道这条缝具体在哪、多宽。</b></p>
+        <p>面试里我最想传达的就是这张表：<b>「成功一次」与「资格通过」之间隔着可复现性工程，而「这条轨迹通了」与「仿真器等价」之间隔着一整个评测体系。我知道每条缝具体在哪、多宽。</b></p>
 
         <h2 id="followups">追问预案</h2>
         <p>面试官大概率会沿着这几条线深挖，每条我都有记录背书：</p>
         <ul>
+          <li><b>「所以到底修没修好？」</b>——分三层：这条冻结轨迹的物理复刻，修好了，有配对因果对照（152 行 vs 0 行）；Isaac/Newton 数值等价，没证明；跨仿真器通用 gap，没消灭（P7-17 边界声明）。</li>
+          <li><b>「最终根因是什么？」</b>——跨帧摩擦记忆的身份管理：锚点绑在每帧重排的临时 contact id 上，摩擦历史在 row306–308 丢失；材料锚点 + 深拷贝快照修复（P7-17）。</li>
+          <li><b>「你最大的 bug？」</b>——把「接触时刻位姿」存成了对 XPBD 乒乓缓冲的引用，求解过程中历史被悄悄改写；复审抓到后改深拷贝 + hash 校验（P7-17 post-review）。教训：声称冻结的东西，必须证明它真的被冻结。</li>
           <li><b>「为什么不直接调大摩擦系数？」</b>——三个预申报调参候选全部被数据拒绝；再拧系数就是 tuning from a correlated trace（P7-12）。</li>
           <li><b>「怎么证明分歧在物理而不是动作/渲染？」</b>——双端探针 + fail-closed 比较器；行 166 两侧命令逐字节一致，测量态分叉（P7-4G）。</li>
           <li><b>「你最大的一次误判？」</b>——早期结果其实是球铰搬运，被摩擦抓取的目标误导；由此立了 friction_only 纪律和零摩擦负对照（P7-4F）。</li>
-          <li><b>「联合求解到底做到哪一步？」</b>——mimic + contact 已进 Kamino 同一 dense PADMM；XPBD 耦合首 substep 闭合到 $5.9\times10^{-8}$ m；bounded drive 与第二 substep 未闭合（P7-11、Kamino 模块头）。</li>
+          <li><b>「联合求解那条线呢？」</b>——XPBD 耦合首 substep 闭合到 $5.9\times10^{-8}$ m、第二 substep 未收敛；Kamino 车道 mimic + contact 已进同一 dense PADMM，bounded drive 仍是缺口（P7-11、Kamino 模块头）。最终闭合这条轨迹的是 16.8 的连续性维度，不是它。</li>
           <li><b>「GPU 确定性怎么搞定的？」</b>——先修 reset 惯量的并行归约（host 固定顺序 + float64），再用 Warp RUN_TO_RUN 锁冷启动（P7-10 / P7-14）。</li>
           <li><b>「失败最惨的一次？」</b>——R5 广义增量 $1.14\times10^{19}$，公式重复相减；教训是每次只改一个变量并冻结其余（P7-11）。</li>
           <li><b>「重做一次会改什么？」</b>——把确定性验证提到物理排查之前：没有 3/3 位精确之前，一切跨进程力对比都在比噪声。</li>
         </ul>
 
         <h2 id="takeaway">这一节你要带走的</h2>
-        <p>Part 15–16 的方法论，每一条都能在这页找到出处：顺序覆盖有 128 迭代台账（10.308 μm vs 0.436 μm），合同梯子来自坐标镜像的 0.723 m，物理门禁来自 friction_only 纪律与零摩擦对照，单帧思维来自行 166。回读路线：<a href="../15-gripper-why-fail/15-1-action-ok-grip-fail.html">15.1 现象分层</a> → <a href="../15-gripper-why-fail/15-5-contract-ladder.html">15.5 合同梯子</a> → <a href="../15-gripper-why-fail/15-7-row166-unit-frame.html">15.7 单帧思维</a> → <a href="../16-coupled-impulse-lab/16-1-desired-balance.html">16.1 联合冲量</a> → <a href="../16-coupled-impulse-lab/16-6-physics-gates.html">16.6 物理门禁</a>。</p>
+        <p>Part 15–16 的方法论，每一条都能在这页找到出处：顺序覆盖有 128 迭代台账（10.308 μm vs 0.436 μm），合同梯子来自坐标镜像的 0.723 m，物理门禁来自 friction_only 纪律与零摩擦/单 jaw 摩擦对照，单帧思维来自行 166，材料锚点来自 row306–308 的崩塌。回读路线：<a href="../15-gripper-why-fail/15-1-action-ok-grip-fail.html">15.1 现象分层</a> → <a href="../15-gripper-why-fail/15-5-contract-ladder.html">15.5 合同梯子</a> → <a href="../15-gripper-why-fail/15-7-row166-unit-frame.html">15.7 单帧思维</a> → <a href="../16-coupled-impulse-lab/16-1-desired-balance.html">16.1 联合冲量</a> → <a href="../16-coupled-impulse-lab/16-6-physics-gates.html">16.6 物理门禁</a> → <a href="../16-coupled-impulse-lab/16-8-contact-lifecycle-anchors.html">16.8 材料锚点</a>。</p>
 
       </article>
     </main>
